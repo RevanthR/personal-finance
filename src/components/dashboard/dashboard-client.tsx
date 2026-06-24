@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { formatCurrency, formatMonthYear, CATEGORY_LABELS, getCategoryDisplay, getCategoryColor } from "@/lib/utils";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useMemo } from "react";
+import dynamic from "next/dynamic";
+import { formatCurrency, formatMonthYear, getCategoryDisplay, getCategoryColor } from "@/lib/utils";
+import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,16 +14,17 @@ import {
 import {
   Wallet, TrendingDown, CheckCircle2, AlertCircle, TrendingUp, Plus, Pencil,
 } from "lucide-react";
-import {
-  PieChart, Pie, Cell, ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, Tooltip, Legend,
-} from "recharts";
 import { toast } from "sonner";
 import { EntryRow } from "./entry-row";
 import { AdHocDialog } from "./adhoc-dialog";
 import { SetupMonthDialog } from "./setup-month-dialog";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+
+const DashboardCharts = dynamic(
+  () => import("./dashboard-charts").then(m => m.DashboardCharts),
+  { ssr: false, loading: () => <div className="h-64 rounded-xl bg-muted animate-pulse" /> }
+);
 
 interface DashboardClientProps {
   currentMonth: MonthWithDetails | null;
@@ -68,29 +70,27 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
   const [otherVal, setOtherVal] = useState("");
   const [incomeLoading, setIncomeLoading] = useState(false);
 
-  const adHocIncome = currentMonth?.adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0) ?? 0;
-  const adHocExpense = currentMonth?.adHocItems.filter(i => i.type === "EXPENSE").reduce((s, i) => s + i.amount, 0) ?? 0;
-  const totalIncome = currentMonth ? currentMonth.salaryIncome + currentMonth.freelanceIncome + currentMonth.otherIncome : 0;
-  const grandIncome = totalIncome + adHocIncome;
-  const totalCommitted = currentMonth?.entries.reduce((s, e) => s + e.amount, 0) ?? 0;
-  const totalPaid = currentMonth?.entries.filter(e => e.isPaid).reduce((s, e) => s + e.amount, 0) ?? 0;
-  const totalPending = totalCommitted - totalPaid;
-  const balance = grandIncome - totalCommitted - adHocExpense;
-  const paidPercent = totalCommitted > 0 ? Math.round((totalPaid / totalCommitted) * 100) : 0;
-  const pendingCount = currentMonth?.entries.filter(e => !e.isPaid).length ?? 0;
+  const entries = currentMonth?.entries ?? [];
+  const adHocItems = currentMonth?.adHocItems ?? [];
 
-  // Group entries — custom categories get their own group, others follow CATEGORY_ORDER
-  const grouped = (() => {
+  const adHocIncome  = useMemo(() => adHocItems.filter(i => i.type === "INCOME").reduce((s, i)  => s + i.amount, 0), [adHocItems]);
+  const adHocExpense = useMemo(() => adHocItems.filter(i => i.type === "EXPENSE").reduce((s, i) => s + i.amount, 0), [adHocItems]);
+  const totalIncome  = currentMonth ? currentMonth.salaryIncome + currentMonth.freelanceIncome + currentMonth.otherIncome : 0;
+  const grandIncome  = totalIncome + adHocIncome;
+  const totalCommitted = useMemo(() => entries.reduce((s, e) => s + e.amount, 0), [entries]);
+  const totalPaid      = useMemo(() => entries.filter(e => e.isPaid).reduce((s, e) => s + e.amount, 0), [entries]);
+  const totalPending   = totalCommitted - totalPaid;
+  const balance        = grandIncome - totalCommitted - adHocExpense;
+  const paidPercent    = totalCommitted > 0 ? Math.round((totalPaid / totalCommitted) * 100) : 0;
+  const pendingCount   = useMemo(() => entries.filter(e => !e.isPaid).length, [entries]);
+
+  const grouped = useMemo(() => {
     const result: Record<string, EntryWithTemplate[]> = {};
-    // First pass: standard categories in order
     for (const cat of CATEGORY_ORDER) {
-      const items = (currentMonth?.entries ?? []).filter(
-        e => e.template.category === cat && !e.template.customCategory
-      );
+      const items = entries.filter(e => e.template.category === cat && !e.template.customCategory);
       if (items.length) result[cat] = items;
     }
-    // Second pass: custom categories
-    for (const e of (currentMonth?.entries ?? [])) {
+    for (const e of entries) {
       if (e.template.customCategory) {
         const key = e.template.customCategory;
         if (!result[key]) result[key] = [];
@@ -98,34 +98,34 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
       }
     }
     return result;
-  })();
+  }, [entries]);
 
-  const categoryBreakdown = Object.entries(
-    (currentMonth?.entries ?? []).reduce<Record<string, number>>((acc, e) => {
+  const categoryBreakdown = useMemo(() => Object.entries(
+    entries.reduce<Record<string, number>>((acc, e) => {
       const key = e.template.customCategory ?? e.template.category;
       acc[key] = (acc[key] || 0) + e.amount;
       return acc;
     }, {})
   ).map(([key, value]) => {
-    const entry = (currentMonth?.entries ?? []).find(e => (e.template.customCategory ?? e.template.category) === key);
+    const entry = entries.find(e => (e.template.customCategory ?? e.template.category) === key);
     return {
       key,
       name: getCategoryDisplay(entry?.template.category ?? key, entry?.template.customCategory),
       value,
       color: getCategoryColor(entry?.template.category ?? key, entry?.template.customCategory),
     };
-  });
+  }), [entries]);
 
-  // FY yearly summary from recentMonths
-  const fyIncome = recentMonths.reduce((s, m) => s + m.salaryIncome + m.freelanceIncome + m.otherIncome + m.adHocItems.filter(i => i.type === "INCOME").reduce((a, i) => a + i.amount, 0), 0);
-  const fyExpenses = recentMonths.reduce((s, m) => s + m.entries.reduce((a, e) => a + e.amount, 0) + m.adHocItems.filter(i => i.type === "EXPENSE").reduce((a, i) => a + i.amount, 0), 0);
-  const fyBalance = fyIncome - fyExpenses;
-
-  const trendData = [...recentMonths].reverse().map(m => ({
-    name: format(new Date(m.year, m.month - 1), "MMM"),
-    Income: m.salaryIncome + m.freelanceIncome + m.otherIncome,
-    Expenses: m.entries.reduce((s, e) => s + e.amount, 0),
-  }));
+  const { fyIncome, fyExpenses, fyBalance, trendData } = useMemo(() => {
+    const fyIncome   = recentMonths.reduce((s, m) => s + m.salaryIncome + m.freelanceIncome + m.otherIncome + m.adHocItems.filter(i => i.type === "INCOME").reduce((a, i) => a + i.amount, 0), 0);
+    const fyExpenses = recentMonths.reduce((s, m) => s + m.entries.reduce((a, e) => a + e.amount, 0) + m.adHocItems.filter(i => i.type === "EXPENSE").reduce((a, i) => a + i.amount, 0), 0);
+    const trendData  = [...recentMonths].reverse().map(m => ({
+      name: format(new Date(m.year, m.month - 1), "MMM"),
+      Income: m.salaryIncome + m.freelanceIncome + m.otherIncome,
+      Expenses: m.entries.reduce((s, e) => s + e.amount, 0),
+    }));
+    return { fyIncome, fyExpenses, fyBalance: fyIncome - fyExpenses, trendData };
+  }, [recentMonths]);
 
   function openIncomeEdit() {
     if (!currentMonth) return;
@@ -337,83 +337,13 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
           )}
         </div>
 
-        {/* Right column: charts always visible on desktop */}
+        {/* Right column: Recharts loaded lazily so it doesn't block navigation */}
         <div className="space-y-4">
-          {categoryBreakdown.length > 0 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Spend by Category</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={170}>
-                  <PieChart>
-                    <Pie data={categoryBreakdown} cx="50%" cy="50%" innerRadius={48} outerRadius={78} paddingAngle={2} dataKey="value">
-                      {categoryBreakdown.map(e => <Cell key={e.key} fill={e.color} />)}
-                    </Pie>
-                    <Tooltip formatter={v => formatCurrency(Number(v))} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="space-y-1 mt-1">
-                  {categoryBreakdown.map(item => (
-                    <div key={item.key} className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: item.color }} />
-                        <span className="text-muted-foreground">{item.name}</span>
-                      </div>
-                      <span className="font-medium">{formatCurrency(item.value)}</span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {trendData.length > 1 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Monthly Trend</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={140}>
-                  <BarChart data={trendData} barSize={10}>
-                    <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                    <YAxis hide />
-                    <Tooltip formatter={v => formatCurrency(Number(v))} />
-                    <Legend wrapperStyle={{ fontSize: 10 }} />
-                    <Bar dataKey="Income" fill="#15803d" radius={[2, 2, 0, 0]} />
-                    <Bar dataKey="Expenses" fill="#b91c1c" radius={[2, 2, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          )}
-
-          {chitFunds.length > 0 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Chit Funds</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2.5">
-                {chitFunds.map(chit => (
-                  <div key={chit.id} className="flex items-center justify-between">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{chit.template.name}</p>
-                      {chit.isLifted
-                        ? <p className="text-xs text-muted-foreground">Lifted</p>
-                        : <p className="text-xs text-green-600">Saved {formatCurrency(chit.accumulatedSavings)}</p>
-                      }
-                    </div>
-                    <span className={cn(
-                      "text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ml-2",
-                      chit.isLifted ? "bg-zinc-100 text-zinc-600" : "bg-green-50 text-green-700"
-                    )}>
-                      {chit.isLifted ? "Lifted" : "Active"}
-                    </span>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
+          <DashboardCharts
+            categoryBreakdown={categoryBreakdown}
+            trendData={trendData}
+            chitFunds={chitFunds}
+          />
         </div>
       </div>
 
