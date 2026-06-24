@@ -13,16 +13,20 @@ export async function PATCH(
   const { templateId } = await params;
   const body = await req.json();
 
+  const isCustom = Boolean(body.customCategory);
   const updated = await db.lineItemTemplate.updateMany({
     where: { id: templateId, userId: session.user.id },
     data: {
-      name: body.name,
-      category: body.category as Category,
-      amount: body.amount,
-      isFixed: body.isFixed,
-      dueDateDay: body.dueDateDay,
-      isActive: body.isActive,
-      sortOrder: body.sortOrder,
+      ...(body.name !== undefined && { name: body.name }),
+      ...(body.category !== undefined && {
+        category: (isCustom ? "MISCELLANEOUS" : body.category) as Category,
+        customCategory: isCustom ? body.customCategory : null,
+      }),
+      ...(body.amount !== undefined && { amount: body.amount }),
+      ...(body.isFixed !== undefined && { isFixed: body.isFixed }),
+      ...(body.dueDateDay !== undefined && { dueDateDay: body.dueDateDay }),
+      ...(body.isActive !== undefined && { isActive: body.isActive }),
+      ...(body.sortOrder !== undefined && { sortOrder: body.sortOrder }),
     },
   });
 

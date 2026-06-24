@@ -22,11 +22,13 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
 
+  const isCustom = Boolean(body.customCategory);
   const template = await db.lineItemTemplate.create({
     data: {
       userId: session.user.id,
       name: body.name,
-      category: body.category as Category,
+      category: (isCustom ? "MISCELLANEOUS" : body.category) as Category,
+      customCategory: isCustom ? body.customCategory : null,
       amount: body.amount,
       isFixed: body.isFixed ?? true,
       dueDateDay: body.dueDateDay,

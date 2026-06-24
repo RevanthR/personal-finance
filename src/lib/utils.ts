@@ -33,6 +33,14 @@ export const CATEGORY_LABELS: Record<string, string> = {
   MISCELLANEOUS: "Miscellaneous",
 };
 
+export function getCategoryDisplay(category: string, customCategory?: string | null): string {
+  return customCategory ?? CATEGORY_LABELS[category] ?? category;
+}
+
+export function getCategoryColor(category: string, customCategory?: string | null): string {
+  return customCategory ? "#9ca3af" : (CATEGORY_COLORS[category] ?? "#9ca3af");
+}
+
 export const CATEGORY_COLORS: Record<string, string> = {
   HOUSE_MAINTENANCE: "#64748b",
   LOAN:             "#b91c1c",

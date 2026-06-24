@@ -10,35 +10,29 @@ export default async function DashboardPage() {
 
   const { month, year } = getCurrentMonthYear();
 
-  // Get or create current month
-  let currentMonth = await db.month.findUnique({
-    where: { userId_month_year: { userId: session.user.id, month, year } },
-    include: {
-      entries: {
-        include: { template: { include: { chitFund: true } } },
-        orderBy: { template: { sortOrder: "asc" } },
+  const [currentMonth, recentMonths, chitFunds] = await Promise.all([
+    db.month.findUnique({
+      where: { userId_month_year: { userId: session.user.id, month, year } },
+      include: {
+        entries: {
+          include: { template: { include: { chitFund: true } } },
+          orderBy: { template: { sortOrder: "asc" } },
+        },
+        adHocItems: { orderBy: { date: "desc" } },
       },
-      adHocItems: { orderBy: { date: "desc" } },
-    },
-  });
-
-  // Get last 6 months for trend chart
-  const recentMonths = await db.month.findMany({
-    where: { userId: session.user.id },
-    orderBy: [{ year: "desc" }, { month: "desc" }],
-    take: 6,
-    include: {
-      entries: true,
-      adHocItems: true,
-    },
-  });
-
-  // Get chit funds
-  const chitFunds = await db.chitFund.findMany({
-    where: { userId: session.user.id },
-    include: { template: true },
-    orderBy: { startDate: "asc" },
-  });
+    }),
+    db.month.findMany({
+      where: { userId: session.user.id },
+      orderBy: [{ year: "desc" }, { month: "desc" }],
+      take: 6,
+      include: { entries: true, adHocItems: true },
+    }),
+    db.chitFund.findMany({
+      where: { userId: session.user.id },
+      include: { template: true },
+      orderBy: { startDate: "asc" },
+    }),
+  ]);
 
   return (
     <DashboardClient

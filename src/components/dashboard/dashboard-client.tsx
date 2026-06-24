@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { formatCurrency, formatMonthYear, CATEGORY_COLORS, CATEGORY_LABELS } from "@/lib/utils";
+import { formatCurrency, formatMonthYear, CATEGORY_LABELS, getCategoryDisplay, getCategoryColor } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -43,7 +43,7 @@ type MonthWithDetails = {
 
 type EntryWithTemplate = {
   id: string; amount: number; isPaid: boolean; paidOn: string | null; notes: string | null; templateId: string;
-  template: { id: string; name: string; category: string; isFixed: boolean; dueDateDay: number | null; chitFund: { isLifted: boolean; accumulatedSavings: number } | null };
+  template: { id: string; name: string; category: string; customCategory: string | null; isFixed: boolean; dueDateDay: number | null; chitFund: { isLifted: boolean; accumulatedSavings: number } | null };
 };
 
 type AdHocItem = {
@@ -79,18 +79,42 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
   const paidPercent = totalCommitted > 0 ? Math.round((totalPaid / totalCommitted) * 100) : 0;
   const pendingCount = currentMonth?.entries.filter(e => !e.isPaid).length ?? 0;
 
-  const grouped = CATEGORY_ORDER.reduce<Record<string, EntryWithTemplate[]>>((acc, cat) => {
-    const items = (currentMonth?.entries ?? []).filter(e => e.template.category === cat);
-    if (items.length) acc[cat] = items;
-    return acc;
-  }, {});
+  // Group entries — custom categories get their own group, others follow CATEGORY_ORDER
+  const grouped = (() => {
+    const result: Record<string, EntryWithTemplate[]> = {};
+    // First pass: standard categories in order
+    for (const cat of CATEGORY_ORDER) {
+      const items = (currentMonth?.entries ?? []).filter(
+        e => e.template.category === cat && !e.template.customCategory
+      );
+      if (items.length) result[cat] = items;
+    }
+    // Second pass: custom categories
+    for (const e of (currentMonth?.entries ?? [])) {
+      if (e.template.customCategory) {
+        const key = e.template.customCategory;
+        if (!result[key]) result[key] = [];
+        result[key].push(e);
+      }
+    }
+    return result;
+  })();
 
   const categoryBreakdown = Object.entries(
     (currentMonth?.entries ?? []).reduce<Record<string, number>>((acc, e) => {
-      acc[e.template.category] = (acc[e.template.category] || 0) + e.amount;
+      const key = e.template.customCategory ?? e.template.category;
+      acc[key] = (acc[key] || 0) + e.amount;
       return acc;
     }, {})
-  ).map(([key, value]) => ({ key, name: CATEGORY_LABELS[key] ?? key, value }));
+  ).map(([key, value]) => {
+    const entry = (currentMonth?.entries ?? []).find(e => (e.template.customCategory ?? e.template.category) === key);
+    return {
+      key,
+      name: getCategoryDisplay(entry?.template.category ?? key, entry?.template.customCategory),
+      value,
+      color: getCategoryColor(entry?.template.category ?? key, entry?.template.customCategory),
+    };
+  });
 
   // FY yearly summary from recentMonths
   const fyIncome = recentMonths.reduce((s, m) => s + m.salaryIncome + m.freelanceIncome + m.otherIncome + m.adHocItems.filter(i => i.type === "INCOME").reduce((a, i) => a + i.amount, 0), 0);
@@ -271,16 +295,19 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Entries */}
         <div className="lg:col-span-2 space-y-4">
-          {Object.entries(grouped).map(([category, entries]) => {
+          {Object.entries(grouped).map(([groupKey, entries]) => {
+            const first = entries[0];
+            const catColor = getCategoryColor(first.template.category, first.template.customCategory);
+            const catLabel = getCategoryDisplay(first.template.category, first.template.customCategory);
             const catTotal = entries.reduce((s, e) => s + e.amount, 0);
             const catPaid = entries.filter(e => e.isPaid).reduce((s, e) => s + e.amount, 0);
             return (
-              <div key={category}>
+              <div key={groupKey}>
                 <div className="flex items-center justify-between mb-1.5 px-0.5">
                   <div className="flex items-center gap-1.5">
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[category] ?? "#6b7280" }} />
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: catColor }} />
                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      {CATEGORY_LABELS[category] ?? category}
+                      {catLabel}
                     </span>
                   </div>
                   <span className="text-xs text-muted-foreground">
@@ -321,7 +348,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
                 <ResponsiveContainer width="100%" height={170}>
                   <PieChart>
                     <Pie data={categoryBreakdown} cx="50%" cy="50%" innerRadius={48} outerRadius={78} paddingAngle={2} dataKey="value">
-                      {categoryBreakdown.map(e => <Cell key={e.key} fill={CATEGORY_COLORS[e.key] ?? "#6b7280"} />)}
+                      {categoryBreakdown.map(e => <Cell key={e.key} fill={e.color} />)}
                     </Pie>
                     <Tooltip formatter={v => formatCurrency(Number(v))} />
                   </PieChart>
@@ -330,7 +357,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
                   {categoryBreakdown.map(item => (
                     <div key={item.key} className="flex items-center justify-between text-xs">
                       <div className="flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CATEGORY_COLORS[item.key] ?? "#6b7280" }} />
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: item.color }} />
                         <span className="text-muted-foreground">{item.name}</span>
                       </div>
                       <span className="font-medium">{formatCurrency(item.value)}</span>

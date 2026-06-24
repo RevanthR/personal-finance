@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Bell, LogOut, Settings } from "lucide-react";
+import { Bell, LogOut, Settings, IndianRupee } from "lucide-react";
 import Link from "next/link";
 
 interface HeaderProps {
@@ -31,7 +31,12 @@ export function Header({ user }: HeaderProps) {
 
   return (
     <header className="h-14 border-b bg-white dark:bg-slate-900 flex items-center justify-between px-4 md:px-6 shrink-0">
-      <div className="md:hidden font-bold text-foreground">FinanceOS</div>
+      <div className="md:hidden flex items-center gap-2">
+        <div className="w-7 h-7 bg-zinc-900 rounded-lg flex items-center justify-center shrink-0">
+          <IndianRupee className="w-3.5 h-3.5 text-white" />
+        </div>
+        <span className="font-bold text-foreground">FinanceOS</span>
+      </div>
       <div className="hidden md:block" />
 
       <div className="flex items-center gap-3">

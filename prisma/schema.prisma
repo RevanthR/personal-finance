@@ -91,19 +91,20 @@ enum AdHocType {
 
 // Recurring line item template — one per type of payment
 model LineItemTemplate {
-  id          String         @id @default(cuid())
-  userId      String
-  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name        String
-  category    Category
-  amount      Float
-  isFixed     Boolean        @default(true)
-  dueDateDay  Int?
-  isActive    Boolean        @default(true)
-  sortOrder   Int            @default(0)
-  createdAt   DateTime       @default(now())
-  entries     MonthlyEntry[]
-  chitFund    ChitFund?
+  id             String         @id @default(cuid())
+  userId         String
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  category       Category
+  customCategory String?
+  amount         Float
+  isFixed        Boolean        @default(true)
+  dueDateDay     Int?
+  isActive       Boolean        @default(true)
+  sortOrder      Int            @default(0)
+  createdAt      DateTime       @default(now())
+  entries        MonthlyEntry[]
+  chitFund       ChitFund?
 }
 
 // One record per calendar month per user

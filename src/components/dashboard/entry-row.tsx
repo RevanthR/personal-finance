@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { formatCurrency, CATEGORY_COLORS, CATEGORY_LABELS } from "@/lib/utils";
+import { formatCurrency, getCategoryDisplay, getCategoryColor } from "@/lib/utils";
 import { Clock, Check } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,7 @@ interface EntryRowProps {
     template: {
       name: string;
       category: string;
+      customCategory: string | null;
       isFixed: boolean;
       dueDateDay: number | null;
       chitFund: { isLifted: boolean; accumulatedSavings: number } | null;
@@ -31,7 +32,7 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const isPaid = optimisticPaid;
-  const color = CATEGORY_COLORS[entry.template.category] ?? "#6b7280";
+  const color = getCategoryColor(entry.template.category, entry.template.customCategory);
   const isChitInvestment = entry.template.category === "CHIT_FUND" && !entry.template.chitFund?.isLifted;
 
   function handleTogglePaid() {
@@ -97,7 +98,7 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
           )}
         </p>
         <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
-          <span>{CATEGORY_LABELS[entry.template.category] ?? entry.template.category}</span>
+          <span>{getCategoryDisplay(entry.template.category, entry.template.customCategory)}</span>
           {entry.template.dueDateDay && !isPaid && (
             <span className="flex items-center gap-0.5 text-amber-600 dark:text-amber-400">
               <Clock className="w-2.5 h-2.5" />
