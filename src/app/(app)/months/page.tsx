@@ -106,7 +106,7 @@ export default async function MonthsPage() {
             {/* Month rows */}
             <div className="space-y-2">
               {[...fyMonths].reverse().map(m => (
-                <Link key={m.id} href={`/months/${m.id}`}>
+                <Link key={m.id} href={`/months/${m.id}`} className="block">
                   <div className="flex items-center justify-between px-4 py-3.5 rounded-xl border bg-card hover:border-zinc-400 transition-colors cursor-pointer">
                     <div className="min-w-0">
                       <p className="text-sm font-medium">{formatMonthYear(m.month, m.year)}</p>
