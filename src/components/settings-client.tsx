@@ -16,6 +16,7 @@ interface SettingsClientProps {
 export function SettingsClient({ user }: SettingsClientProps) {
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
+  const [testLoading, setTestLoading] = useState(false);
   const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 
   useEffect(() => {
@@ -114,18 +115,38 @@ export function SettingsClient({ user }: SettingsClientProps) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">{pushEnabled ? "Reminders on" : "Reminders off"}</p>
-              <p className="text-xs text-muted-foreground">
-                {pushEnabled ? "You'll be notified for pending payments" : "Enable to get payment reminders"}
-              </p>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">{pushEnabled ? "Reminders on" : "Reminders off"}</p>
+                <p className="text-xs text-muted-foreground">
+                  {pushEnabled ? "You'll be notified for pending payments" : "Enable to get payment reminders"}
+                </p>
+              </div>
+              <Switch
+                checked={pushEnabled}
+                onCheckedChange={togglePush}
+                disabled={pushLoading}
+              />
             </div>
-            <Switch
-              checked={pushEnabled}
-              onCheckedChange={togglePush}
-              disabled={pushLoading}
-            />
+            {pushEnabled && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={testLoading}
+                onClick={async () => {
+                  setTestLoading(true);
+                  const res = await fetch("/api/push/test", { method: "POST" });
+                  const data = await res.json();
+                  if (res.ok) toast.success(`Sent ${data.sent} test notifications`);
+                  else toast.error(data.error ?? "Failed to send");
+                  setTestLoading(false);
+                }}
+              >
+                <Bell className="w-3.5 h-3.5 mr-1.5" />
+                {testLoading ? "Sending..." : "Send test notification"}
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>

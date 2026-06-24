@@ -73,17 +73,35 @@ export default async function MonthsPage() {
               <span className="text-xs text-muted-foreground">{fyMonths.length} months</span>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
-              <SummaryCard label="Total Income" value={fyIncome} icon={<Wallet className="w-3.5 h-3.5" />} color="text-green-600" />
-              <SummaryCard label="Total Expenses" value={fyExpenses} icon={<TrendingDown className="w-3.5 h-3.5" />} color="text-red-600" />
-              <SummaryCard
-                label={fyBalance >= 0 ? "Leftover" : "Deficit"}
-                value={Math.abs(fyBalance)}
-                icon={fyBalance >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-                color={fyBalance >= 0 ? "text-green-600" : "text-red-600"}
-                sub={fyBalance >= 0 ? "after all spends" : "over income"}
-              />
-            </div>
+            <Card>
+              <CardContent className="p-3">
+                <div className="grid grid-cols-3 divide-x divide-border">
+                  <div className="pr-3">
+                    <p className="text-[10px] text-muted-foreground mb-0.5 flex items-center gap-1">
+                      <Wallet className="w-3 h-3" /> Income
+                    </p>
+                    <p className="text-sm font-bold text-green-600 tabular-nums">{formatCurrency(fyIncome)}</p>
+                  </div>
+                  <div className="px-3">
+                    <p className="text-[10px] text-muted-foreground mb-0.5 flex items-center gap-1">
+                      <TrendingDown className="w-3 h-3" /> Spent
+                    </p>
+                    <p className="text-sm font-bold text-red-600 tabular-nums">{formatCurrency(fyExpenses)}</p>
+                  </div>
+                  <div className="pl-3">
+                    <p className="text-[10px] text-muted-foreground mb-0.5 flex items-center gap-1">
+                      {fyBalance >= 0
+                        ? <TrendingUp className="w-3 h-3" />
+                        : <TrendingDown className="w-3 h-3" />}
+                      {fyBalance >= 0 ? "Leftover" : "Deficit"}
+                    </p>
+                    <p className={`text-sm font-bold tabular-nums ${fyBalance >= 0 ? "text-green-600" : "text-red-600"}`}>
+                      {formatCurrency(Math.abs(fyBalance))}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
             {/* Month rows */}
             <div className="space-y-1.5">

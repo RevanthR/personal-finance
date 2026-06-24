@@ -32,8 +32,6 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title ?? "FinanceOS", {
       body: data.body ?? "You have a pending payment",
-      icon: "/icons/icon-192.png",
-      badge: "/icons/icon-192.png",
       data: { url: data.url ?? "/dashboard" },
       actions: [{ action: "open", title: "View" }],
     })
