@@ -73,7 +73,7 @@ export function AddChitDialog({ open, onOpenChange, onAdd }: AddChitDialogProps)
             </div>
           ))}
           <DialogFooter>
-            <Button type="submit" disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-700">
+            <Button type="submit" disabled={loading} className="w-full">
               {loading ? "Adding..." : "Add Chit Fund"}
             </Button>
           </DialogFooter>

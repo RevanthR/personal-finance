@@ -177,7 +177,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <h2 className="text-2xl font-bold">{formatMonthYear(todayMonth, todayYear)}</h2>
         <p className="text-muted-foreground">Set up this month to start tracking</p>
-        <Button onClick={() => setShowSetup(true)} className="bg-indigo-600 hover:bg-indigo-700">
+        <Button onClick={() => setShowSetup(true)}>
           <Plus className="w-4 h-4 mr-2" /> Set Up {formatMonthYear(todayMonth, todayYear)}
         </Button>
         <SetupMonthDialog open={showSetup} onOpenChange={setShowSetup} month={todayMonth} year={todayYear} onConfirm={handleSetupMonth} />
@@ -208,15 +208,15 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <p className="text-[10px] text-slate-400">Income</p>
-                <p className="text-sm font-bold text-emerald-400">{formatCurrency(fyIncome)}</p>
+                <p className="text-sm font-bold text-green-400">{formatCurrency(fyIncome)}</p>
               </div>
               <div>
                 <p className="text-[10px] text-slate-400">Expenses</p>
-                <p className="text-sm font-bold text-rose-400">{formatCurrency(fyExpenses)}</p>
+                <p className="text-sm font-bold text-red-400">{formatCurrency(fyExpenses)}</p>
               </div>
               <div>
                 <p className="text-[10px] text-slate-400">{fyBalance >= 0 ? "Leftover" : "Deficit"}</p>
-                <p className={cn("text-sm font-bold", fyBalance >= 0 ? "text-emerald-400" : "text-rose-400")}>
+                <p className={cn("text-sm font-bold", fyBalance >= 0 ? "text-green-400" : "text-red-400")}>
                   {fyBalance >= 0 ? "+" : "-"}{formatCurrency(Math.abs(fyBalance))}
                 </p>
               </div>
@@ -228,31 +228,31 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
       {/* Metric cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <button onClick={openIncomeEdit} className="text-left">
-          <Card className="hover:border-indigo-400 transition-colors cursor-pointer h-full">
+          <Card className="hover:border-zinc-400 transition-colors cursor-pointer h-full">
             <CardContent className="p-3">
               <div className="flex items-center justify-between mb-1">
                 <p className="text-xs text-muted-foreground">Income</p>
                 <div className="flex items-center gap-1">
-                  <span className="text-emerald-600"><Wallet className="w-4 h-4" /></span>
+                  <span className="text-green-600"><Wallet className="w-4 h-4" /></span>
                   <Pencil className="w-2.5 h-2.5 text-muted-foreground" />
                 </div>
               </div>
               <p className="text-base font-bold">{formatCurrency(grandIncome)}</p>
               {(currentMonth.freelanceIncome > 0 || adHocIncome > 0) && (
-                <p className="text-[10px] text-emerald-600 mt-0.5">
+                <p className="text-[10px] text-green-600 mt-0.5">
                   +{formatCurrency(currentMonth.freelanceIncome + adHocIncome)} extra
                 </p>
               )}
             </CardContent>
           </Card>
         </button>
-        <MetricCard label="Committed" value={formatCurrency(totalCommitted)} icon={<TrendingDown className="w-4 h-4" />} color="text-rose-500" sub={`${pendingCount} pending`} />
-        <MetricCard label="Paid" value={formatCurrency(totalPaid)} icon={<CheckCircle2 className="w-4 h-4" />} color="text-indigo-600" sub={`${currentMonth.entries.filter(e => e.isPaid).length}/${currentMonth.entries.length} items`} />
+        <MetricCard label="Committed" value={formatCurrency(totalCommitted)} icon={<TrendingDown className="w-4 h-4" />} color="text-red-600" sub={`${pendingCount} pending`} />
+        <MetricCard label="Paid" value={formatCurrency(totalPaid)} icon={<CheckCircle2 className="w-4 h-4" />} color="text-zinc-500" sub={`${currentMonth.entries.filter(e => e.isPaid).length}/${currentMonth.entries.length} items`} />
         <MetricCard
           label={balance >= 0 ? "Leftover" : "Deficit"}
           value={formatCurrency(Math.abs(balance))}
           icon={balance >= 0 ? <TrendingUp className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-          color={balance >= 0 ? "text-emerald-600" : "text-rose-500"}
+          color={balance >= 0 ? "text-green-600" : "text-red-600"}
           sub={balance >= 0 ? "after all commitments" : "over income"}
         />
       </div>
@@ -353,8 +353,8 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
                     <YAxis hide />
                     <Tooltip formatter={v => formatCurrency(Number(v))} />
                     <Legend wrapperStyle={{ fontSize: 10 }} />
-                    <Bar dataKey="Income" fill="#10b981" radius={[2, 2, 0, 0]} />
-                    <Bar dataKey="Expenses" fill="#f43f5e" radius={[2, 2, 0, 0]} />
+                    <Bar dataKey="Income" fill="#15803d" radius={[2, 2, 0, 0]} />
+                    <Bar dataKey="Expenses" fill="#b91c1c" radius={[2, 2, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -373,12 +373,12 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
                       <p className="text-sm font-medium truncate">{chit.template.name}</p>
                       {chit.isLifted
                         ? <p className="text-xs text-muted-foreground">Lifted</p>
-                        : <p className="text-xs text-emerald-600">Saved {formatCurrency(chit.accumulatedSavings)}</p>
+                        : <p className="text-xs text-green-600">Saved {formatCurrency(chit.accumulatedSavings)}</p>
                       }
                     </div>
                     <span className={cn(
                       "text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ml-2",
-                      chit.isLifted ? "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400" : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400"
+                      chit.isLifted ? "bg-zinc-100 text-zinc-600" : "bg-green-50 text-green-700"
                     )}>
                       {chit.isLifted ? "Lifted" : "Active"}
                     </span>
@@ -430,7 +430,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
             <Button variant="outline" onClick={() => setShowIncomeEdit(false)} disabled={incomeLoading}>
               Cancel
             </Button>
-            <Button onClick={handleSaveIncome} disabled={incomeLoading} className="bg-indigo-600 hover:bg-indigo-700">
+            <Button onClick={handleSaveIncome} disabled={incomeLoading}>
               {incomeLoading ? "Saving..." : "Save"}
             </Button>
           </DialogFooter>
@@ -460,15 +460,15 @@ function MetricCard({ label, value, icon, color, sub }: { label: string; value: 
 function AdHocRow({ item, onDelete }: { item: AdHocItem; onDelete: (id: string) => void }) {
   return (
     <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl border bg-card">
-      <div className={cn("w-0.5 h-7 rounded-full shrink-0", item.type === "INCOME" ? "bg-emerald-500" : "bg-rose-500")} />
+      <div className={cn("w-0.5 h-7 rounded-full shrink-0", item.type === "INCOME" ? "bg-green-600" : "bg-red-600")} />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium">{item.name}</p>
         <p className="text-xs text-muted-foreground">{format(new Date(item.date), "dd MMM")}{item.notes ? ` · ${item.notes}` : ""}</p>
       </div>
-      <span className={cn("text-sm font-semibold shrink-0", item.type === "INCOME" ? "text-emerald-600" : "text-rose-500")}>
+      <span className={cn("text-sm font-semibold shrink-0", item.type === "INCOME" ? "text-green-600" : "text-red-600")}>
         {item.type === "INCOME" ? "+" : "-"}{formatCurrency(item.amount)}
       </span>
-      <Button variant="ghost" size="sm" onClick={() => onDelete(item.id)} className="h-7 w-7 p-0 text-muted-foreground hover:text-rose-500">
+      <Button variant="ghost" size="sm" onClick={() => onDelete(item.id)} className="h-7 w-7 p-0 text-muted-foreground hover:text-red-600">
         ×
       </Button>
     </div>

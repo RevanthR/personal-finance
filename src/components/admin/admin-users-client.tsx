@@ -50,7 +50,7 @@ export function AdminUsersClient({ users: initial }: { users: User[] }) {
               >
                 <Avatar className="w-10 h-10">
                   <AvatarImage src={user.image ?? undefined} />
-                  <AvatarFallback className="bg-indigo-600 text-white text-xs">{initials}</AvatarFallback>
+                  <AvatarFallback className="bg-zinc-900 text-white text-xs">{initials}</AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">

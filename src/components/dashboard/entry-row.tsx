@@ -72,7 +72,7 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
         onClick={handleTogglePaid}
         className={cn(
           "shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all",
-          isPaid ? "bg-emerald-500 border-emerald-500" : "border-muted-foreground/50 hover:border-indigo-500"
+          isPaid ? "bg-zinc-900 border-zinc-900" : "border-muted-foreground/50 hover:border-zinc-500"
         )}
       >
         {isPaid && <Check className="w-3 h-3 text-white" />}
@@ -86,12 +86,12 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
         <p className={cn("text-sm font-medium leading-tight", isPaid && "line-through text-muted-foreground")}>
           {entry.template.name}
           {isChitInvestment && (
-            <span className="ml-1.5 text-[10px] font-normal px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">
+            <span className="ml-1.5 text-[10px] font-normal px-1.5 py-0.5 rounded-full bg-green-50 text-green-700">
               saving
             </span>
           )}
           {entry.template.chitFund?.isLifted && (
-            <span className="ml-1.5 text-[10px] font-normal px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400">
+            <span className="ml-1.5 text-[10px] font-normal px-1.5 py-0.5 rounded-full bg-zinc-100 text-zinc-600">
               lifted
             </span>
           )}
@@ -105,7 +105,7 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
             </span>
           )}
           {isPaid && entry.paidOn && (
-            <span className="text-emerald-600 dark:text-emerald-400">
+            <span className="text-green-600">
               {format(new Date(entry.paidOn), "dd MMM")}
             </span>
           )}
@@ -122,14 +122,14 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
             onChange={(e) => setAmountVal(e.target.value)}
             onBlur={handleAmountBlur}
             onKeyDown={handleAmountKey}
-            className="w-24 text-right text-sm font-semibold bg-transparent border-b border-indigo-500 outline-none"
+            className="w-24 text-right text-sm font-semibold bg-transparent border-b border-zinc-400 outline-none"
           />
         ) : (
           <span
             onClick={handleAmountClick}
             className={cn(
               "text-sm font-semibold",
-              !entry.template.isFixed && !isPaid && "cursor-pointer hover:text-indigo-600 underline decoration-dotted underline-offset-2"
+              !entry.template.isFixed && !isPaid && "cursor-pointer hover:text-zinc-600 underline decoration-dotted underline-offset-2"
             )}
           >
             {formatCurrency(entry.amount)}

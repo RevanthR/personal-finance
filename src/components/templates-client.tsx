@@ -101,7 +101,7 @@ export function TemplatesClient({ templates: initial }: { templates: Template[] 
             {templates.filter((t) => t.isActive).length} active · auto-populate each month
           </p>
         </div>
-        <Button onClick={() => setShowAdd(true)} className="bg-indigo-600 hover:bg-indigo-700">
+        <Button onClick={() => setShowAdd(true)} className="bg-zinc-900 hover:bg-zinc-800">
           <Plus className="w-4 h-4 mr-1" /> Add Template
         </Button>
       </div>
@@ -134,7 +134,7 @@ export function TemplatesClient({ templates: initial }: { templates: Template[] 
                     <button onClick={() => setEditing(t)} className="text-muted-foreground hover:text-foreground">
                       <Pencil className="w-4 h-4" />
                     </button>
-                    <button onClick={() => deleteTemplate(t.id)} className="text-muted-foreground hover:text-rose-500">
+                    <button onClick={() => deleteTemplate(t.id)} className="text-muted-foreground hover:text-red-600">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -228,7 +228,7 @@ function TemplateDialog({
             <Input type="number" min="1" max="31" value={dueDateDay} onChange={(e) => setDueDateDay(e.target.value)} placeholder="e.g. 21" />
           </div>
           <DialogFooter>
-            <Button type="submit" disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-700">
+            <Button type="submit" disabled={loading} className="w-full bg-zinc-900 hover:bg-zinc-800">
               {loading ? "Saving..." : "Save"}
             </Button>
           </DialogFooter>

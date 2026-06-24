@@ -23,7 +23,7 @@ export default async function AdminPage() {
       <div className="grid grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
-            <Users className="w-8 h-8 text-indigo-500" />
+            <Users className="w-8 h-8 text-zinc-500" />
             <div>
               <p className="text-2xl font-bold">{users.length}</p>
               <p className="text-xs text-muted-foreground">Total Users</p>
@@ -32,7 +32,7 @@ export default async function AdminPage() {
         </Card>
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
-            <Activity className="w-8 h-8 text-emerald-500" />
+            <Activity className="w-8 h-8 text-green-600" />
             <div>
               <p className="text-2xl font-bold">{activeUsers}</p>
               <p className="text-xs text-muted-foreground">Active Users</p>

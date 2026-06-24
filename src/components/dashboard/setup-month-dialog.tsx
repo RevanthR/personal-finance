@@ -54,7 +54,7 @@ export function SetupMonthDialog({ open, onOpenChange, month, year, onConfirm }:
             />
           </div>
           <DialogFooter>
-            <Button type="submit" disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-700">
+            <Button type="submit" disabled={loading} className="w-full">
               {loading ? "Setting up..." : "Start Month"}
             </Button>
           </DialogFooter>

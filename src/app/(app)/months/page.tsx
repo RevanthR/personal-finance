@@ -74,13 +74,13 @@ export default async function MonthsPage() {
             </div>
 
             <div className="grid grid-cols-3 gap-2">
-              <SummaryCard label="Total Income" value={fyIncome} icon={<Wallet className="w-3.5 h-3.5" />} color="text-emerald-600" />
-              <SummaryCard label="Total Expenses" value={fyExpenses} icon={<TrendingDown className="w-3.5 h-3.5" />} color="text-rose-500" />
+              <SummaryCard label="Total Income" value={fyIncome} icon={<Wallet className="w-3.5 h-3.5" />} color="text-green-600" />
+              <SummaryCard label="Total Expenses" value={fyExpenses} icon={<TrendingDown className="w-3.5 h-3.5" />} color="text-red-600" />
               <SummaryCard
                 label={fyBalance >= 0 ? "Leftover" : "Deficit"}
                 value={Math.abs(fyBalance)}
                 icon={fyBalance >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-                color={fyBalance >= 0 ? "text-emerald-600" : "text-rose-500"}
+                color={fyBalance >= 0 ? "text-green-600" : "text-red-600"}
                 sub={fyBalance >= 0 ? "after all spends" : "over income"}
               />
             </div>
@@ -89,7 +89,7 @@ export default async function MonthsPage() {
             <div className="space-y-1.5">
               {[...fyMonths].reverse().map(m => (
                 <Link key={m.id} href={`/months/${m.id}`}>
-                  <div className="flex items-center justify-between px-4 py-3 rounded-xl border bg-card hover:border-indigo-400 transition-colors cursor-pointer">
+                  <div className="flex items-center justify-between px-4 py-3 rounded-xl border bg-card hover:border-zinc-400 transition-colors cursor-pointer">
                     <div className="min-w-0">
                       <p className="text-sm font-medium">{formatMonthYear(m.month, m.year)}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
@@ -98,10 +98,10 @@ export default async function MonthsPage() {
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
                       <div className="text-right">
-                        <p className={`text-xs font-medium ${m.balance >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
+                        <p className={`text-xs font-medium ${m.balance >= 0 ? "text-green-600" : "text-red-600"}`}>
                           {m.balance >= 0 ? "Leftover" : "Deficit"}
                         </p>
-                        <p className={`text-sm font-bold ${m.balance >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
+                        <p className={`text-sm font-bold ${m.balance >= 0 ? "text-green-600" : "text-red-600"}`}>
                           {formatCurrency(Math.abs(m.balance))}
                         </p>
                       </div>

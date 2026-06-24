@@ -93,7 +93,7 @@ export function SettingsClient({ user }: SettingsClientProps) {
         <CardContent className="flex items-center gap-4">
           <Avatar className="w-14 h-14">
             <AvatarImage src={user.image ?? undefined} />
-            <AvatarFallback className="bg-indigo-600 text-white text-lg">{initials}</AvatarFallback>
+            <AvatarFallback className="bg-zinc-900 text-white text-lg">{initials}</AvatarFallback>
           </Avatar>
           <div>
             <p className="font-semibold">{user.name}</p>

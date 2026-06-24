@@ -31,7 +31,7 @@ export function Header({ user }: HeaderProps) {
 
   return (
     <header className="h-14 border-b bg-white dark:bg-slate-900 flex items-center justify-between px-4 md:px-6 shrink-0">
-      <div className="md:hidden font-bold text-indigo-600">FinanceOS</div>
+      <div className="md:hidden font-bold text-foreground">FinanceOS</div>
       <div className="hidden md:block" />
 
       <div className="flex items-center gap-3">
@@ -44,7 +44,7 @@ export function Header({ user }: HeaderProps) {
             <button className="flex items-center gap-2 outline-none">
               <Avatar className="w-8 h-8 cursor-pointer">
                 <AvatarImage src={user.image ?? undefined} alt={user.name ?? "User"} />
-                <AvatarFallback className="bg-indigo-600 text-white text-xs">
+                <AvatarFallback className="bg-zinc-900 text-white text-xs">
                   {initials}
                 </AvatarFallback>
               </Avatar>

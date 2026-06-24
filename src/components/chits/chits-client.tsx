@@ -88,7 +88,7 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
             {activeChits.length} active · {formatCurrency(totalSavings)} accumulated
           </p>
         </div>
-        <Button onClick={() => setShowAdd(true)} className="bg-indigo-600 hover:bg-indigo-700">
+        <Button onClick={() => setShowAdd(true)}>
           <Plus className="w-4 h-4 mr-1" /> Add Chit
         </Button>
       </div>
@@ -112,7 +112,7 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
         <Card className="col-span-2 md:col-span-1">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground mb-1">Total Savings Accumulated</p>
-            <p className="text-2xl font-bold text-emerald-600">{formatCurrency(totalSavings)}</p>
+            <p className="text-2xl font-bold text-green-600">{formatCurrency(totalSavings)}</p>
           </CardContent>
         </Card>
       </div>
@@ -163,7 +163,7 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
                     <div>
                       <div className="flex justify-between text-xs mb-1">
                         <span className="text-muted-foreground">Accumulated savings</span>
-                        <span className="font-medium text-emerald-600">
+                        <span className="font-medium text-green-600">
                           {formatCurrency(chit.accumulatedSavings)} ({progressPercent}%)
                         </span>
                       </div>
@@ -173,7 +173,7 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="w-full text-amber-600 border-amber-200 hover:bg-amber-50"
+                      className="w-full"
                       onClick={() => setLiftingChit(chit)}
                     >
                       Mark as Lifted

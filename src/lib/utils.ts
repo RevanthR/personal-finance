@@ -34,11 +34,11 @@ export const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export const CATEGORY_COLORS: Record<string, string> = {
-  HOUSE_MAINTENANCE: "#6366f1",
-  LOAN: "#f43f5e",
-  CHIT_FUND: "#f59e0b",
-  CREDIT_CARD: "#8b5cf6",
-  SAVINGS: "#10b981",
-  PERSONAL: "#3b82f6",
-  MISCELLANEOUS: "#6b7280",
+  HOUSE_MAINTENANCE: "#64748b",
+  LOAN:             "#b91c1c",
+  CREDIT_CARD:      "#6d28d9",
+  CHIT_FUND:        "#b45309",
+  SAVINGS:          "#15803d",
+  PERSONAL:         "#1d4ed8",
+  MISCELLANEOUS:    "#9ca3af",
 };

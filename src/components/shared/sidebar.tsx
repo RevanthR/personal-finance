@@ -42,14 +42,14 @@ export function Sidebar({ isAdmin }: SidebarProps) {
         <div className="flex items-center justify-between p-4 border-b border-slate-800">
           {!collapsed && (
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shrink-0">
+              <div className="w-8 h-8 bg-zinc-700 rounded-lg flex items-center justify-center shrink-0">
                 <IndianRupee className="w-4 h-4 text-white" />
               </div>
               <span className="font-bold text-lg">FinanceOS</span>
             </div>
           )}
           {collapsed && (
-            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center mx-auto">
+            <div className="w-8 h-8 bg-zinc-700 rounded-lg flex items-center justify-center mx-auto">
               <IndianRupee className="w-4 h-4 text-white" />
             </div>
           )}
@@ -77,7 +77,7 @@ export function Sidebar({ isAdmin }: SidebarProps) {
               className={cn(
                 "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                 pathname === href || pathname.startsWith(href + "/")
-                  ? "bg-indigo-600 text-white"
+                  ? "bg-zinc-700 text-white"
                   : "text-slate-400 hover:bg-slate-800 hover:text-white"
               )}
             >
@@ -96,7 +96,7 @@ export function Sidebar({ isAdmin }: SidebarProps) {
                 className={cn(
                   "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                   pathname.startsWith("/admin")
-                    ? "bg-indigo-600 text-white"
+                    ? "bg-zinc-700 text-white"
                     : "text-slate-400 hover:bg-slate-800 hover:text-white"
                 )}
               >
@@ -118,7 +118,7 @@ export function Sidebar({ isAdmin }: SidebarProps) {
               className={cn(
                 "flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-xs",
                 pathname === href || pathname.startsWith(href + "/")
-                  ? "text-indigo-400"
+                  ? "text-white"
                   : "text-slate-500"
               )}
             >

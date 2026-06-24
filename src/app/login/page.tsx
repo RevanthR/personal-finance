@@ -4,14 +4,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950 p-4">
-      <Card className="w-full max-w-sm shadow-xl border-0">
+    <div className="min-h-screen flex items-center justify-center bg-zinc-50 p-4">
+      <Card className="w-full max-w-sm shadow-sm">
         <CardHeader className="text-center pb-2">
-          <div className="mx-auto mb-4 w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg">
+          <div className="mx-auto mb-4 w-14 h-14 bg-zinc-900 rounded-xl flex items-center justify-center text-white text-xl font-bold">
             ₹
           </div>
           <CardTitle className="text-2xl font-bold">FinanceOS</CardTitle>
-          <CardDescription className="text-base">
+          <CardDescription className="text-sm">
             Your personal finance command centre
           </CardDescription>
         </CardHeader>
@@ -22,7 +22,7 @@ export default function LoginPage() {
               await signIn("google", { redirectTo: "/dashboard" });
             }}
           >
-            <Button type="submit" className="w-full h-12 text-base bg-indigo-600 hover:bg-indigo-700 cursor-pointer">
+            <Button type="submit" className="w-full h-11 cursor-pointer">
               <svg className="mr-2 h-5 w-5" viewBox="0 0 24 24">
                 <path
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"

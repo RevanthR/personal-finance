@@ -75,7 +75,7 @@ export function AdHocDialog({ open, onOpenChange, onAdd }: AdHocDialogProps) {
             <Button
               type="button"
               variant={type === "INCOME" ? "default" : "outline"}
-              className={type === "INCOME" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : ""}
+              className={type === "INCOME" ? "bg-green-700 hover:bg-green-800 text-white" : ""}
               onClick={() => { setType("INCOME"); setCategory(""); }}
             >
               Income
@@ -96,8 +96,8 @@ export function AdHocDialog({ open, onOpenChange, onAdd }: AdHocDialogProps) {
                   className={cn(
                     "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
                     category === c.value
-                      ? "bg-indigo-600 text-white border-indigo-600"
-                      : "border-border text-muted-foreground hover:border-indigo-400 hover:text-foreground"
+                      ? "bg-zinc-900 text-white border-zinc-900"
+                      : "border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"
                   )}
                 >
                   {c.label}
@@ -141,7 +141,7 @@ export function AdHocDialog({ open, onOpenChange, onAdd }: AdHocDialogProps) {
             <Button
               type="submit"
               disabled={loading || !name || !amount}
-              className="w-full bg-indigo-600 hover:bg-indigo-700"
+              className="w-full"
             >
               {loading ? "Adding..." : `Add ${type === "INCOME" ? "Income" : "Expense"}`}
             </Button>
