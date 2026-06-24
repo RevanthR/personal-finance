@@ -1,10 +1,12 @@
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-export default auth((req) => {
+async function handler(req: NextRequest) {
+  const session = await auth();
   const { pathname } = req.nextUrl;
-  const isLoggedIn = !!req.auth;
-  const isAdmin = req.auth?.user?.role === "ADMIN";
+  const isLoggedIn = !!session?.user;
+  const isAdmin = session?.user?.role === "ADMIN";
 
   if (pathname.startsWith("/admin") && !isAdmin) {
     return NextResponse.redirect(new URL("/dashboard", req.url));
@@ -23,7 +25,9 @@ export default auth((req) => {
   }
 
   return NextResponse.next();
-});
+}
+
+export { handler as proxy };
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|icons).*)"],
