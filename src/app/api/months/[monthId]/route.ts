@@ -38,14 +38,15 @@ export async function PATCH(
   const { monthId } = await params;
   const body = await req.json();
 
-  const month = await db.month.updateMany({
+  const updated = await db.month.updateMany({
     where: { id: monthId, userId: session.user.id },
     data: {
-      salaryIncome: body.salaryIncome,
-      freelanceIncome: body.freelanceIncome,
-      otherIncome: body.otherIncome,
+      ...(body.salaryIncome  !== undefined && { salaryIncome:  Number(body.salaryIncome)  }),
+      ...(body.freelanceIncome !== undefined && { freelanceIncome: Number(body.freelanceIncome) }),
+      ...(body.otherIncome   !== undefined && { otherIncome:   Number(body.otherIncome)   }),
     },
   });
 
-  return NextResponse.json(month);
+  if (updated.count === 0) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  return NextResponse.json({ ok: true });
 }

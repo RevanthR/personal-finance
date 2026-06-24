@@ -14,19 +14,13 @@ export async function PATCH(
   const body = await req.json();
   const { entryId, isPaid, amount, notes } = body;
 
-  // Verify this entry belongs to the user's month
-  const entry = await db.monthlyEntry.findFirst({
-    where: { id: entryId, monthId, month: { userId: session.user.id } },
-  });
-  if (!entry) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
+  // Single query: update only if the entry belongs to this user's month
   const updated = await db.monthlyEntry.update({
-    where: { id: entryId },
+    where: { id: entryId, monthId, month: { userId: session.user.id } },
     data: {
-      isPaid: isPaid ?? entry.isPaid,
-      paidOn: isPaid === true ? new Date() : isPaid === false ? null : entry.paidOn,
-      amount: amount ?? entry.amount,
-      notes: notes ?? entry.notes,
+      ...(isPaid !== undefined && { isPaid, paidOn: isPaid ? new Date() : null }),
+      ...(amount !== undefined && { amount }),
+      ...(notes !== undefined && { notes }),
     },
     include: { template: true },
   });
