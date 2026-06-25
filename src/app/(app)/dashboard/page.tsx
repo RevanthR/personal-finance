@@ -34,7 +34,7 @@ export default async function DashboardPage() {
     }),
     db.lineItemTemplate.findMany({
       where: { userId: session.user.id, category: "CREDIT_CARD", isActive: true },
-      select: { id: true, name: true },
+      select: { id: true, name: true, statementDay: true, dueDateDay: true },
     }),
   ]);
 

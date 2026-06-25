@@ -34,6 +34,9 @@ type Template = {
   pendingAmount: number | null;
   pendingFromMonth: number | null;
   pendingFromYear: number | null;
+  statementDay: number | null;
+  frequency: string;
+  dueMonth: number | null;
   sortOrder: number;
 };
 
@@ -44,6 +47,9 @@ type SaveData = {
   amount: number;
   isFixed: boolean;
   dueDateDay?: number;
+  statementDay?: number | null;
+  frequency?: string;
+  dueMonth?: number | null;
   updateCurrentMonth?: boolean;
   pendingAmount?: number | null;
   pendingFromMonth?: number | null;
@@ -83,6 +89,9 @@ export function TemplatesClient({ templates: initial }: { templates: Template[] 
       pendingAmount: data.clearPending ? null : (data.pendingAmount ?? editing.pendingAmount),
       pendingFromMonth: data.clearPending ? null : (data.pendingFromMonth ?? editing.pendingFromMonth),
       pendingFromYear: data.clearPending ? null : (data.pendingFromYear ?? editing.pendingFromYear),
+      statementDay: data.statementDay ?? editing.statementDay,
+      frequency: data.frequency ?? editing.frequency,
+      dueMonth: data.dueMonth !== undefined ? data.dueMonth : editing.dueMonth,
     };
     setTemplates((prev) => prev.map((x) => x.id === editing.id ? resolved : x));
     toast.success("Template updated");
@@ -183,6 +192,11 @@ export function TemplatesClient({ templates: initial }: { templates: Template[] 
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="text-sm font-medium truncate">{t.name}</p>
                           {!t.isFixed && !isClosed && <Badge variant="outline" className="text-xs">Variable</Badge>}
+                          {t.frequency === "YEARLY" && !isClosed && (
+                            <Badge className="text-xs bg-violet-50 text-violet-700 hover:bg-violet-50 border border-violet-200">
+                              Yearly{t.dueMonth ? ` · ${MONTHS[t.dueMonth - 1]}` : ""}
+                            </Badge>
+                          )}
                           {t.dueDateDay && !isClosed && (
                             <Badge variant="secondary" className="text-xs">Due {t.dueDateDay}th</Badge>
                           )}
@@ -200,7 +214,13 @@ export function TemplatesClient({ templates: initial }: { templates: Template[] 
                         <p className="text-xs text-muted-foreground">
                           {isClosed && t.foreCloseAmount
                             ? `Settled ${formatCurrency(t.foreCloseAmount)}`
-                            : `${formatCurrency(t.amount)}/month`}
+                            : `${formatCurrency(t.amount)}/${t.frequency === "YEARLY" ? "year" : "month"}`}
+                          {!isClosed && t.category === "CREDIT_CARD" && (t.statementDay || t.dueDateDay) && (
+                            <span className="ml-1.5 text-blue-500">
+                              {t.statementDay ? `· closes ${t.statementDay}th` : ""}
+                              {t.dueDateDay ? ` · due ${t.dueDateDay}th` : ""}
+                            </span>
+                          )}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
@@ -286,6 +306,11 @@ function TemplateDialog({
   const [amount, setAmount] = useState(String(initial?.amount ?? ""));
   const [isFixed, setIsFixed] = useState(initial?.isFixed ?? true);
   const [dueDateDay, setDueDateDay] = useState(String(initial?.dueDateDay ?? ""));
+  const [statementDay, setStatementDay] = useState(String(initial?.statementDay ?? ""));
+  const [frequency, setFrequency] = useState<"MONTHLY" | "YEARLY">(
+    (initial?.frequency as "MONTHLY" | "YEARLY") ?? "MONTHLY"
+  );
+  const [dueMonth, setDueMonth] = useState<number | null>(initial?.dueMonth ?? null);
   const [loading, setLoading] = useState(false);
 
   // Part 1: apply to current month
@@ -324,6 +349,9 @@ function TemplateDialog({
       amount: parseFloat(amount),
       isFixed,
       dueDateDay: dueDateDay ? parseInt(dueDateDay) : undefined,
+      statementDay: statementDay ? parseInt(statementDay) : null,
+      frequency,
+      dueMonth: frequency === "YEARLY" ? dueMonth : null,
       ...(isEditing && { updateCurrentMonth }),
       ...(pendingValid && {
         pendingAmount: parseFloat(pendingAmt),
@@ -336,7 +364,7 @@ function TemplateDialog({
   }
 
   const isCustom = category === "__custom__";
-  const isValid = name && category && (!isCustom || customLabel) && amount;
+  const isValid = name && category && (!isCustom || customLabel) && amount && (frequency === "MONTHLY" || dueMonth !== null);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -410,10 +438,68 @@ function TemplateDialog({
             <Label className="text-xs">Fixed Amount</Label>
             <Switch checked={isFixed} onCheckedChange={setIsFixed} />
           </div>
+
+          {/* Frequency */}
+          <div>
+            <Label className="text-xs mb-2 block">Frequency</Label>
+            <div className="flex gap-2">
+              {(["MONTHLY", "YEARLY"] as const).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setFrequency(f)}
+                  className={cn(
+                    "flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors",
+                    frequency === f
+                      ? "bg-zinc-900 text-white border-zinc-900"
+                      : "border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"
+                  )}
+                >
+                  {f === "MONTHLY" ? "Monthly" : "Yearly"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {frequency === "YEARLY" && (
+            <div>
+              <Label className="text-xs mb-2 block">Due month</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {MONTHS.map((m, i) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setDueMonth(i + 1)}
+                    className={cn(
+                      "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
+                      dueMonth === i + 1
+                        ? "bg-zinc-900 text-white border-zinc-900"
+                        : "border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"
+                    )}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div>
             <Label className="text-xs">Due Date (day of month, optional)</Label>
             <Input type="number" min="1" max="31" value={dueDateDay} onChange={(e) => setDueDateDay(e.target.value)} placeholder="e.g. 21" />
           </div>
+
+          {category === "CREDIT_CARD" && (
+            <div>
+              <Label className="text-xs">Statement closes on (day of month, optional)</Label>
+              <Input type="number" min="1" max="31" value={statementDay} onChange={(e) => setStatementDay(e.target.value)} placeholder="e.g. 15" />
+              {statementDay && (
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Charges on/before {statementDay}th → this month's bill · charges after → next month
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Part 2: schedule a future amount change */}
           {isEditing && (

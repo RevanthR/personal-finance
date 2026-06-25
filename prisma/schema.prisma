@@ -84,6 +84,11 @@ enum Category {
   MISCELLANEOUS
 }
 
+enum Frequency {
+  MONTHLY
+  YEARLY
+}
+
 enum AdHocType {
   INCOME
   EXPENSE
@@ -106,6 +111,9 @@ model LineItemTemplate {
   pendingAmount    Float?
   pendingFromMonth Int?
   pendingFromYear  Int?
+  statementDay     Int?
+  frequency        Frequency      @default(MONTHLY)
+  dueMonth         Int?
   sortOrder        Int            @default(0)
   createdAt        DateTime       @default(now())
   entries          MonthlyEntry[]

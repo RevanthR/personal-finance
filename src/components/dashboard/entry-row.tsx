@@ -19,6 +19,7 @@ interface EntryRowProps {
       customCategory: string | null;
       isFixed: boolean;
       dueDateDay: number | null;
+      statementDay: number | null;
       chitFund: { isLifted: boolean; accumulatedSavings: number } | null;
     };
   };
@@ -88,7 +89,13 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
         </p>
         <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
           <span>{getCategoryDisplay(entry.template.category, entry.template.customCategory)}</span>
-          {entry.template.dueDateDay && !isPaid && (
+          {entry.template.category === "CREDIT_CARD" && entry.template.statementDay && !isPaid && (
+            <span className="text-[10px] text-blue-500">
+              closes {entry.template.statementDay}th
+              {entry.template.dueDateDay ? ` · due ${entry.template.dueDateDay}th` : ""}
+            </span>
+          )}
+          {entry.template.category !== "CREDIT_CARD" && entry.template.dueDateDay && !isPaid && (
             <span className="flex items-center gap-0.5 text-amber-600">
               <Clock className="w-2.5 h-2.5" />{entry.template.dueDateDay}th
             </span>

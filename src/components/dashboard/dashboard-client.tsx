@@ -12,7 +12,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Wallet, TrendingDown, CheckCircle2, AlertCircle, TrendingUp, Plus, Pencil, ChevronDown,
+  Wallet, TrendingDown, CheckCircle2, AlertCircle, TrendingUp, Plus, Pencil, ChevronDown, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { EntryRow } from "./entry-row";
@@ -30,7 +30,7 @@ interface DashboardClientProps {
   currentMonth: MonthWithDetails | null;
   recentMonths: MonthWithDetails[];
   chitFunds: ChitFundWithTemplate[];
-  ccTemplates: { id: string; name: string }[];
+  ccTemplates: { id: string; name: string; statementDay: number | null; dueDateDay: number | null }[];
   todayMonth: number;
   todayYear: number;
   userId: string;
@@ -47,7 +47,7 @@ type MonthWithDetails = {
 type EntryWithTemplate = {
   id: string; amount: number; isPaid: boolean; paidOn: string | null; notes: string | null; templateId: string;
   statementAmount: number | null;
-  template: { id: string; name: string; category: string; customCategory: string | null; isFixed: boolean; dueDateDay: number | null; chitFund: { isLifted: boolean; accumulatedSavings: number } | null };
+  template: { id: string; name: string; category: string; customCategory: string | null; isFixed: boolean; dueDateDay: number | null; statementDay: number | null; chitFund: { isLifted: boolean; accumulatedSavings: number } | null };
 };
 
 type AdHocItem = {
@@ -140,9 +140,10 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
   const entries = currentMonth?.entries ?? [];
   const adHocItems = currentMonth?.adHocItems ?? [];
 
-  const adHocIncome    = useMemo(() => adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0), [adHocItems]);
-  const ccAdHocTotal   = useMemo(() => adHocItems.filter(i => i.type === "EXPENSE" && i.category === "CREDIT_CARD").reduce((s, i) => s + i.amount, 0), [adHocItems]);
-  const adHocExpense   = useMemo(() => adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0), [adHocItems]);
+  const adHocIncome      = useMemo(() => adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0), [adHocItems]);
+  // Post-close CC charges live in statementAmount (next month's bill); pre-close go into entry.amount (Recurring)
+  const ccStatementTotal = useMemo(() => entries.filter(e => e.template.category === "CREDIT_CARD").reduce((s, e) => s + (e.statementAmount ?? 0), 0), [entries]);
+  const adHocExpense     = useMemo(() => adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0), [adHocItems]);
   const totalIncome    = currentMonth ? currentMonth.salaryIncome + currentMonth.freelanceIncome + currentMonth.otherIncome : 0;
   const grandIncome    = totalIncome + adHocIncome;
   const totalCommitted = useMemo(() => entries.reduce((s, e) => s + e.amount, 0), [entries]);
@@ -268,16 +269,30 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
       body: JSON.stringify(item),
     });
     if (!res.ok) { toast.error("Failed to add"); return; }
-    const newItem = await res.json();
-    setCurrentMonth(prev => prev ? { ...prev, adHocItems: [...prev.adHocItems, newItem] } : prev);
+    const { item: newItem, updatedEntry } = await res.json();
+    setCurrentMonth(prev => {
+      if (!prev) return prev;
+      const updatedEntries = updatedEntry
+        ? prev.entries.map(e => e.id === updatedEntry.id ? { ...e, amount: updatedEntry.amount, statementAmount: updatedEntry.statementAmount } : e)
+        : prev.entries;
+      return { ...prev, adHocItems: [...prev.adHocItems, newItem], entries: updatedEntries };
+    });
     toast.success("Added");
     setShowAdHoc(false);
   }
 
   async function handleAdHocDelete(id: string) {
     if (!currentMonth) return;
-    await fetch(`/api/months/${currentMonth.id}/adhoc?id=${id}`, { method: "DELETE" });
-    setCurrentMonth(prev => prev ? { ...prev, adHocItems: prev.adHocItems.filter(i => i.id !== id) } : prev);
+    const res = await fetch(`/api/months/${currentMonth.id}/adhoc?id=${id}`, { method: "DELETE" });
+    if (!res.ok) { toast.error("Failed to remove"); return; }
+    const { updatedEntry } = await res.json();
+    setCurrentMonth(prev => {
+      if (!prev) return prev;
+      const updatedEntries = updatedEntry
+        ? prev.entries.map(e => e.id === updatedEntry.id ? { ...e, amount: updatedEntry.amount, statementAmount: updatedEntry.statementAmount } : e)
+        : prev.entries;
+      return { ...prev, adHocItems: prev.adHocItems.filter(i => i.id !== id), entries: updatedEntries };
+    });
     toast.success("Removed");
   }
 
@@ -381,17 +396,29 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
         />
       </div>
 
-      {/* CC next-month liability callout */}
-      {ccAdHocTotal > 0 && (
-        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-blue-50 border border-blue-200 text-sm">
-          <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-            <span className="text-blue-800 font-medium">CC spend this month</span>
-            <span className="text-[10px] text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full">next month's bill</span>
+      {/* CC post-close liability callout */}
+      {ccStatementTotal > 0 && (() => {
+        const ccEntry = entries.find(e => e.template.category === "CREDIT_CARD" && (e.statementAmount ?? 0) > 0);
+        const tpl = ccEntry ? ccTemplates.find(t => t.id === ccEntry.templateId) : null;
+        const statDay = tpl?.statementDay ?? null;
+        const dueDay  = tpl?.dueDateDay  ?? null;
+        const nextM   = todayMonth === 12 ? 1 : todayMonth + 1;
+        const nextY   = todayMonth === 12 ? todayYear + 1 : todayYear;
+        const monthName = new Date(nextY, nextM - 1).toLocaleString("default", { month: "short" });
+        return (
+          <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-blue-50 border border-blue-200 text-sm">
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+              <span className="text-blue-800 font-medium">CC carry-forward</span>
+              {statDay
+                ? <span className="text-[10px] text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full">closes {statDay}th {monthName}{dueDay ? ` · due ${dueDay}th` : ""}</span>
+                : <span className="text-[10px] text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full">next month's bill</span>
+              }
+            </div>
+            <span className="text-blue-900 font-bold shrink-0">{formatCurrency(ccStatementTotal)}</span>
           </div>
-          <span className="text-blue-900 font-bold">{formatCurrency(ccAdHocTotal)}</span>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Progress */}
       <div className="space-y-1.5">
@@ -576,7 +603,7 @@ function TransactionRow({ item, onDelete }: { item: AdHocItem; onDelete: (id: st
         {item.type === "INCOME" ? "+" : "-"}{formatCurrency(item.amount)}
       </span>
       <Button variant="ghost" size="sm" onClick={() => onDelete(item.id)} className="h-7 w-7 p-0 text-muted-foreground hover:text-red-600">
-        ×
+        <Trash2 className="w-3.5 h-3.5" />
       </Button>
     </div>
   );

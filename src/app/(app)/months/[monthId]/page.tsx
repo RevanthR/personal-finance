@@ -39,7 +39,7 @@ export default async function MonthDetailPage({
     }),
     db.lineItemTemplate.findMany({
       where: { userId: session.user.id, category: "CREDIT_CARD", isActive: true },
-      select: { id: true, name: true },
+      select: { id: true, name: true, statementDay: true, dueDateDay: true },
     }),
   ]);
 

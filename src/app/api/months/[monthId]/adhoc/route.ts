@@ -29,16 +29,17 @@ export async function POST(
     },
   });
 
-  // CC expense → find-or-create the MonthlyEntry for the template, then increment statementAmount
+  let updatedEntry: { id: string; amount: number; statementAmount: number | null } | null = null;
+
   if (body.type === "EXPENSE" && body.category === "CREDIT_CARD" && body.ccTemplateId) {
     const templateId: string = body.ccTemplateId;
 
+    // Find or create the MonthlyEntry for this CC template in this month
     let entry = await db.monthlyEntry.findUnique({
       where: { monthId_templateId: { monthId, templateId } },
     });
 
     if (!entry) {
-      // Template was added after this month was populated — create the entry now
       const template = await db.lineItemTemplate.findFirst({
         where: { id: templateId, userId: session.user.id, category: "CREDIT_CARD" },
       });
@@ -50,14 +51,31 @@ export async function POST(
     }
 
     if (entry) {
-      await db.monthlyEntry.update({
-        where: { id: entry.id },
-        data: { statementAmount: { increment: body.amount } },
-      });
+      // Determine if charge is pre-close (belongs to current month's bill) or post-close (next month)
+      const template = await db.lineItemTemplate.findUnique({ where: { id: templateId } });
+      const statementDay = template?.statementDay ?? null;
+      const expenseDay = new Date(body.date).getDate();
+      const isPreClose = statementDay !== null && expenseDay <= statementDay;
+
+      if (isPreClose) {
+        // Add directly to current bill (entry.amount) — this month's liability
+        updatedEntry = await db.monthlyEntry.update({
+          where: { id: entry.id },
+          data: { amount: { increment: body.amount } },
+          select: { id: true, amount: true, statementAmount: true },
+        });
+      } else {
+        // Post-close: accumulate in statementAmount for next month's bill
+        updatedEntry = await db.monthlyEntry.update({
+          where: { id: entry.id },
+          data: { statementAmount: { increment: body.amount } },
+          select: { id: true, amount: true, statementAmount: true },
+        });
+      }
     }
   }
 
-  return NextResponse.json(item, { status: 201 });
+  return NextResponse.json({ item, updatedEntry }, { status: 201 });
 }
 
 // DELETE /api/months/[monthId]/adhoc?id=xxx
@@ -72,18 +90,38 @@ export async function DELETE(
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
-  // If this was a CC expense, decrement statementAmount before deleting
   const item = await db.adHocItem.findFirst({
     where: { id, monthId, month: { userId: session.user.id } },
   });
+
+  let updatedEntry: { id: string; amount: number; statementAmount: number | null } | null = null;
+
   if (item?.category === "CREDIT_CARD" && item.type === "EXPENSE") {
-    const ccEntry = await db.monthlyEntry.findFirst({
-      where: { monthId, template: { category: "CREDIT_CARD", userId: session.user.id } },
+    // Parse card name from notes ("CardName · Subcategory") to find the right entry
+    const cardName = item.notes?.split(" · ")[0] ?? null;
+    const entry = await db.monthlyEntry.findFirst({
+      where: {
+        monthId,
+        template: {
+          category: "CREDIT_CARD",
+          userId: session.user.id,
+          ...(cardName ? { name: cardName } : {}),
+        },
+      },
+      include: { template: { select: { statementDay: true } } },
     });
-    if (ccEntry) {
-      await db.monthlyEntry.update({
-        where: { id: ccEntry.id },
-        data: { statementAmount: { decrement: item.amount } },
+
+    if (entry) {
+      const statementDay = entry.template.statementDay ?? null;
+      const expenseDay = new Date(item.date).getDate();
+      const isPreClose = statementDay !== null && expenseDay <= statementDay;
+
+      updatedEntry = await db.monthlyEntry.update({
+        where: { id: entry.id },
+        data: isPreClose
+          ? { amount: { decrement: item.amount } }
+          : { statementAmount: { decrement: item.amount } },
+        select: { id: true, amount: true, statementAmount: true },
       });
     }
   }
@@ -92,5 +130,5 @@ export async function DELETE(
     where: { id, monthId, month: { userId: session.user.id } },
   });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, updatedEntry });
 }

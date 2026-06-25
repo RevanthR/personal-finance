@@ -32,6 +32,9 @@ export async function POST(req: NextRequest) {
       amount: body.amount,
       isFixed: body.isFixed ?? true,
       dueDateDay: body.dueDateDay,
+      statementDay: body.statementDay ?? null,
+      frequency: body.frequency ?? "MONTHLY",
+      dueMonth: body.dueMonth ?? null,
       sortOrder: body.sortOrder ?? 0,
     },
   });
