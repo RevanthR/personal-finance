@@ -63,6 +63,22 @@ export async function POST(req: NextRequest) {
     );
 
     for (const t of templates) {
+      // Income templates don't create entries — they just inform income pre-fill.
+      // Still promote pending amounts so the template.amount stays current.
+      if (t.templateType === "INCOME") {
+        if (t.pendingAmount != null && t.pendingFromMonth != null && t.pendingFromYear != null) {
+          const kicks = year > t.pendingFromYear ||
+            (year === t.pendingFromYear && month >= t.pendingFromMonth);
+          if (kicks) {
+            await db.lineItemTemplate.update({
+              where: { id: t.id },
+              data: { amount: t.pendingAmount, pendingAmount: null, pendingFromMonth: null, pendingFromYear: null },
+            });
+          }
+        }
+        continue;
+      }
+
       // Yearly templates only appear in their designated month
       if (t.frequency === "YEARLY" && t.dueMonth !== month) continue;
 

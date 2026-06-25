@@ -12,7 +12,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Wallet, TrendingDown, CheckCircle2, AlertCircle, TrendingUp, Plus, Pencil, ChevronDown, Trash2,
+  Wallet, TrendingDown, CheckCircle2, AlertCircle, TrendingUp, Plus, Pencil, ChevronDown, Trash2, CreditCard,
 } from "lucide-react";
 import { toast } from "sonner";
 import { EntryRow } from "./entry-row";
@@ -61,6 +61,7 @@ type ChitFundWithTemplate = {
 };
 
 const CATEGORY_ORDER = ["HOUSE_MAINTENANCE", "LOAN", "CREDIT_CARD", "CHIT_FUND", "SAVINGS", "PERSONAL", "MISCELLANEOUS"];
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 const CC_SUBCATEGORIES = ["Food", "Coffee", "Groceries", "Fuel", "Shopping", "Travel", "Health", "Bills", "Entertainment", "Other"];
 
@@ -86,18 +87,8 @@ function CCSubcatBreakdown({ txItems, onDelete }: { txItems: AdHocItem[]; onDele
     return acc;
   }, []);
 
-  const total = txItems.reduce((s, t) => s + t.amount, 0);
-
-  function toggle(key: string) {
-    setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
-  }
-
   return (
-    <div className="mt-2 ml-3 border-l-2 border-blue-100 pl-3 space-y-1">
-      <div className="flex items-center justify-between pb-1">
-        <span className="text-[10px] font-semibold text-blue-500 uppercase tracking-wider">Spend this month</span>
-        <span className="text-[10px] text-blue-500 font-medium">{formatCurrency(total)}</span>
-      </div>
+    <div className="space-y-0.5">
       {sections.map(([subcat, txs]) => {
         const subtotal = txs.reduce((s, t) => s + t.amount, 0);
         const open = !!openSections[subcat];
@@ -105,7 +96,7 @@ function CCSubcatBreakdown({ txItems, onDelete }: { txItems: AdHocItem[]; onDele
           <div key={subcat}>
             <button
               type="button"
-              onClick={() => toggle(subcat)}
+              onClick={() => setOpenSections(prev => ({ ...prev, [subcat]: !prev[subcat] }))}
               className="w-full flex items-center justify-between py-1.5 hover:bg-muted/50 rounded px-1 transition-colors"
             >
               <div className="flex items-center gap-1.5">
@@ -123,6 +114,72 @@ function CCSubcatBreakdown({ txItems, onDelete }: { txItems: AdHocItem[]; onDele
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function CCCardBlock({
+  entry, txItems, nextMonthName, onUpdate, onDelete,
+}: {
+  entry: EntryWithTemplate;
+  txItems: AdHocItem[];
+  nextMonthName: string;
+  onUpdate: (id: string, updates: { isPaid?: boolean; amount?: number; notes?: string }) => Promise<void>;
+  onDelete: (id: string) => void;
+}) {
+  const statementDay = entry.template.statementDay;
+  const nextBillTotal = entry.statementAmount ?? 0;
+
+  // Pre-close txs bumped entry.amount; post-close go to next bill
+  const preCloseTxs = statementDay
+    ? txItems.filter(t => new Date(t.date).getDate() <= statementDay)
+    : [];
+  const postCloseTxs = statementDay
+    ? txItems.filter(t => new Date(t.date).getDate() > statementDay)
+    : txItems;
+
+  return (
+    <div className="rounded-xl border border-border overflow-hidden">
+      {/* Card header */}
+      <div className="flex items-center justify-between px-3 py-2 bg-muted/40 border-b border-border">
+        <div className="flex items-center gap-2">
+          <CreditCard className="w-3.5 h-3.5 text-muted-foreground" />
+          <span className="text-xs font-semibold">{entry.template.name}</span>
+        </div>
+        {statementDay && (
+          <span className="text-[10px] text-muted-foreground">
+            closes {statementDay}th
+            {entry.template.dueDateDay ? (() => {
+              const isNextMonth = entry.template.dueDateDay < statementDay;
+              return ` · due ${entry.template.dueDateDay}th${isNextMonth ? ` ${nextMonthName}` : ""}`;
+            })() : ""}
+          </span>
+        )}
+      </div>
+
+      {/* Current bill */}
+      <div className="p-2">
+        <EntryRow entry={entry} onUpdate={onUpdate} />
+        {preCloseTxs.length > 0 && (
+          <div className="mt-1.5 ml-3 border-l-2 border-zinc-200 pl-3 space-y-1">
+            <p className="text-[10px] text-muted-foreground font-medium">Added to this bill</p>
+            {preCloseTxs.map(t => <TransactionRow key={t.id} item={t} onDelete={onDelete} />)}
+          </div>
+        )}
+      </div>
+
+      {/* Next cycle charges */}
+      {nextBillTotal > 0 && (
+        <div className="border-t border-blue-100 bg-blue-50/60 px-3 py-2">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[10px] font-semibold text-blue-600 uppercase tracking-wider">
+              → {nextMonthName} bill
+            </span>
+            <span className="text-xs font-semibold text-blue-700">{formatCurrency(nextBillTotal)}</span>
+          </div>
+          {postCloseTxs.length > 0 && <CCSubcatBreakdown txItems={postCloseTxs} onDelete={onDelete} />}
+        </div>
+      )}
     </div>
   );
 }
@@ -153,6 +210,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
   const balance        = grandIncome - totalCommitted - adHocExpense;
   const paidPercent    = totalCommitted > 0 ? Math.round((totalPaid / totalCommitted) * 100) : 0;
   const pendingCount   = useMemo(() => entries.filter(e => !e.isPaid).length, [entries]);
+  const nextMonthName  = MONTHS[todayMonth % 12]; // todayMonth is 1-12; % 12 maps Dec→Jan correctly
 
   type GroupedItem =
     | { kind: "entry"; data: EntryWithTemplate }
@@ -396,29 +454,16 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
         />
       </div>
 
-      {/* CC post-close liability callout */}
-      {ccStatementTotal > 0 && (() => {
-        const ccEntry = entries.find(e => e.template.category === "CREDIT_CARD" && (e.statementAmount ?? 0) > 0);
-        const tpl = ccEntry ? ccTemplates.find(t => t.id === ccEntry.templateId) : null;
-        const statDay = tpl?.statementDay ?? null;
-        const dueDay  = tpl?.dueDateDay  ?? null;
-        const nextM   = todayMonth === 12 ? 1 : todayMonth + 1;
-        const nextY   = todayMonth === 12 ? todayYear + 1 : todayYear;
-        const monthName = new Date(nextY, nextM - 1).toLocaleString("default", { month: "short" });
-        return (
-          <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-blue-50 border border-blue-200 text-sm">
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
-              <span className="text-blue-800 font-medium">CC carry-forward</span>
-              {statDay
-                ? <span className="text-[10px] text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full">closes {statDay}th {monthName}{dueDay ? ` · due ${dueDay}th` : ""}</span>
-                : <span className="text-[10px] text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full">next month's bill</span>
-              }
-            </div>
-            <span className="text-blue-900 font-bold shrink-0">{formatCurrency(ccStatementTotal)}</span>
+      {/* CC carry-forward summary */}
+      {ccStatementTotal > 0 && (
+        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-blue-50 border border-blue-200">
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+            <span className="text-sm text-blue-800 font-medium">Total carrying to {nextMonthName}</span>
           </div>
-        );
-      })()}
+          <span className="text-sm text-blue-900 font-bold">{formatCurrency(ccStatementTotal)}</span>
+        </div>
+      )}
 
       {/* Progress */}
       <div className="space-y-1.5">
@@ -461,19 +506,20 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
                     {formatCurrency(catPaid)} / {formatCurrency(catTotal)}
                   </span>
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   {entryItems.map(item => {
-                    // For CC: attach per-card spend breakdown below each bill entry
                     if (isCC) {
                       const cardName = item.data.template.name;
                       const cardTxs = txItems.filter(t => parseCCCardName(t.notes) === cardName);
                       return (
-                        <div key={item.data.id}>
-                          <EntryRow entry={item.data} onUpdate={handleEntryUpdate} />
-                          {cardTxs.length > 0 && (
-                            <CCSubcatBreakdown txItems={cardTxs} onDelete={handleAdHocDelete} />
-                          )}
-                        </div>
+                        <CCCardBlock
+                          key={item.data.id}
+                          entry={item.data}
+                          txItems={cardTxs}
+                          nextMonthName={nextMonthName}
+                          onUpdate={handleEntryUpdate}
+                          onDelete={handleAdHocDelete}
+                        />
                       );
                     }
                     return <EntryRow key={item.data.id} entry={item.data} onUpdate={handleEntryUpdate} />;
@@ -483,13 +529,16 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
                   )}
                 </div>
 
-                {/* CC transactions whose card name doesn't match any entry (edge case) */}
+                {/* Orphaned CC transactions (card template deleted but transactions remain) */}
                 {isCC && (() => {
                   const entryNames = new Set(entryItems.map(i => i.data.template.name));
                   const orphaned = txItems.filter(t => !entryNames.has(parseCCCardName(t.notes) ?? ""));
-                  return orphaned.length > 0
-                    ? <CCSubcatBreakdown txItems={orphaned} onDelete={handleAdHocDelete} />
-                    : null;
+                  return orphaned.length > 0 ? (
+                    <div className="mt-2 rounded-xl border border-dashed border-border px-3 py-2">
+                      <p className="text-[10px] text-muted-foreground mb-1.5">Unmatched transactions</p>
+                      <CCSubcatBreakdown txItems={orphaned} onDelete={handleAdHocDelete} />
+                    </div>
+                  ) : null;
                 })()}
               </div>
             );

@@ -1,153 +1,121 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
-import Link from "next/link";
-import { Card, CardContent } from "@/components/ui/card";
-import { formatCurrency, formatMonthYear } from "@/lib/utils";
-import { ChevronRight, TrendingUp, TrendingDown, Wallet } from "lucide-react";
-import type { MonthlyEntry, AdHocItem } from "@/generated/prisma/client";
+import { YearOverviewClient, type MonthData } from "@/components/months/year-overview-client";
+
+function getFY(month: number, year: number) {
+  const fyStart = month >= 4 ? year : year - 1;
+  return {
+    fyStart,
+    fyKey: `FY${String(fyStart).slice(2)}-${String(fyStart + 1).slice(2)}`,
+  };
+}
 
 export default async function MonthsPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
+  const userId = session.user.id;
 
-  const months = await db.month.findMany({
-    where: { userId: session.user.id },
-    orderBy: [{ year: "asc" }, { month: "asc" }],
-    include: { entries: true, adHocItems: true },
-  });
+  const now = new Date();
+  const todayMonth = now.getMonth() + 1;
+  const todayYear = now.getFullYear();
+  const { fyStart, fyKey } = getFY(todayMonth, todayYear);
 
-  // Group by fiscal year (April–March)
-  function getFY(month: number, year: number) {
-    return month >= 4 ? `FY${String(year).slice(2)}-${String(year + 1).slice(2)}` : `FY${String(year - 1).slice(2)}-${String(year).slice(2)}`;
+  // All 12 months of the current FY: Apr(fyStart)→Mar(fyStart+1)
+  const fyMonths = [
+    ...Array.from({ length: 9 }, (_, i) => ({ month: i + 4, year: fyStart })),
+    ...Array.from({ length: 3 }, (_, i) => ({ month: i + 1, year: fyStart + 1 })),
+  ];
+
+  const [allMonths, templates] = await Promise.all([
+    db.month.findMany({
+      where: { userId },
+      include: { entries: true, adHocItems: true },
+      orderBy: [{ year: "asc" }, { month: "asc" }],
+    }),
+    db.lineItemTemplate.findMany({
+      where: { userId, isActive: true, foreClosedOn: null },
+    }),
+  ]);
+
+  // Separate income vs expense templates
+  const incomeTemplates = templates.filter(t => t.templateType === "INCOME");
+  const expenseTemplates = templates.filter(t => t.templateType === "EXPENSE");
+
+  // Base income: prefer income templates; fallback to most recent month's salary
+  const recentMonth = [...allMonths]
+    .filter(m => m.isPopulated)
+    .sort((a, b) => b.year - a.year || b.month - a.month)[0];
+  const fallbackIncome = recentMonth?.salaryIncome ?? 0;
+
+  function getProjectedIncome(month: number, year: number): number {
+    if (incomeTemplates.length === 0) return fallbackIncome;
+    return incomeTemplates.reduce((sum, t) => {
+      let amount = t.amount;
+      if (t.pendingAmount != null && t.pendingFromMonth != null && t.pendingFromYear != null) {
+        const kicks = year > t.pendingFromYear ||
+          (year === t.pendingFromYear && month >= t.pendingFromMonth);
+        if (kicks) amount = t.pendingAmount;
+      }
+      return sum + amount;
+    }, 0);
   }
 
-  type MonthSummary = {
-    id: string; month: number; year: number;
-    income: number; committed: number; balance: number;
-    paid: number; total: number;
-  };
-
-  const summaries: MonthSummary[] = months.map(m => {
-    const income = m.salaryIncome + m.freelanceIncome + m.otherIncome
-      + m.adHocItems.filter((i: AdHocItem) => i.type === "INCOME").reduce((s: number, i: AdHocItem) => s + i.amount, 0);
-    // Exclude CC ad-hoc (next-month liability, not current-month expense)
-    const committed = m.entries.reduce((s: number, e: MonthlyEntry) => s + e.amount, 0)
-      + m.adHocItems.filter((i: AdHocItem) => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s: number, i: AdHocItem) => s + i.amount, 0);
+  // Current FY months (actual or projected)
+  const currentFYMonths: MonthData[] = fyMonths.map(({ month, year }) => {
+    const actual = allMonths.find(m => m.month === month && m.year === year && m.isPopulated);
+    if (actual) {
+      const income = actual.salaryIncome + actual.freelanceIncome + actual.otherIncome
+        + actual.adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0);
+      const expenses = actual.entries.reduce((s, e) => s + e.amount, 0)
+        + actual.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0);
+      return {
+        id: actual.id, month, year, income, expenses,
+        balance: income - expenses,
+        paid: actual.entries.filter(e => e.isPaid).length,
+        total: actual.entries.length,
+        isPopulated: true,
+        isCurrent: month === todayMonth && year === todayYear,
+      };
+    }
+    // Projected: sum active expense templates + any yearly template due this month
+    const projExpenses = expenseTemplates
+      .filter(t => t.frequency === "MONTHLY" || (t.frequency === "YEARLY" && t.dueMonth === month))
+      .reduce((s, t) => s + t.amount, 0);
+    const projIncome = getProjectedIncome(month, year);
     return {
-      id: m.id, month: m.month, year: m.year,
-      income, committed, balance: income - committed,
-      paid: m.entries.filter((e: MonthlyEntry) => e.isPaid).length,
-      total: m.entries.length,
+      id: null, month, year,
+      income: projIncome, expenses: projExpenses,
+      balance: projIncome - projExpenses,
+      paid: null, total: null,
+      isPopulated: false,
+      isCurrent: month === todayMonth && year === todayYear,
     };
   });
 
-  // Group by FY
-  const byFY = summaries.reduce<Record<string, MonthSummary[]>>((acc, s) => {
-    const fy = getFY(s.month, s.year);
-    if (!acc[fy]) acc[fy] = [];
-    acc[fy].push(s);
-    return acc;
-  }, {});
-
-  const fyKeys = Object.keys(byFY).sort().reverse();
+  // Past FY summaries
+  const pastFYMap: Record<string, { income: number; expenses: number; count: number }> = {};
+  for (const m of allMonths) {
+    const { fyStart: mFYStart, fyKey: mFY } = getFY(m.month, m.year);
+    if (mFYStart === fyStart) continue; // skip current FY
+    if (!pastFYMap[mFY]) pastFYMap[mFY] = { income: 0, expenses: 0, count: 0 };
+    const income = m.salaryIncome + m.freelanceIncome + m.otherIncome
+      + m.adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0);
+    const expenses = m.entries.reduce((s, e) => s + e.amount, 0)
+      + m.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0);
+    pastFYMap[mFY].income += income;
+    pastFYMap[mFY].expenses += expenses;
+    pastFYMap[mFY].count++;
+  }
+  const pastFYSummaries = Object.entries(pastFYMap)
+    .map(([fy, d]) => ({ fy, ...d, balance: d.income - d.expenses }))
+    .sort((a, b) => b.fy.localeCompare(a.fy));
 
   return (
-    <div className="space-y-6 max-w-3xl mx-auto">
-      <h1 className="text-xl font-bold">Monthly History</h1>
-
-      {fyKeys.length === 0 && (
-        <p className="text-muted-foreground">No months recorded yet.</p>
-      )}
-
-      {fyKeys.map(fy => {
-        const fyMonths = byFY[fy];
-        const fyIncome = fyMonths.reduce((s, m) => s + m.income, 0);
-        const fyExpenses = fyMonths.reduce((s, m) => s + m.committed, 0);
-        const fyBalance = fyIncome - fyExpenses;
-
-        return (
-          <div key={fy} className="space-y-3">
-            {/* FY summary header */}
-            <div className="flex items-start justify-between">
-              <h2 className="text-base font-semibold text-muted-foreground">{fy}</h2>
-              <span className="text-xs text-muted-foreground">{fyMonths.length} months</span>
-            </div>
-
-            <Card>
-              <CardContent className="p-3">
-                <div className="grid grid-cols-3 divide-x divide-border">
-                  <div className="pr-3">
-                    <p className="text-[10px] text-muted-foreground mb-0.5 flex items-center gap-1">
-                      <Wallet className="w-3 h-3" /> Income
-                    </p>
-                    <p className="text-sm font-bold text-green-600 tabular-nums">{formatCurrency(fyIncome)}</p>
-                  </div>
-                  <div className="px-3">
-                    <p className="text-[10px] text-muted-foreground mb-0.5 flex items-center gap-1">
-                      <TrendingDown className="w-3 h-3" /> Spent
-                    </p>
-                    <p className="text-sm font-bold text-red-600 tabular-nums">{formatCurrency(fyExpenses)}</p>
-                  </div>
-                  <div className="pl-3">
-                    <p className="text-[10px] text-muted-foreground mb-0.5 flex items-center gap-1">
-                      {fyBalance >= 0
-                        ? <TrendingUp className="w-3 h-3" />
-                        : <TrendingDown className="w-3 h-3" />}
-                      {fyBalance >= 0 ? "Leftover" : "Deficit"}
-                    </p>
-                    <p className={`text-sm font-bold tabular-nums ${fyBalance >= 0 ? "text-green-600" : "text-red-600"}`}>
-                      {formatCurrency(Math.abs(fyBalance))}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Month rows */}
-            <div className="space-y-2">
-              {[...fyMonths].reverse().map(m => (
-                <Link key={m.id} href={`/months/${m.id}`} className="block">
-                  <div className="flex items-center justify-between px-4 py-3.5 rounded-xl border bg-card hover:border-zinc-400 transition-colors cursor-pointer">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium">{formatMonthYear(m.month, m.year)}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {m.paid}/{m.total} paid · {formatCurrency(m.income)} income
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <div className="text-right">
-                        <p className={`text-xs font-medium ${m.balance >= 0 ? "text-green-600" : "text-red-600"}`}>
-                          {m.balance >= 0 ? "Leftover" : "Deficit"}
-                        </p>
-                        <p className={`text-sm font-bold ${m.balance >= 0 ? "text-green-600" : "text-red-600"}`}>
-                          {formatCurrency(Math.abs(m.balance))}
-                        </p>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function SummaryCard({ label, value, icon, color, sub }: { label: string; value: number; icon: React.ReactNode; color: string; sub?: string }) {
-  return (
-    <Card>
-      <CardContent className="p-3">
-        <div className="flex items-center justify-between mb-1">
-          <p className="text-[10px] text-muted-foreground leading-tight">{label}</p>
-          <span className={color}>{icon}</span>
-        </div>
-        <p className="text-sm font-bold leading-tight">{formatCurrency(value)}</p>
-        {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
-      </CardContent>
-    </Card>
+    <YearOverviewClient
+      months={JSON.parse(JSON.stringify(currentFYMonths))}
+      fyKey={fyKey}
+      pastFYSummaries={pastFYSummaries}
+    />
   );
 }

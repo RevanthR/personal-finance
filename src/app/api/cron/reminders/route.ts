@@ -26,7 +26,13 @@ export async function GET(req: NextRequest) {
   const todayDay = now.getDate();
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
-  const targetDay = todayDay + 3; // send reminder 3 days before due
+  const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+  const rawTarget = todayDay + 3;
+
+  // If rawTarget overflows (e.g. July 30 + 3 = 33), the due date is in the next month.
+  // We still match against entries in the CURRENT month since the entry belongs here;
+  // only the due date itself falls in the next month (common for CC bills).
+  const targetDay = rawTarget > daysInMonth ? rawTarget - daysInMonth : rawTarget;
 
   // Find all unpaid entries due in 3 days across all users who have push subscriptions
   const entries = await db.monthlyEntry.findMany({

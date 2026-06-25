@@ -61,14 +61,15 @@ export async function POST(
         // Add directly to current bill (entry.amount) — this month's liability
         updatedEntry = await db.monthlyEntry.update({
           where: { id: entry.id },
-          data: { amount: { increment: body.amount } },
+          data: { amount: entry.amount + body.amount },
           select: { id: true, amount: true, statementAmount: true },
         });
       } else {
         // Post-close: accumulate in statementAmount for next month's bill
+        // Use explicit value (not Prisma increment) to avoid NULL + X = NULL in PostgreSQL
         updatedEntry = await db.monthlyEntry.update({
           where: { id: entry.id },
-          data: { statementAmount: { increment: body.amount } },
+          data: { statementAmount: (entry.statementAmount ?? 0) + body.amount },
           select: { id: true, amount: true, statementAmount: true },
         });
       }
@@ -108,7 +109,10 @@ export async function DELETE(
           ...(cardName ? { name: cardName } : {}),
         },
       },
-      include: { template: { select: { statementDay: true } } },
+      select: {
+        id: true, amount: true, statementAmount: true,
+        template: { select: { statementDay: true } },
+      },
     });
 
     if (entry) {
@@ -119,8 +123,8 @@ export async function DELETE(
       updatedEntry = await db.monthlyEntry.update({
         where: { id: entry.id },
         data: isPreClose
-          ? { amount: { decrement: item.amount } }
-          : { statementAmount: { decrement: item.amount } },
+          ? { amount: Math.max(0, entry.amount - item.amount) }
+          : { statementAmount: Math.max(0, (entry.statementAmount ?? 0) - item.amount) },
         select: { id: true, amount: true, statementAmount: true },
       });
     }

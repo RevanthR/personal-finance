@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
-import { Category } from "@/generated/prisma/client";
+import { Category, TemplateType } from "@/generated/prisma/client";
 
 export async function GET() {
   const session = await auth();
@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
       statementDay: body.statementDay ?? null,
       frequency: body.frequency ?? "MONTHLY",
       dueMonth: body.dueMonth ?? null,
+      templateType: (body.templateType ?? "EXPENSE") as TemplateType,
       sortOrder: body.sortOrder ?? 0,
     },
   });

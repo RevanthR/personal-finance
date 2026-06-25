@@ -37,6 +37,7 @@ type Template = {
   statementDay: number | null;
   frequency: string;
   dueMonth: number | null;
+  templateType: string;
   sortOrder: number;
 };
 
@@ -50,6 +51,7 @@ type SaveData = {
   statementDay?: number | null;
   frequency?: string;
   dueMonth?: number | null;
+  templateType?: string;
   updateCurrentMonth?: boolean;
   pendingAmount?: number | null;
   pendingFromMonth?: number | null;
@@ -92,6 +94,7 @@ export function TemplatesClient({ templates: initial }: { templates: Template[] 
       statementDay: data.statementDay ?? editing.statementDay,
       frequency: data.frequency ?? editing.frequency,
       dueMonth: data.dueMonth !== undefined ? data.dueMonth : editing.dueMonth,
+      templateType: data.templateType ?? editing.templateType,
     };
     setTemplates((prev) => prev.map((x) => x.id === editing.id ? resolved : x));
     toast.success("Template updated");
@@ -146,7 +149,10 @@ export function TemplatesClient({ templates: initial }: { templates: Template[] 
     setShowAdd(false);
   }
 
-  const grouped = templates.reduce<Record<string, Template[]>>((acc, t) => {
+  const incomeTemplates = templates.filter(t => t.templateType === "INCOME");
+  const expenseTemplates = templates.filter(t => t.templateType !== "INCOME");
+
+  const grouped = expenseTemplates.reduce<Record<string, Template[]>>((acc, t) => {
     const key = t.customCategory ?? t.category;
     if (!acc[key]) acc[key] = [];
     acc[key].push(t);
@@ -166,6 +172,49 @@ export function TemplatesClient({ templates: initial }: { templates: Template[] 
           <Plus className="w-4 h-4 mr-1" /> Add Template
         </Button>
       </div>
+
+      {/* Income sources */}
+      {incomeTemplates.length > 0 && (
+        <div>
+          <div className="flex items-center gap-1.5 mb-2">
+            <div className="w-2 h-2 rounded-full bg-green-500" />
+            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Income Sources</h2>
+          </div>
+          <div className="space-y-2">
+            {incomeTemplates.map(t => {
+              const hasPending = t.pendingAmount != null && t.pendingFromMonth != null && t.pendingFromYear != null;
+              const pendingDir = hasPending && t.pendingAmount! > t.amount ? "↑" : "↓";
+              return (
+                <Card key={t.id} className={cn(!t.isActive ? "opacity-50" : "")}>
+                  <CardContent className="p-3 flex items-center gap-3">
+                    <div className="w-1 h-10 rounded-full shrink-0 bg-green-500" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium truncate">{t.name}</p>
+                        {hasPending && (
+                          <Badge className="text-xs bg-amber-50 text-amber-700 hover:bg-amber-50 border border-amber-200">
+                            {pendingDir} {formatCurrency(t.pendingAmount!)} from {MONTHS[(t.pendingFromMonth! - 1)]} {t.pendingFromYear}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">{formatCurrency(t.amount)}/month</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Switch checked={t.isActive} onCheckedChange={() => toggleActive(t)} />
+                      <button onClick={() => setEditing(t)} className="text-muted-foreground hover:text-foreground">
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => deleteTemplate(t.id)} className="text-muted-foreground hover:text-red-600">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {Object.entries(grouped).map(([key, items]) => {
         const first = items[0];
@@ -311,6 +360,9 @@ function TemplateDialog({
     (initial?.frequency as "MONTHLY" | "YEARLY") ?? "MONTHLY"
   );
   const [dueMonth, setDueMonth] = useState<number | null>(initial?.dueMonth ?? null);
+  const [templateType, setTemplateType] = useState<"INCOME" | "EXPENSE">(
+    (initial?.templateType as "INCOME" | "EXPENSE") ?? "EXPENSE"
+  );
   const [loading, setLoading] = useState(false);
 
   // Part 1: apply to current month
@@ -352,6 +404,7 @@ function TemplateDialog({
       statementDay: statementDay ? parseInt(statementDay) : null,
       frequency,
       dueMonth: frequency === "YEARLY" ? dueMonth : null,
+      templateType,
       ...(isEditing && { updateCurrentMonth }),
       ...(pendingValid && {
         pendingAmount: parseFloat(pendingAmt),
@@ -364,19 +417,49 @@ function TemplateDialog({
   }
 
   const isCustom = category === "__custom__";
-  const isValid = name && category && (!isCustom || customLabel) && amount && (frequency === "MONTHLY" || dueMonth !== null);
+  const isIncome = templateType === "INCOME";
+  const isValid = name && (isIncome || (category && (!isCustom || customLabel))) && amount && (frequency === "MONTHLY" || dueMonth !== null);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-3">
+          {/* Income vs Expense toggle — only on new templates */}
+          {!isEditing && (
+            <div className="flex gap-2">
+              {(["EXPENSE", "INCOME"] as const).map(t => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTemplateType(t)}
+                  className={cn(
+                    "flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors",
+                    templateType === t
+                      ? t === "INCOME"
+                        ? "bg-green-600 text-white border-green-600"
+                        : "bg-zinc-900 text-white border-zinc-900"
+                      : "border-border text-muted-foreground hover:border-zinc-500"
+                  )}
+                >
+                  {t === "INCOME" ? "Income" : "Expense"}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div>
             <Label className="text-xs">Name</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} required />
           </div>
 
-          <div>
+          {templateType === "INCOME" && (
+            <p className="text-[11px] text-muted-foreground bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+              Income templates pre-fill your salary when setting up future months and drive year projections.
+            </p>
+          )}
+
+          <div className={cn(templateType === "INCOME" && "hidden")}>
             <Label className="text-xs mb-2 block">Category</Label>
             <div className="flex flex-wrap gap-1.5">
               {CATEGORY_CHIPS.map(([k, v]) => (
@@ -434,10 +517,12 @@ function TemplateDialog({
             </div>
           )}
 
-          <div className="flex items-center justify-between">
-            <Label className="text-xs">Fixed Amount</Label>
-            <Switch checked={isFixed} onCheckedChange={setIsFixed} />
-          </div>
+          {!isIncome && (
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">Fixed Amount</Label>
+              <Switch checked={isFixed} onCheckedChange={setIsFixed} />
+            </div>
+          )}
 
           {/* Frequency */}
           <div>
@@ -484,12 +569,14 @@ function TemplateDialog({
             </div>
           )}
 
-          <div>
-            <Label className="text-xs">Due Date (day of month, optional)</Label>
-            <Input type="number" min="1" max="31" value={dueDateDay} onChange={(e) => setDueDateDay(e.target.value)} placeholder="e.g. 21" />
-          </div>
+          {!isIncome && (
+            <div>
+              <Label className="text-xs">Due Date (day of month, optional)</Label>
+              <Input type="number" min="1" max="31" value={dueDateDay} onChange={(e) => setDueDateDay(e.target.value)} placeholder="e.g. 21" />
+            </div>
+          )}
 
-          {category === "CREDIT_CARD" && (
+          {!isIncome && category === "CREDIT_CARD" && (
             <div>
               <Label className="text-xs">Statement closes on (day of month, optional)</Label>
               <Input type="number" min="1" max="31" value={statementDay} onChange={(e) => setStatementDay(e.target.value)} placeholder="e.g. 15" />

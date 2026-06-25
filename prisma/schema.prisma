@@ -89,6 +89,11 @@ enum Frequency {
   YEARLY
 }
 
+enum TemplateType {
+  EXPENSE
+  INCOME
+}
+
 enum AdHocType {
   INCOME
   EXPENSE
@@ -114,6 +119,7 @@ model LineItemTemplate {
   statementDay     Int?
   frequency        Frequency      @default(MONTHLY)
   dueMonth         Int?
+  templateType     TemplateType   @default(EXPENSE)
   sortOrder        Int            @default(0)
   createdAt        DateTime       @default(now())
   entries          MonthlyEntry[]

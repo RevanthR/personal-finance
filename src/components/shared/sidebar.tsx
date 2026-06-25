@@ -108,24 +108,25 @@ export function Sidebar({ isAdmin }: SidebarProps) {
         </nav>
       </aside>
 
-      {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-950 border-t border-slate-800 z-50">
-        <div className="flex items-center justify-around py-2">
-          {navItems.map(({ href, label, icon: Icon }) => (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                "flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-xs",
-                pathname === href || pathname.startsWith(href + "/")
-                  ? "text-white"
-                  : "text-slate-500"
-              )}
-            >
-              <Icon className="w-5 h-5" />
-              <span>{label.split(" ")[0]}</span>
-            </Link>
-          ))}
+      {/* Mobile bottom nav — floating pill, lifted above iPhone home indicator */}
+      <nav className="md:hidden fixed left-4 right-4 z-50" style={{ bottom: "calc(1rem + env(safe-area-inset-bottom))" }}>
+        <div className="flex items-center justify-around bg-slate-950/95 backdrop-blur-md rounded-2xl px-2 py-2 shadow-2xl border border-slate-800">
+          {navItems.map(({ href, label, icon: Icon }) => {
+            const active = pathname === href || pathname.startsWith(href + "/");
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={cn(
+                  "flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl text-xs transition-colors",
+                  active ? "bg-zinc-700 text-white" : "text-slate-500"
+                )}
+              >
+                <Icon className="w-5 h-5" />
+                <span className="text-[10px] font-medium">{label.split(" ")[0]}</span>
+              </Link>
+            );
+          })}
         </div>
       </nav>
     </>
