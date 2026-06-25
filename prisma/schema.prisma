@@ -129,16 +129,17 @@ model Month {
 
 // Instance of a template for a specific month
 model MonthlyEntry {
-  id         String           @id @default(cuid())
-  monthId    String
-  month      Month            @relation(fields: [monthId], references: [id], onDelete: Cascade)
-  templateId String
-  template   LineItemTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  amount     Float
-  isPaid     Boolean          @default(false)
-  paidOn     DateTime?
-  notes      String?
-  createdAt  DateTime         @default(now())
+  id              String           @id @default(cuid())
+  monthId         String
+  month           Month            @relation(fields: [monthId], references: [id], onDelete: Cascade)
+  templateId      String
+  template        LineItemTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  amount          Float
+  isPaid          Boolean          @default(false)
+  paidOn          DateTime?
+  notes           String?
+  statementAmount Float?           // CC only: spend on card this month → becomes bill next month
+  createdAt       DateTime         @default(now())
 
   @@unique([monthId, templateId])
 }

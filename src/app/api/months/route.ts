@@ -49,13 +49,29 @@ export async function POST(req: NextRequest) {
       include: { chitFund: true },
     });
 
+    // Find previous month to carry CC statement amounts forward
+    const prevMonthNum = month === 1 ? 12 : month - 1;
+    const prevYear = month === 1 ? year - 1 : year;
+    const prevMonth = await db.month.findUnique({
+      where: { userId_month_year: { userId: session.user.id, month: prevMonthNum, year: prevYear } },
+      include: { entries: { select: { templateId: true, statementAmount: true } } },
+    });
+    const prevStatements = new Map(
+      (prevMonth?.entries ?? [])
+        .filter(e => e.statementAmount != null)
+        .map(e => [e.templateId, e.statementAmount!])
+    );
+
     for (const t of templates) {
       let amount = t.amount;
-      // Chit fund: use lifted amount if lifted, else unlifted amount
+
       if (t.chitFund) {
         amount = t.chitFund.isLifted
           ? (t.chitFund.monthlyLiftedAmount ?? t.amount)
           : t.chitFund.monthlyUnliftedAmount;
+      } else if (t.category === "CREDIT_CARD" && prevStatements.has(t.id)) {
+        // Bill for this month = last month's card spend
+        amount = prevStatements.get(t.id)!;
       }
 
       await db.monthlyEntry.upsert({

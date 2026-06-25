@@ -12,7 +12,7 @@ export async function PATCH(
 
   const { monthId } = await params;
   const body = await req.json();
-  const { entryId, isPaid, amount, notes } = body;
+  const { entryId, isPaid, amount, notes, statementAmount } = body;
 
   // Single query: update only if the entry belongs to this user's month
   const updated = await db.monthlyEntry.update({
@@ -21,6 +21,7 @@ export async function PATCH(
       ...(isPaid !== undefined && { isPaid, paidOn: isPaid ? new Date() : null }),
       ...(amount !== undefined && { amount }),
       ...(notes !== undefined && { notes }),
+      ...(statementAmount !== undefined && { statementAmount: statementAmount === null ? null : Number(statementAmount) }),
     },
     include: { template: true },
   });

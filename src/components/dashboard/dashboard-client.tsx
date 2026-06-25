@@ -45,6 +45,7 @@ type MonthWithDetails = {
 
 type EntryWithTemplate = {
   id: string; amount: number; isPaid: boolean; paidOn: string | null; notes: string | null; templateId: string;
+  statementAmount: number | null;
   template: { id: string; name: string; category: string; customCategory: string | null; isFixed: boolean; dueDateDay: number | null; chitFund: { isLifted: boolean; accumulatedSavings: number } | null };
 };
 
@@ -153,7 +154,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
     toast.success("Income updated");
   }
 
-  async function handleEntryUpdate(entryId: string, updates: { isPaid?: boolean; amount?: number; notes?: string }) {
+  async function handleEntryUpdate(entryId: string, updates: { isPaid?: boolean; amount?: number; notes?: string; statementAmount?: number | null }) {
     if (!currentMonth) return;
     const res = await fetch(`/api/months/${currentMonth.id}/entries`, {
       method: "PATCH",
