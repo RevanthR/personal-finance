@@ -45,6 +45,7 @@ type MonthWithDetails = {
 
 type CCLineItem = {
   id: string; name: string; amount: number; category: string | null; date: string | null; createdAt: string;
+  // category is a CCCategory enum value stored as string after JSON serialisation
 };
 
 type EntryWithTemplate = {

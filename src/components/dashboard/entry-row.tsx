@@ -7,11 +7,24 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
+type CCCategory = "FOOD" | "COFFEE" | "GROCERIES" | "FUEL" | "SHOPPING" | "TRAVEL" | "HEALTH" | "BILLS" | "ENTERTAINMENT" | "OTHER";
+
 type CCLineItem = {
   id: string; name: string; amount: number; category: string | null; date: string | null; createdAt: string;
 };
 
-const CC_CATEGORIES = ["Food", "Coffee", "Fuel", "Bills", "Shopping", "Travel", "Health", "Entertainment", "Other"];
+const CC_CATEGORIES: { value: CCCategory; label: string }[] = [
+  { value: "FOOD",          label: "Food" },
+  { value: "COFFEE",        label: "Coffee" },
+  { value: "GROCERIES",     label: "Groceries" },
+  { value: "FUEL",          label: "Fuel" },
+  { value: "SHOPPING",      label: "Shopping" },
+  { value: "TRAVEL",        label: "Travel" },
+  { value: "HEALTH",        label: "Health" },
+  { value: "BILLS",         label: "Bills" },
+  { value: "ENTERTAINMENT", label: "Entertainment" },
+  { value: "OTHER",         label: "Other" },
+];
 
 interface EntryRowProps {
   entry: {
@@ -44,7 +57,7 @@ export function EntryRow({ entry, monthId, onUpdate, onCCChange }: EntryRowProps
   const [ccItems, setCCItems] = useState<CCLineItem[]>(entry.ccItems);
   const [newName, setNewName] = useState("");
   const [newAmount, setNewAmount] = useState("");
-  const [newCategory, setNewCategory] = useState("");
+  const [newCategory, setNewCategory] = useState<CCCategory | "">("");
   const [adding, setAdding] = useState(false);
   const amountRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -56,8 +69,9 @@ export function EntryRow({ entry, monthId, onUpdate, onCCChange }: EntryRowProps
   const ccTotal = ccItems.reduce((s, i) => s + i.amount, 0);
 
   // Group items by category for display
+  const CC_LABEL = Object.fromEntries(CC_CATEGORIES.map(c => [c.value, c.label]));
   const itemsByCategory = ccItems.reduce<Record<string, CCLineItem[]>>((acc, item) => {
-    const key = item.category ?? "Uncategorised";
+    const key = item.category ? (CC_LABEL[item.category] ?? item.category) : "Uncategorised";
     if (!acc[key]) acc[key] = [];
     acc[key].push(item);
     return acc;
@@ -249,19 +263,19 @@ export function EntryRow({ entry, monthId, onUpdate, onCCChange }: EntryRowProps
           <form onSubmit={handleAddItem} className="space-y-2">
             {/* Category chips */}
             <div className="flex flex-wrap gap-1">
-              {CC_CATEGORIES.map(cat => (
+              {CC_CATEGORIES.map(({ value, label }) => (
                 <button
-                  key={cat}
+                  key={value}
                   type="button"
-                  onClick={() => setNewCategory(c => c === cat ? "" : cat)}
+                  onClick={() => setNewCategory(c => c === value ? "" : value)}
                   className={cn(
                     "px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors",
-                    newCategory === cat
+                    newCategory === value
                       ? "bg-zinc-900 text-white border-zinc-900"
                       : "border-border text-muted-foreground hover:border-zinc-400"
                   )}
                 >
-                  {cat}
+                  {label}
                 </button>
               ))}
             </div>

@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { CCCategory } from "@/generated/prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 type Ctx = { params: Promise<{ monthId: string; entryId: string }> };
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       entryId,
       name: String(body.name).trim(),
       amount: Number(body.amount),
-      category: body.category ? String(body.category).trim() : null,
+      category: body.category && Object.values(CCCategory).includes(body.category) ? body.category as CCCategory : null,
       date: body.date ? new Date(body.date) : null,
     },
   });

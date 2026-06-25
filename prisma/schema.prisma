@@ -89,6 +89,19 @@ enum AdHocType {
   EXPENSE
 }
 
+enum CCCategory {
+  FOOD
+  COFFEE
+  GROCERIES
+  FUEL
+  SHOPPING
+  TRAVEL
+  HEALTH
+  BILLS
+  ENTERTAINMENT
+  OTHER
+}
+
 // Recurring line item template — one per type of payment
 model LineItemTemplate {
   id               String         @id @default(cuid())
@@ -152,7 +165,7 @@ model CCLineItem {
   entry     MonthlyEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
   name      String
   amount    Float
-  category  String?      // free-text e.g. "Food", "Bills", "Fuel", "Shopping"
+  category  CCCategory?
   date      DateTime?
   createdAt DateTime     @default(now())
 }
