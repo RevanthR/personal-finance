@@ -26,23 +26,29 @@ export default async function MonthDetailPage({
 
   if (!currentMonth) notFound();
 
-  const recentMonths = await db.month.findMany({
-    where: { userId: session.user.id },
-    orderBy: [{ year: "desc" }, { month: "desc" }],
-    take: 6,
-    include: { entries: true, adHocItems: true },
-  });
-
-  const chitFunds = await db.chitFund.findMany({
-    where: { userId: session.user.id },
-    include: { template: true },
-  });
+  const [recentMonths, chitFunds, ccTemplates] = await Promise.all([
+    db.month.findMany({
+      where: { userId: session.user.id },
+      orderBy: [{ year: "desc" }, { month: "desc" }],
+      take: 6,
+      include: { entries: true, adHocItems: true },
+    }),
+    db.chitFund.findMany({
+      where: { userId: session.user.id },
+      include: { template: true },
+    }),
+    db.lineItemTemplate.findMany({
+      where: { userId: session.user.id, category: "CREDIT_CARD", isActive: true },
+      select: { id: true, name: true },
+    }),
+  ]);
 
   return (
     <DashboardClient
       currentMonth={JSON.parse(JSON.stringify(currentMonth))}
       recentMonths={JSON.parse(JSON.stringify(recentMonths))}
       chitFunds={JSON.parse(JSON.stringify(chitFunds))}
+      ccTemplates={JSON.parse(JSON.stringify(ccTemplates))}
       todayMonth={currentMonth.month}
       todayYear={currentMonth.year}
       userId={session.user.id}

@@ -30,6 +30,7 @@ interface DashboardClientProps {
   currentMonth: MonthWithDetails | null;
   recentMonths: MonthWithDetails[];
   chitFunds: ChitFundWithTemplate[];
+  ccTemplates: { id: string; name: string }[];
   todayMonth: number;
   todayYear: number;
   userId: string;
@@ -124,7 +125,7 @@ function CCSubcatBreakdown({
   );
 }
 
-export function DashboardClient({ currentMonth: initialMonth, recentMonths, chitFunds, todayMonth, todayYear }: DashboardClientProps) {
+export function DashboardClient({ currentMonth: initialMonth, recentMonths, chitFunds, ccTemplates, todayMonth, todayYear }: DashboardClientProps) {
   const [currentMonth, setCurrentMonth] = useState(initialMonth);
   const [showAdHoc, setShowAdHoc] = useState(false);
   const [showSetup, setShowSetup] = useState(!initialMonth);
@@ -257,7 +258,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
     if (updates.isPaid !== undefined) toast.success(updates.isPaid ? "Marked paid ✓" : "Marked pending");
   }
 
-  async function handleAdHocAdd(item: { name: string; amount: number; type: string; category?: string; date: string; notes?: string; ccEntryId?: string }) {
+  async function handleAdHocAdd(item: { name: string; amount: number; type: string; category?: string; date: string; notes?: string; ccTemplateId?: string }) {
     if (!currentMonth) return;
     const res = await fetch(`/api/months/${currentMonth.id}/adhoc`, {
       method: "POST",
@@ -537,9 +538,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
         open={showAdHoc}
         onOpenChange={setShowAdHoc}
         onAdd={handleAdHocAdd}
-        ccCards={entries
-          .filter(e => e.template.category === "CREDIT_CARD")
-          .map(e => ({ entryId: e.id, name: e.template.name } satisfies CCCard))}
+        ccCards={ccTemplates.map(t => ({ templateId: t.id, name: t.name } satisfies CCCard))}
       />
     </div>
   );

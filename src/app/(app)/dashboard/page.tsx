@@ -10,7 +10,7 @@ export default async function DashboardPage() {
 
   const { month, year } = getCurrentMonthYear();
 
-  const [currentMonth, recentMonths, chitFunds] = await Promise.all([
+  const [currentMonth, recentMonths, chitFunds, ccTemplates] = await Promise.all([
     db.month.findUnique({
       where: { userId_month_year: { userId: session.user.id, month, year } },
       include: {
@@ -32,6 +32,10 @@ export default async function DashboardPage() {
       include: { template: true },
       orderBy: { startDate: "asc" },
     }),
+    db.lineItemTemplate.findMany({
+      where: { userId: session.user.id, category: "CREDIT_CARD", isActive: true },
+      select: { id: true, name: true },
+    }),
   ]);
 
   return (
@@ -39,6 +43,7 @@ export default async function DashboardPage() {
       currentMonth={currentMonth ? JSON.parse(JSON.stringify(currentMonth)) : null}
       recentMonths={JSON.parse(JSON.stringify(recentMonths))}
       chitFunds={JSON.parse(JSON.stringify(chitFunds))}
+      ccTemplates={JSON.parse(JSON.stringify(ccTemplates))}
       todayMonth={month}
       todayYear={year}
       userId={session.user.id}

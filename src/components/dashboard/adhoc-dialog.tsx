@@ -30,14 +30,14 @@ const INCOME_SOURCES = [
   { value: "other",         label: "Other" },
 ];
 
-export type CCCard = { entryId: string; name: string };
+export type CCCard = { templateId: string; name: string };
 
 interface AdHocDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAdd: (item: {
     name: string; amount: number; type: string;
-    category?: string; date: string; notes?: string; ccEntryId?: string;
+    category?: string; date: string; notes?: string; ccTemplateId?: string;
   }) => Promise<void>;
   ccCards: CCCard[];
 }
@@ -77,7 +77,7 @@ export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogP
       category: category || undefined,
       date,
       notes: notesStr || undefined,
-      ccEntryId: isCC ? (ccCard?.entryId ?? undefined) : undefined,
+      ccTemplateId: isCC ? (ccCard?.templateId ?? undefined) : undefined,
     });
 
     setLoading(false);
@@ -147,12 +147,12 @@ export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogP
                   <div className="flex flex-wrap gap-1.5">
                     {ccCards.map(card => (
                       <button
-                        key={card.entryId}
+                        key={card.templateId}
                         type="button"
                         onClick={() => setCCCard(card)}
                         className={cn(
                           "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
-                          ccCard?.entryId === card.entryId
+                          ccCard?.templateId === card.templateId
                             ? "bg-zinc-900 text-white border-zinc-900"
                             : "border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"
                         )}

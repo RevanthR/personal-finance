@@ -29,12 +29,32 @@ export async function POST(
     },
   });
 
-  // CC expense → increment statementAmount on the linked CC entry so next month's bill auto-fills
-  if (body.type === "EXPENSE" && body.category === "CREDIT_CARD" && body.ccEntryId) {
-    await db.monthlyEntry.updateMany({
-      where: { id: body.ccEntryId, monthId, month: { userId: session.user.id } },
-      data: { statementAmount: { increment: body.amount } },
+  // CC expense → find-or-create the MonthlyEntry for the template, then increment statementAmount
+  if (body.type === "EXPENSE" && body.category === "CREDIT_CARD" && body.ccTemplateId) {
+    const templateId: string = body.ccTemplateId;
+
+    let entry = await db.monthlyEntry.findUnique({
+      where: { monthId_templateId: { monthId, templateId } },
     });
+
+    if (!entry) {
+      // Template was added after this month was populated — create the entry now
+      const template = await db.lineItemTemplate.findFirst({
+        where: { id: templateId, userId: session.user.id, category: "CREDIT_CARD" },
+      });
+      if (template) {
+        entry = await db.monthlyEntry.create({
+          data: { monthId, templateId, amount: template.amount, isPaid: false, statementAmount: 0 },
+        });
+      }
+    }
+
+    if (entry) {
+      await db.monthlyEntry.update({
+        where: { id: entry.id },
+        data: { statementAmount: { increment: body.amount } },
+      });
+    }
   }
 
   return NextResponse.json(item, { status: 201 });
