@@ -27,20 +27,19 @@ export default async function MonthsPage() {
     ...Array.from({ length: 3 }, (_, i) => ({ month: i + 1, year: fyStart + 1 })),
   ];
 
-  const [allMonths, templates] = await Promise.all([
+  const [allMonths, expenseTemplates, incomeTemplates] = await Promise.all([
     db.month.findMany({
       where: { userId },
       include: { entries: true, adHocItems: true },
       orderBy: [{ year: "asc" }, { month: "asc" }],
     }),
     db.lineItemTemplate.findMany({
-      where: { userId, isActive: true, foreClosedOn: null },
+      where: { userId, isActive: true, foreClosedOn: null, templateType: "EXPENSE" },
+    }),
+    db.lineItemTemplate.findMany({
+      where: { userId, isActive: true, templateType: "INCOME" },
     }),
   ]);
-
-  // Separate income vs expense templates
-  const incomeTemplates = templates.filter(t => t.templateType === "INCOME");
-  const expenseTemplates = templates.filter(t => t.templateType === "EXPENSE");
 
   // Base income: prefer income templates; fallback to most recent month's salary
   const recentMonth = [...allMonths]
