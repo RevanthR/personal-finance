@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { EntryRow } from "./entry-row";
-import { AdHocDialog } from "./adhoc-dialog";
+import { AdHocDialog, type CCCard } from "./adhoc-dialog";
 import { SetupMonthDialog } from "./setup-month-dialog";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -85,21 +85,44 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
   const paidPercent    = totalCommitted > 0 ? Math.round((totalPaid / totalCommitted) * 100) : 0;
   const pendingCount   = useMemo(() => entries.filter(e => !e.isPaid).length, [entries]);
 
-  const grouped = useMemo(() => {
-    const result: Record<string, EntryWithTemplate[]> = {};
+  type GroupedItem =
+    | { kind: "entry"; data: EntryWithTemplate }
+    | { kind: "transaction"; data: AdHocItem };
+
+  const { grouped, oneTimeItems } = useMemo(() => {
+    const result: Record<string, GroupedItem[]> = {};
+
+    // Template entries grouped by category
     for (const cat of CATEGORY_ORDER) {
       const items = entries.filter(e => e.template.category === cat && !e.template.customCategory);
-      if (items.length) result[cat] = items;
+      if (items.length) result[cat] = items.map(d => ({ kind: "entry" as const, data: d }));
     }
     for (const e of entries) {
       if (e.template.customCategory) {
         const key = e.template.customCategory;
         if (!result[key]) result[key] = [];
-        result[key].push(e);
+        result[key].push({ kind: "entry", data: e });
       }
     }
-    return result;
-  }, [entries]);
+
+    // Merge categorised ad-hoc EXPENSE items into their group
+    const oneTime: AdHocItem[] = [];
+    for (const item of adHocItems) {
+      if (item.type === "EXPENSE" && item.category) {
+        const key = item.category;
+        if (result[key]) {
+          result[key].push({ kind: "transaction", data: item });
+        } else {
+          // Category exists as a key but no template entries — create the group
+          result[key] = [{ kind: "transaction", data: item }];
+        }
+      } else {
+        oneTime.push(item);
+      }
+    }
+
+    return { grouped: result, oneTimeItems: oneTime };
+  }, [entries, adHocItems]);
 
   const categoryBreakdown = useMemo(() => Object.entries(
     entries.reduce<Record<string, number>>((acc, e) => {
@@ -169,10 +192,12 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
     if (updates.isPaid !== undefined) toast.success(updates.isPaid ? "Marked paid ✓" : "Marked pending");
   }
 
-  async function handleAdHocAdd(item: { name: string; amount: number; type: string; category?: string; date: string; notes?: string }) {
+  async function handleAdHocAdd(item: { name: string; amount: number; type: string; category?: string; date: string; notes?: string; ccEntryId?: string }) {
     if (!currentMonth) return;
     const res = await fetch(`/api/months/${currentMonth.id}/adhoc`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item),
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(item),
     });
     if (!res.ok) { toast.error("Failed to add"); return; }
     const newItem = await res.json();
@@ -221,7 +246,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
           </p>
         </div>
         <Button onClick={() => setShowAdHoc(true)} size="sm" variant="outline" className="gap-1.5">
-          <Plus className="w-3.5 h-3.5" /> Ad-hoc
+          <Plus className="w-3.5 h-3.5" /> Add Transaction
         </Button>
       </div>
 
@@ -296,12 +321,16 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Entries */}
         <div className="lg:col-span-2 space-y-4">
-          {Object.entries(grouped).map(([groupKey, entries]) => {
-            const first = entries[0];
-            const catColor = getCategoryColor(first.template.category, first.template.customCategory);
-            const catLabel = getCategoryDisplay(first.template.category, first.template.customCategory);
-            const catTotal = entries.reduce((s, e) => s + e.amount, 0);
-            const catPaid = entries.filter(e => e.isPaid).reduce((s, e) => s + e.amount, 0);
+          {Object.entries(grouped).map(([groupKey, items]) => {
+            const firstEntry = items.find(i => i.kind === "entry");
+            const sampleCat = firstEntry?.kind === "entry"
+              ? { cat: firstEntry.data.template.category, custom: firstEntry.data.template.customCategory }
+              : { cat: groupKey, custom: null };
+            const catColor = getCategoryColor(sampleCat.cat, sampleCat.custom);
+            const catLabel = getCategoryDisplay(sampleCat.cat, sampleCat.custom);
+            const catTotal = items.reduce((s, i) => s + (i.kind === "entry" ? i.data.amount : i.data.amount), 0);
+            const catPaid = items.reduce((s, i) =>
+              s + (i.kind === "entry" && i.data.isPaid ? i.data.amount : 0), 0);
             return (
               <div key={groupKey}>
                 <div className="flex items-center justify-between mb-1.5 px-0.5">
@@ -316,22 +345,24 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
                   </span>
                 </div>
                 <div className="space-y-1.5">
-                  {entries.map(entry => (
-                    <EntryRow key={entry.id} entry={entry} onUpdate={handleEntryUpdate} />
-                  ))}
+                  {items.map(item =>
+                    item.kind === "entry"
+                      ? <EntryRow key={item.data.id} entry={item.data} onUpdate={handleEntryUpdate} />
+                      : <TransactionRow key={item.data.id} item={item.data} onDelete={handleAdHocDelete} />
+                  )}
                 </div>
               </div>
             );
           })}
 
-          {currentMonth.adHocItems.length > 0 && (
+          {oneTimeItems.length > 0 && (
             <div>
               <div className="px-0.5 mb-1.5">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Ad-hoc</span>
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">One-time</span>
               </div>
               <div className="space-y-1.5">
-                {currentMonth.adHocItems.map(item => (
-                  <AdHocRow key={item.id} item={item} onDelete={handleAdHocDelete} />
+                {oneTimeItems.map(item => (
+                  <TransactionRow key={item.id} item={item} onDelete={handleAdHocDelete} />
                 ))}
               </div>
             </div>
@@ -399,7 +430,9 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
         open={showAdHoc}
         onOpenChange={setShowAdHoc}
         onAdd={handleAdHocAdd}
-        ccCards={entries.filter(e => e.template.category === "CREDIT_CARD").map(e => e.template.name)}
+        ccCards={entries
+          .filter(e => e.template.category === "CREDIT_CARD")
+          .map(e => ({ entryId: e.id, name: e.template.name } satisfies CCCard))}
       />
     </div>
   );
@@ -420,7 +453,7 @@ function MetricCard({ label, value, icon, color, sub }: { label: string; value: 
   );
 }
 
-function AdHocRow({ item, onDelete }: { item: AdHocItem; onDelete: (id: string) => void }) {
+function TransactionRow({ item, onDelete }: { item: AdHocItem; onDelete: (id: string) => void }) {
   return (
     <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl border bg-card">
       <div className={cn("w-0.5 h-7 rounded-full shrink-0", item.type === "INCOME" ? "bg-green-600" : "bg-red-600")} />

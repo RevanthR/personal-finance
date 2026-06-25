@@ -30,17 +30,22 @@ const INCOME_SOURCES = [
   { value: "other",         label: "Other" },
 ];
 
+export type CCCard = { entryId: string; name: string };
+
 interface AdHocDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAdd: (item: { name: string; amount: number; type: string; category?: string; date: string; notes?: string }) => Promise<void>;
-  ccCards: string[];
+  onAdd: (item: {
+    name: string; amount: number; type: string;
+    category?: string; date: string; notes?: string; ccEntryId?: string;
+  }) => Promise<void>;
+  ccCards: CCCard[];
 }
 
 export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogProps) {
   const [type, setType] = useState<"INCOME" | "EXPENSE">("EXPENSE");
   const [category, setCategory] = useState("");
-  const [ccCard, setCCCard] = useState(ccCards[0] ?? "");
+  const [ccCard, setCCCard] = useState<CCCard | null>(ccCards[0] ?? null);
   const [ccSpendCat, setCCSpendCat] = useState("");
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
@@ -51,7 +56,7 @@ export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogP
   const isCC = category === "CREDIT_CARD";
 
   function reset() {
-    setType("EXPENSE"); setCategory(""); setCCCard(ccCards[0] ?? "");
+    setType("EXPENSE"); setCategory(""); setCCCard(ccCards[0] ?? null);
     setCCSpendCat(""); setName(""); setAmount("");
     setDate(format(new Date(), "yyyy-MM-dd")); setNotes("");
   }
@@ -61,9 +66,8 @@ export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogP
     if (!name || !amount) return;
     setLoading(true);
 
-    // For CC expenses, build a rich notes string so the data is queryable later
     const notesStr = isCC
-      ? [ccCard, ccSpendCat, notes].filter(Boolean).join(" · ")
+      ? [ccCard?.name, ccSpendCat, notes].filter(Boolean).join(" · ")
       : notes || undefined;
 
     await onAdd({
@@ -73,6 +77,7 @@ export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogP
       category: category || undefined,
       date,
       notes: notesStr || undefined,
+      ccEntryId: isCC ? (ccCard?.entryId ?? undefined) : undefined,
     });
 
     setLoading(false);
@@ -83,7 +88,7 @@ export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogP
     <Dialog open={open} onOpenChange={v => { if (!v) reset(); onOpenChange(v); }}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Add Item</DialogTitle>
+          <DialogTitle>Add Transaction</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
 
@@ -111,7 +116,8 @@ export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogP
           {/* Category chips */}
           <div>
             <Label className="text-xs mb-2 block">
-              {type === "EXPENSE" ? "Category" : "Source"} <span className="text-muted-foreground">(optional)</span>
+              {type === "EXPENSE" ? "Category" : "Source"}{" "}
+              <span className="text-muted-foreground">(optional)</span>
             </Label>
             <div className="flex flex-wrap gap-1.5">
               {(type === "EXPENSE" ? EXPENSE_CATEGORIES : INCOME_SOURCES).map(c => (
@@ -132,36 +138,35 @@ export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogP
             </div>
           </div>
 
-          {/* CC sub-options — shown only when Credit Card category is selected */}
+          {/* CC sub-options */}
           {isCC && (
             <>
-              {/* Card picker — only if multiple CC cards */}
               {ccCards.length > 1 && (
                 <div>
                   <Label className="text-xs mb-2 block">Which card?</Label>
                   <div className="flex flex-wrap gap-1.5">
                     {ccCards.map(card => (
                       <button
-                        key={card}
+                        key={card.entryId}
                         type="button"
                         onClick={() => setCCCard(card)}
                         className={cn(
                           "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
-                          ccCard === card
+                          ccCard?.entryId === card.entryId
                             ? "bg-zinc-900 text-white border-zinc-900"
                             : "border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"
                         )}
                       >
-                        {card}
+                        {card.name}
                       </button>
                     ))}
                   </div>
                 </div>
               )}
-
-              {/* Spend category */}
               <div>
-                <Label className="text-xs mb-2 block">Spend category <span className="text-muted-foreground">(optional)</span></Label>
+                <Label className="text-xs mb-2 block">
+                  Spend category <span className="text-muted-foreground">(optional)</span>
+                </Label>
                 <div className="flex flex-wrap gap-1.5">
                   {CC_SPEND_CATEGORIES.map(cat => (
                     <button
@@ -191,7 +196,7 @@ export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogP
               placeholder={
                 isCC ? "e.g. Zomato, Amazon, Petrol" :
                 type === "INCOME" ? "e.g. Bonus, Refund" :
-                "e.g. Birthday gift"
+                "e.g. Plumber, Birthday gift"
               }
               autoFocus
               required
