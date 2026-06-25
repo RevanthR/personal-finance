@@ -89,19 +89,6 @@ enum AdHocType {
   EXPENSE
 }
 
-enum CCCategory {
-  FOOD
-  COFFEE
-  GROCERIES
-  FUEL
-  SHOPPING
-  TRAVEL
-  HEALTH
-  BILLS
-  ENTERTAINMENT
-  OTHER
-}
-
 // Recurring line item template — one per type of payment
 model LineItemTemplate {
   id               String         @id @default(cuid())
@@ -153,21 +140,8 @@ model MonthlyEntry {
   notes           String?
   statementAmount Float?
   createdAt       DateTime         @default(now())
-  ccItems         CCLineItem[]
 
   @@unique([monthId, templateId])
-}
-
-// Individual purchases tracked under a CC monthly entry
-model CCLineItem {
-  id        String       @id @default(cuid())
-  entryId   String
-  entry     MonthlyEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
-  name      String
-  amount    Float
-  category  CCCategory?
-  date      DateTime?
-  createdAt DateTime     @default(now())
 }
 
 // Chit fund details — linked 1:1 to a LineItemTemplate

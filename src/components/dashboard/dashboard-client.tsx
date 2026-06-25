@@ -43,15 +43,9 @@ type MonthWithDetails = {
   adHocItems: AdHocItem[];
 };
 
-type CCLineItem = {
-  id: string; name: string; amount: number; category: string | null; date: string | null; createdAt: string;
-  // category is a CCCategory enum value stored as string after JSON serialisation
-};
-
 type EntryWithTemplate = {
   id: string; amount: number; isPaid: boolean; paidOn: string | null; notes: string | null; templateId: string;
   statementAmount: number | null;
-  ccItems: CCLineItem[];
   template: { id: string; name: string; category: string; customCategory: string | null; isFixed: boolean; dueDateDay: number | null; chitFund: { isLifted: boolean; accumulatedSavings: number } | null };
 };
 
@@ -160,7 +154,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
     toast.success("Income updated");
   }
 
-  async function handleEntryUpdate(entryId: string, updates: { isPaid?: boolean; amount?: number; notes?: string; statementAmount?: number | null }) {
+  async function handleEntryUpdate(entryId: string, updates: { isPaid?: boolean; amount?: number; notes?: string }) {
     if (!currentMonth) return;
     const res = await fetch(`/api/months/${currentMonth.id}/entries`, {
       method: "PATCH",
@@ -323,20 +317,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
                 </div>
                 <div className="space-y-1.5">
                   {entries.map(entry => (
-                    <EntryRow
-                      key={entry.id}
-                      entry={entry}
-                      monthId={currentMonth.id}
-                      onUpdate={handleEntryUpdate}
-                      onCCChange={(entryId, ccItems, statementAmount) =>
-                        setCurrentMonth(prev => prev ? {
-                          ...prev,
-                          entries: prev.entries.map(e =>
-                            e.id === entryId ? { ...e, ccItems, statementAmount } : e
-                          ),
-                        } : prev)
-                      }
-                    />
+                    <EntryRow key={entry.id} entry={entry} onUpdate={handleEntryUpdate} />
                   ))}
                 </div>
               </div>
@@ -414,7 +395,12 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
         </DialogContent>
       </Dialog>
 
-      <AdHocDialog open={showAdHoc} onOpenChange={setShowAdHoc} onAdd={handleAdHocAdd} />
+      <AdHocDialog
+        open={showAdHoc}
+        onOpenChange={setShowAdHoc}
+        onAdd={handleAdHocAdd}
+        ccCards={entries.filter(e => e.template.category === "CREDIT_CARD").map(e => e.template.name)}
+      />
     </div>
   );
 }

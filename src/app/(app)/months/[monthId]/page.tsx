@@ -17,10 +17,7 @@ export default async function MonthDetailPage({
     where: { id: monthId, userId: session.user.id },
     include: {
       entries: {
-        include: {
-          template: { include: { chitFund: true } },
-          ccItems: { orderBy: { createdAt: "asc" } },
-        },
+        include: { template: { include: { chitFund: true } } },
         orderBy: { template: { sortOrder: "asc" } },
       },
       adHocItems: { orderBy: { date: "desc" } },

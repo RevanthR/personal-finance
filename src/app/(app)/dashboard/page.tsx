@@ -15,10 +15,7 @@ export default async function DashboardPage() {
       where: { userId_month_year: { userId: session.user.id, month, year } },
       include: {
         entries: {
-          include: {
-            template: { include: { chitFund: true } },
-            ccItems: { orderBy: { createdAt: "asc" } },
-          },
+          include: { template: { include: { chitFund: true } } },
           orderBy: { template: { sortOrder: "asc" } },
         },
         adHocItems: { orderBy: { date: "desc" } },
