@@ -119,13 +119,14 @@ function CCSubcatBreakdown({ txItems, onDelete }: { txItems: AdHocItem[]; onDele
 }
 
 function CCCardBlock({
-  entry, txItems, nextMonthName, onUpdate, onDelete,
+  entry, txItems, nextMonthName, onUpdate, onDelete, onClearStatement,
 }: {
   entry: EntryWithTemplate;
   txItems: AdHocItem[];
   nextMonthName: string;
   onUpdate: (id: string, updates: { isPaid?: boolean; amount?: number; notes?: string }) => Promise<void>;
   onDelete: (id: string) => void;
+  onClearStatement: (entryId: string) => Promise<void>;
 }) {
   const statementDay = entry.template.statementDay;
   const nextBillTotal = entry.statementAmount ?? 0;
@@ -175,7 +176,18 @@ function CCCardBlock({
             <span className="text-[10px] font-semibold text-blue-600 uppercase tracking-wider">
               → {nextMonthName} bill
             </span>
-            <span className="text-xs font-semibold text-blue-700">{formatCurrency(nextBillTotal)}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-blue-700">{formatCurrency(nextBillTotal)}</span>
+              {/* Show clear button when balance is stale (no transactions but amount > 0) */}
+              {postCloseTxs.length === 0 && (
+                <button
+                  onClick={() => onClearStatement(entry.id)}
+                  className="text-[10px] text-blue-400 hover:text-blue-700 underline"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
           </div>
           {postCloseTxs.length > 0 && <CCSubcatBreakdown txItems={postCloseTxs} onDelete={onDelete} />}
         </div>
@@ -354,6 +366,21 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
     toast.success("Removed");
   }
 
+  async function handleClearStatement(entryId: string) {
+    if (!currentMonth) return;
+    const res = await fetch(`/api/months/${currentMonth.id}/entries`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entryId, statementAmount: 0 }),
+    });
+    if (!res.ok) { toast.error("Failed to clear"); return; }
+    setCurrentMonth(prev => prev ? {
+      ...prev,
+      entries: prev.entries.map(e => e.id === entryId ? { ...e, statementAmount: 0 } : e),
+    } : prev);
+    toast.success("Cleared");
+  }
+
   async function handleSetupMonth(salaryIncome: number) {
     const res = await fetch("/api/months", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -519,6 +546,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
                           nextMonthName={nextMonthName}
                           onUpdate={handleEntryUpdate}
                           onDelete={handleAdHocDelete}
+                          onClearStatement={handleClearStatement}
                         />
                       );
                     }
