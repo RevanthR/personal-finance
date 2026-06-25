@@ -3,6 +3,35 @@ import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { AdHocType, Category } from "@/generated/prisma/client";
 
+// Recompute statementAmount for a CC card from ALL remaining post-close adHocItems.
+// This is idempotent and self-healing regardless of past accumulation bugs.
+async function recomputeStatementAmount(
+  monthId: string,
+  entryId: string,
+  cardName: string | null,
+  statementDay: number | null,
+): Promise<{ id: string; amount: number; statementAmount: number | null }> {
+  const allCCItems = await db.adHocItem.findMany({
+    where: { monthId, type: "EXPENSE", category: "CREDIT_CARD" },
+    select: { notes: true, amount: true, date: true },
+  });
+
+  const postCloseTotal = allCCItems
+    .filter(i => {
+      const iCard = i.notes?.split(" · ")[0] ?? null;
+      if (cardName && iCard !== cardName) return false;
+      const day = new Date(i.date).getDate();
+      return statementDay === null || day > statementDay;
+    })
+    .reduce((sum, i) => sum + i.amount, 0);
+
+  return db.monthlyEntry.update({
+    where: { id: entryId },
+    data: { statementAmount: postCloseTotal },
+    select: { id: true, amount: true, statementAmount: true },
+  });
+}
+
 // POST /api/months/[monthId]/adhoc
 export async function POST(
   req: NextRequest,
@@ -34,7 +63,6 @@ export async function POST(
   if (body.type === "EXPENSE" && body.category === "CREDIT_CARD" && body.ccTemplateId) {
     const templateId: string = body.ccTemplateId;
 
-    // Find or create the MonthlyEntry for this CC template in this month
     let entry = await db.monthlyEntry.findUnique({
       where: { monthId_templateId: { monthId, templateId } },
     });
@@ -51,27 +79,21 @@ export async function POST(
     }
 
     if (entry) {
-      // Determine if charge is pre-close (belongs to current month's bill) or post-close (next month)
       const template = await db.lineItemTemplate.findUnique({ where: { id: templateId } });
       const statementDay = template?.statementDay ?? null;
       const expenseDay = new Date(body.date).getDate();
       const isPreClose = statementDay !== null && expenseDay <= statementDay;
+      const cardName = item.notes?.split(" · ")[0] ?? null;
 
       if (isPreClose) {
-        // Add directly to current bill (entry.amount) — this month's liability
         updatedEntry = await db.monthlyEntry.update({
           where: { id: entry.id },
           data: { amount: entry.amount + body.amount },
           select: { id: true, amount: true, statementAmount: true },
         });
       } else {
-        // Post-close: accumulate in statementAmount for next month's bill
-        // Use explicit value (not Prisma increment) to avoid NULL + X = NULL in PostgreSQL
-        updatedEntry = await db.monthlyEntry.update({
-          where: { id: entry.id },
-          data: { statementAmount: (entry.statementAmount ?? 0) + body.amount },
-          select: { id: true, amount: true, statementAmount: true },
-        });
+        // Recompute from all post-close items (self-healing)
+        updatedEntry = await recomputeStatementAmount(monthId, entry.id, cardName, statementDay);
       }
     }
   }
@@ -95,10 +117,14 @@ export async function DELETE(
     where: { id, monthId, month: { userId: session.user.id } },
   });
 
+  // Delete first, then recompute so the deleted item is excluded from the sum
+  await db.adHocItem.deleteMany({
+    where: { id, monthId, month: { userId: session.user.id } },
+  });
+
   let updatedEntry: { id: string; amount: number; statementAmount: number | null } | null = null;
 
   if (item?.category === "CREDIT_CARD" && item.type === "EXPENSE") {
-    // Parse card name from notes ("CardName · Subcategory") to find the right entry
     const cardName = item.notes?.split(" · ")[0] ?? null;
     const entry = await db.monthlyEntry.findFirst({
       where: {
@@ -120,19 +146,18 @@ export async function DELETE(
       const expenseDay = new Date(item.date).getDate();
       const isPreClose = statementDay !== null && expenseDay <= statementDay;
 
-      updatedEntry = await db.monthlyEntry.update({
-        where: { id: entry.id },
-        data: isPreClose
-          ? { amount: Math.max(0, entry.amount - item.amount) }
-          : { statementAmount: Math.max(0, (entry.statementAmount ?? 0) - item.amount) },
-        select: { id: true, amount: true, statementAmount: true },
-      });
+      if (isPreClose) {
+        updatedEntry = await db.monthlyEntry.update({
+          where: { id: entry.id },
+          data: { amount: Math.max(0, entry.amount - item.amount) },
+          select: { id: true, amount: true, statementAmount: true },
+        });
+      } else {
+        // Recompute from remaining post-close items (self-healing — delete already ran above)
+        updatedEntry = await recomputeStatementAmount(monthId, entry.id, cardName, statementDay);
+      }
     }
   }
-
-  await db.adHocItem.deleteMany({
-    where: { id, monthId, month: { userId: session.user.id } },
-  });
 
   return NextResponse.json({ ok: true, updatedEntry });
 }
