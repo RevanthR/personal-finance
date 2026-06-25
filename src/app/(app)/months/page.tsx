@@ -31,8 +31,9 @@ export default async function MonthsPage() {
   const summaries: MonthSummary[] = months.map(m => {
     const income = m.salaryIncome + m.freelanceIncome + m.otherIncome
       + m.adHocItems.filter((i: AdHocItem) => i.type === "INCOME").reduce((s: number, i: AdHocItem) => s + i.amount, 0);
+    // Exclude CC ad-hoc (next-month liability, not current-month expense)
     const committed = m.entries.reduce((s: number, e: MonthlyEntry) => s + e.amount, 0)
-      + m.adHocItems.filter((i: AdHocItem) => i.type === "EXPENSE").reduce((s: number, i: AdHocItem) => s + i.amount, 0);
+      + m.adHocItems.filter((i: AdHocItem) => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s: number, i: AdHocItem) => s + i.amount, 0);
     return {
       id: m.id, month: m.month, year: m.year,
       income, committed, balance: income - committed,

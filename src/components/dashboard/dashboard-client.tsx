@@ -65,26 +65,28 @@ const CATEGORY_ORDER = ["HOUSE_MAINTENANCE", "LOAN", "CREDIT_CARD", "CHIT_FUND",
 const CC_SUBCATEGORIES = ["Food", "Coffee", "Groceries", "Fuel", "Shopping", "Travel", "Health", "Bills", "Entertainment", "Other"];
 
 function parseCCSubcat(notes: string | null): string {
-  if (!notes) return "Uncategorised";
+  if (!notes) return "Other";
   for (const part of notes.split(" · ")) {
     if (CC_SUBCATEGORIES.includes(part)) return part;
   }
-  return "Uncategorised";
+  return "Other";
 }
 
-function CCSubcatBreakdown({
-  bySubcat, uncategorised, total, onDelete,
-}: {
-  bySubcat: Record<string, AdHocItem[]>;
-  uncategorised: AdHocItem[];
-  total: number;
-  onDelete: (id: string) => void;
-}) {
+function parseCCCardName(notes: string | null): string | null {
+  if (!notes) return null;
+  return notes.split(" · ")[0] ?? null;
+}
+
+function CCSubcatBreakdown({ txItems, onDelete }: { txItems: AdHocItem[]; onDelete: (id: string) => void }) {
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
-  const allSections = [
-    ...Object.entries(bySubcat),
-    ...(uncategorised.length ? [["Other", uncategorised] as [string, AdHocItem[]]] : []),
-  ];
+
+  const sections: [string, AdHocItem[]][] = CC_SUBCATEGORIES.reduce<[string, AdHocItem[]][]>((acc, sub) => {
+    const matches = txItems.filter(t => parseCCSubcat(t.notes) === sub);
+    if (matches.length) acc.push([sub, matches]);
+    return acc;
+  }, []);
+
+  const total = txItems.reduce((s, t) => s + t.amount, 0);
 
   function toggle(key: string) {
     setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
@@ -96,8 +98,8 @@ function CCSubcatBreakdown({
         <span className="text-[10px] font-semibold text-blue-500 uppercase tracking-wider">Spend this month</span>
         <span className="text-[10px] text-blue-500 font-medium">{formatCurrency(total)}</span>
       </div>
-      {allSections.map(([subcat, txs]) => {
-        const subtotal = (txs as AdHocItem[]).reduce((s, t) => s + t.amount, 0);
+      {sections.map(([subcat, txs]) => {
+        const subtotal = txs.reduce((s, t) => s + t.amount, 0);
         const open = !!openSections[subcat];
         return (
           <div key={subcat}>
@@ -109,13 +111,13 @@ function CCSubcatBreakdown({
               <div className="flex items-center gap-1.5">
                 <ChevronDown className={cn("w-3 h-3 text-muted-foreground transition-transform", open && "rotate-180")} />
                 <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{subcat}</span>
-                <span className="text-[10px] text-muted-foreground/60">({(txs as AdHocItem[]).length})</span>
+                <span className="text-[10px] text-muted-foreground/60">({txs.length})</span>
               </div>
               <span className="text-[10px] text-muted-foreground font-medium">{formatCurrency(subtotal)}</span>
             </button>
             {open && (
               <div className="space-y-1 mt-1 mb-1">
-                {(txs as AdHocItem[]).map(t => <TransactionRow key={t.id} item={t} onDelete={onDelete} />)}
+                {txs.map(t => <TransactionRow key={t.id} item={t} onDelete={onDelete} />)}
               </div>
             )}
           </div>
@@ -419,15 +421,6 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
 
             const isCC = groupKey === "CREDIT_CARD";
 
-            // Group CC transactions by subcategory
-            const ccBySubcat = isCC ? CC_SUBCATEGORIES.reduce<Record<string, AdHocItem[]>>((acc, sub) => {
-              const matches = txItems.filter(t => parseCCSubcat(t.notes) === sub);
-              if (matches.length) acc[sub] = matches;
-              return acc;
-            }, {}) : {};
-            const ccUncategorised = isCC ? txItems.filter(t => parseCCSubcat(t.notes) === "Uncategorised") : [];
-            const ccThisMonth = txItems.reduce((s, t) => s + t.amount, 0);
-
             return (
               <div key={groupKey}>
                 <div className="flex items-center justify-between mb-1.5 px-0.5">
@@ -442,23 +435,35 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
                   </span>
                 </div>
                 <div className="space-y-1.5">
-                  {entryItems.map(item =>
-                    <EntryRow key={item.data.id} entry={item.data} onUpdate={handleEntryUpdate} />
-                  )}
+                  {entryItems.map(item => {
+                    // For CC: attach per-card spend breakdown below each bill entry
+                    if (isCC) {
+                      const cardName = item.data.template.name;
+                      const cardTxs = txItems.filter(t => parseCCCardName(t.notes) === cardName);
+                      return (
+                        <div key={item.data.id}>
+                          <EntryRow entry={item.data} onUpdate={handleEntryUpdate} />
+                          {cardTxs.length > 0 && (
+                            <CCSubcatBreakdown txItems={cardTxs} onDelete={handleAdHocDelete} />
+                          )}
+                        </div>
+                      );
+                    }
+                    return <EntryRow key={item.data.id} entry={item.data} onUpdate={handleEntryUpdate} />;
+                  })}
                   {!isCC && txItems.map(item =>
                     <TransactionRow key={item.id} item={item} onDelete={handleAdHocDelete} />
                   )}
                 </div>
 
-                {/* CC: collapsible subcategory breakdown */}
-                {isCC && txItems.length > 0 && (
-                  <CCSubcatBreakdown
-                    bySubcat={ccBySubcat}
-                    uncategorised={ccUncategorised}
-                    total={ccThisMonth}
-                    onDelete={handleAdHocDelete}
-                  />
-                )}
+                {/* CC transactions whose card name doesn't match any entry (edge case) */}
+                {isCC && (() => {
+                  const entryNames = new Set(entryItems.map(i => i.data.template.name));
+                  const orphaned = txItems.filter(t => !entryNames.has(parseCCCardName(t.notes) ?? ""));
+                  return orphaned.length > 0
+                    ? <CCSubcatBreakdown txItems={orphaned} onDelete={handleAdHocDelete} />
+                    : null;
+                })()}
               </div>
             );
           })}
