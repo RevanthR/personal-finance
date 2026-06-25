@@ -138,10 +138,23 @@ model MonthlyEntry {
   isPaid          Boolean          @default(false)
   paidOn          DateTime?
   notes           String?
-  statementAmount Float?           // CC only: spend on card this month → becomes bill next month
+  statementAmount Float?
   createdAt       DateTime         @default(now())
+  ccItems         CCLineItem[]
 
   @@unique([monthId, templateId])
+}
+
+// Individual purchases tracked under a CC monthly entry
+model CCLineItem {
+  id        String       @id @default(cuid())
+  entryId   String
+  entry     MonthlyEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  name      String
+  amount    Float
+  category  String?      // free-text e.g. "Food", "Bills", "Fuel", "Shopping"
+  date      DateTime?
+  createdAt DateTime     @default(now())
 }
 
 // Chit fund details — linked 1:1 to a LineItemTemplate

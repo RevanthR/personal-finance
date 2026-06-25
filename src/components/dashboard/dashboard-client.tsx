@@ -43,9 +43,14 @@ type MonthWithDetails = {
   adHocItems: AdHocItem[];
 };
 
+type CCLineItem = {
+  id: string; name: string; amount: number; category: string | null; date: string | null; createdAt: string;
+};
+
 type EntryWithTemplate = {
   id: string; amount: number; isPaid: boolean; paidOn: string | null; notes: string | null; templateId: string;
   statementAmount: number | null;
+  ccItems: CCLineItem[];
   template: { id: string; name: string; category: string; customCategory: string | null; isFixed: boolean; dueDateDay: number | null; chitFund: { isLifted: boolean; accumulatedSavings: number } | null };
 };
 
@@ -317,7 +322,20 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
                 </div>
                 <div className="space-y-1.5">
                   {entries.map(entry => (
-                    <EntryRow key={entry.id} entry={entry} onUpdate={handleEntryUpdate} />
+                    <EntryRow
+                      key={entry.id}
+                      entry={entry}
+                      monthId={currentMonth.id}
+                      onUpdate={handleEntryUpdate}
+                      onCCChange={(entryId, ccItems, statementAmount) =>
+                        setCurrentMonth(prev => prev ? {
+                          ...prev,
+                          entries: prev.entries.map(e =>
+                            e.id === entryId ? { ...e, ccItems, statementAmount } : e
+                          ),
+                        } : prev)
+                      }
+                    />
                   ))}
                 </div>
               </div>
