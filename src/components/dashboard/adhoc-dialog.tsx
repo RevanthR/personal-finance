@@ -141,7 +141,7 @@ export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogP
           {/* CC sub-options */}
           {isCC && (
             <>
-              {ccCards.length > 1 && (
+              {ccCards.length >= 1 && (
                 <div>
                   <Label className="text-xs mb-2 block">Which card?</Label>
                   <div className="flex flex-wrap gap-1.5">

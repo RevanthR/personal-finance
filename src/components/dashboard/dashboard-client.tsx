@@ -12,7 +12,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Wallet, TrendingDown, CheckCircle2, AlertCircle, TrendingUp, Plus, Pencil,
+  Wallet, TrendingDown, CheckCircle2, AlertCircle, TrendingUp, Plus, Pencil, ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { EntryRow } from "./entry-row";
@@ -60,6 +60,69 @@ type ChitFundWithTemplate = {
 };
 
 const CATEGORY_ORDER = ["HOUSE_MAINTENANCE", "LOAN", "CREDIT_CARD", "CHIT_FUND", "SAVINGS", "PERSONAL", "MISCELLANEOUS"];
+
+const CC_SUBCATEGORIES = ["Food", "Coffee", "Groceries", "Fuel", "Shopping", "Travel", "Health", "Bills", "Entertainment", "Other"];
+
+function parseCCSubcat(notes: string | null): string {
+  if (!notes) return "Uncategorised";
+  for (const part of notes.split(" · ")) {
+    if (CC_SUBCATEGORIES.includes(part)) return part;
+  }
+  return "Uncategorised";
+}
+
+function CCSubcatBreakdown({
+  bySubcat, uncategorised, total, onDelete,
+}: {
+  bySubcat: Record<string, AdHocItem[]>;
+  uncategorised: AdHocItem[];
+  total: number;
+  onDelete: (id: string) => void;
+}) {
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  const allSections = [
+    ...Object.entries(bySubcat),
+    ...(uncategorised.length ? [["Other", uncategorised] as [string, AdHocItem[]]] : []),
+  ];
+
+  function toggle(key: string) {
+    setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
+  }
+
+  return (
+    <div className="mt-2 ml-3 border-l-2 border-blue-100 pl-3 space-y-1">
+      <div className="flex items-center justify-between pb-1">
+        <span className="text-[10px] font-semibold text-blue-500 uppercase tracking-wider">Spend this month</span>
+        <span className="text-[10px] text-blue-500 font-medium">{formatCurrency(total)}</span>
+      </div>
+      {allSections.map(([subcat, txs]) => {
+        const subtotal = (txs as AdHocItem[]).reduce((s, t) => s + t.amount, 0);
+        const open = !!openSections[subcat];
+        return (
+          <div key={subcat}>
+            <button
+              type="button"
+              onClick={() => toggle(subcat)}
+              className="w-full flex items-center justify-between py-1.5 hover:bg-muted/50 rounded px-1 transition-colors"
+            >
+              <div className="flex items-center gap-1.5">
+                <ChevronDown className={cn("w-3 h-3 text-muted-foreground transition-transform", open && "rotate-180")} />
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{subcat}</span>
+                <span className="text-[10px] text-muted-foreground/60">({(txs as AdHocItem[]).length})</span>
+              </div>
+              <span className="text-[10px] text-muted-foreground font-medium">{formatCurrency(subtotal)}</span>
+            </button>
+            {open && (
+              <div className="space-y-1 mt-1 mb-1">
+                {(txs as AdHocItem[]).map(t => <TransactionRow key={t.id} item={t} onDelete={onDelete} />)}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export function DashboardClient({ currentMonth: initialMonth, recentMonths, chitFunds, todayMonth, todayYear }: DashboardClientProps) {
   const [currentMonth, setCurrentMonth] = useState(initialMonth);
@@ -348,9 +411,22 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
               : { cat: groupKey, custom: null };
             const catColor = getCategoryColor(sampleCat.cat, sampleCat.custom);
             const catLabel = getCategoryDisplay(sampleCat.cat, sampleCat.custom);
-            const catTotal = items.reduce((s, i) => s + (i.kind === "entry" ? i.data.amount : i.data.amount), 0);
-            const catPaid = items.reduce((s, i) =>
-              s + (i.kind === "entry" && i.data.isPaid ? i.data.amount : 0), 0);
+            const entryItems = items.filter(i => i.kind === "entry");
+            const txItems = items.filter(i => i.kind === "transaction").map(i => i.data as AdHocItem);
+            const catTotal = entryItems.reduce((s, i) => s + i.data.amount, 0);
+            const catPaid  = entryItems.reduce((s, i) => s + (i.data.isPaid ? i.data.amount : 0), 0);
+
+            const isCC = groupKey === "CREDIT_CARD";
+
+            // Group CC transactions by subcategory
+            const ccBySubcat = isCC ? CC_SUBCATEGORIES.reduce<Record<string, AdHocItem[]>>((acc, sub) => {
+              const matches = txItems.filter(t => parseCCSubcat(t.notes) === sub);
+              if (matches.length) acc[sub] = matches;
+              return acc;
+            }, {}) : {};
+            const ccUncategorised = isCC ? txItems.filter(t => parseCCSubcat(t.notes) === "Uncategorised") : [];
+            const ccThisMonth = txItems.reduce((s, t) => s + t.amount, 0);
+
             return (
               <div key={groupKey}>
                 <div className="flex items-center justify-between mb-1.5 px-0.5">
@@ -365,12 +441,23 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
                   </span>
                 </div>
                 <div className="space-y-1.5">
-                  {items.map(item =>
-                    item.kind === "entry"
-                      ? <EntryRow key={item.data.id} entry={item.data} onUpdate={handleEntryUpdate} />
-                      : <TransactionRow key={item.data.id} item={item.data} onDelete={handleAdHocDelete} />
+                  {entryItems.map(item =>
+                    <EntryRow key={item.data.id} entry={item.data} onUpdate={handleEntryUpdate} />
+                  )}
+                  {!isCC && txItems.map(item =>
+                    <TransactionRow key={item.id} item={item} onDelete={handleAdHocDelete} />
                   )}
                 </div>
+
+                {/* CC: collapsible subcategory breakdown */}
+                {isCC && txItems.length > 0 && (
+                  <CCSubcatBreakdown
+                    bySubcat={ccBySubcat}
+                    uncategorised={ccUncategorised}
+                    total={ccThisMonth}
+                    onDelete={handleAdHocDelete}
+                  />
+                )}
               </div>
             );
           })}
