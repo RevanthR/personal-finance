@@ -1,7 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
-import { TemplateType } from "@/generated/prisma/enums";
 import { YearOverviewClient, type MonthData } from "@/components/months/year-overview-client";
 
 function getFY(month: number, year: number) {
@@ -28,19 +27,21 @@ export default async function MonthsPage() {
     ...Array.from({ length: 3 }, (_, i) => ({ month: i + 1, year: fyStart + 1 })),
   ];
 
-  const [allMonths, expenseTemplates, incomeTemplates] = await Promise.all([
+  const [allMonths, allTemplates] = await Promise.all([
     db.month.findMany({
       where: { userId },
       include: { entries: true, adHocItems: true },
       orderBy: [{ year: "asc" }, { month: "asc" }],
     }),
     db.lineItemTemplate.findMany({
-      where: { userId, isActive: true, foreClosedOn: null, templateType: TemplateType.EXPENSE },
-    }),
-    db.lineItemTemplate.findMany({
-      where: { userId, isActive: true, templateType: TemplateType.INCOME },
+      where: { userId, isActive: true, foreClosedOn: null },
     }),
   ]);
+
+  // templateType may be null for pre-existing rows (DB DEFAULT not backfilled by Prisma 7)
+  // Use !== "INCOME" so null rows are treated as EXPENSE
+  const incomeTemplates = allTemplates.filter(t => t.templateType === "INCOME");
+  const expenseTemplates = allTemplates.filter(t => t.templateType !== "INCOME");
 
   // Base income: prefer income templates; fallback to most recent month's salary
   const recentMonth = [...allMonths]
