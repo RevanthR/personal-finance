@@ -281,7 +281,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
 
   const { fyIncome, fyExpenses, fyBalance, trendData } = useMemo(() => {
     const fyIncome   = recentMonths.reduce((s, m) => s + m.salaryIncome + m.freelanceIncome + m.otherIncome + m.adHocItems.filter(i => i.type === "INCOME").reduce((a, i) => a + i.amount, 0), 0);
-    const fyExpenses = recentMonths.reduce((s, m) => s + m.entries.reduce((a, e) => a + e.amount, 0) + m.adHocItems.filter(i => i.type === "EXPENSE").reduce((a, i) => a + i.amount, 0), 0);
+    const fyExpenses = recentMonths.reduce((s, m) => s + m.entries.reduce((a, e) => a + e.amount, 0) + m.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((a, i) => a + i.amount, 0), 0);
     const trendData  = [...recentMonths].reverse().map(m => ({
       name: format(new Date(m.year, m.month - 1), "MMM"),
       Income: m.salaryIncome + m.freelanceIncome + m.otherIncome,
