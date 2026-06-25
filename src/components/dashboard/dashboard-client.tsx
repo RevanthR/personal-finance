@@ -296,21 +296,27 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
             </CardContent>
           </Card>
         </button>
-        <MetricCard label="Committed" value={formatCurrency(totalCommitted)} icon={<TrendingDown className="w-4 h-4" />} color="text-red-600" sub={`${pendingCount} pending`} />
-        <MetricCard label="Paid" value={formatCurrency(totalPaid)} icon={<CheckCircle2 className="w-4 h-4" />} color="text-zinc-500" sub={`${currentMonth.entries.filter(e => e.isPaid).length}/${currentMonth.entries.length} items`} />
+        <MetricCard label="Recurring" value={formatCurrency(totalCommitted)} icon={<TrendingDown className="w-4 h-4" />} color="text-red-600" sub={`${pendingCount} pending`} />
+        <MetricCard
+          label="Unplanned"
+          value={formatCurrency(adHocExpense)}
+          icon={<CheckCircle2 className="w-4 h-4" />}
+          color="text-amber-600"
+          sub={adHocExpense > 0 ? `${adHocItems.filter(i => i.type === "EXPENSE").length} transaction${adHocItems.filter(i => i.type === "EXPENSE").length !== 1 ? "s" : ""}` : "no extra spends"}
+        />
         <MetricCard
           label={balance >= 0 ? "Leftover" : "Deficit"}
           value={formatCurrency(Math.abs(balance))}
           icon={balance >= 0 ? <TrendingUp className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
           color={balance >= 0 ? "text-green-600" : "text-red-600"}
-          sub={balance >= 0 ? "after all commitments" : "over income"}
+          sub={balance >= 0 ? "after all spends" : "over income"}
         />
       </div>
 
       {/* Progress */}
       <div className="space-y-1.5">
         <div className="flex justify-between text-xs text-muted-foreground">
-          <span>Paid {formatCurrency(totalPaid)}</span>
+          <span>Settled {formatCurrency(totalPaid)}</span>
           <span className="font-semibold text-foreground">{paidPercent}%</span>
           <span>Pending {formatCurrency(totalPending)}</span>
         </div>
