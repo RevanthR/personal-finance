@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
+import { TemplateType } from "@/generated/prisma/enums";
 import { YearOverviewClient, type MonthData } from "@/components/months/year-overview-client";
 
 function getFY(month: number, year: number) {
@@ -34,10 +35,10 @@ export default async function MonthsPage() {
       orderBy: [{ year: "asc" }, { month: "asc" }],
     }),
     db.lineItemTemplate.findMany({
-      where: { userId, isActive: true, foreClosedOn: null, templateType: "EXPENSE" },
+      where: { userId, isActive: true, foreClosedOn: null, templateType: TemplateType.EXPENSE },
     }),
     db.lineItemTemplate.findMany({
-      where: { userId, isActive: true, templateType: "INCOME" },
+      where: { userId, isActive: true, templateType: TemplateType.INCOME },
     }),
   ]);
 
