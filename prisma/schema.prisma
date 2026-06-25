@@ -103,6 +103,9 @@ model LineItemTemplate {
   isActive         Boolean        @default(true)
   foreClosedOn     DateTime?
   foreCloseAmount  Float?
+  pendingAmount    Float?
+  pendingFromMonth Int?
+  pendingFromYear  Int?
   sortOrder        Int            @default(0)
   createdAt        DateTime       @default(now())
   entries          MonthlyEntry[]

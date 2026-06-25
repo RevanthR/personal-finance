@@ -30,8 +30,27 @@ export async function PATCH(
       ...(body.sortOrder !== undefined && { sortOrder: body.sortOrder }),
       ...(body.foreClosedOn !== undefined && { foreClosedOn: new Date(body.foreClosedOn) }),
       ...(body.foreCloseAmount !== undefined && { foreCloseAmount: Number(body.foreCloseAmount) }),
+      // Pending scheduled amount change
+      ...(body.pendingAmount !== undefined && { pendingAmount: body.pendingAmount }),
+      ...(body.pendingFromMonth !== undefined && { pendingFromMonth: body.pendingFromMonth }),
+      ...(body.pendingFromYear !== undefined && { pendingFromYear: body.pendingFromYear }),
+      ...(body.clearPending && { pendingAmount: null, pendingFromMonth: null, pendingFromYear: null }),
     },
   });
+
+  // Optionally apply the new amount to the current month's existing entry
+  if (body.updateCurrentMonth && body.amount !== undefined) {
+    const now = new Date();
+    const currentMonth = await db.month.findFirst({
+      where: { userId: session.user.id, month: now.getMonth() + 1, year: now.getFullYear() },
+    });
+    if (currentMonth) {
+      await db.monthlyEntry.updateMany({
+        where: { monthId: currentMonth.id, templateId },
+        data: { amount: body.amount },
+      });
+    }
+  }
 
   // If foreclosing, optionally add a one-off expense to the current month
   if (body.foreClosedOn && body.addToCurrentMonth && body.foreCloseAmount) {

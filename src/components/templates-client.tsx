@@ -11,12 +11,14 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  formatCurrency, CATEGORY_LABELS, CATEGORY_COLORS, getCategoryDisplay, getCategoryColor, cn,
+  formatCurrency, CATEGORY_LABELS, getCategoryDisplay, getCategoryColor, cn,
 } from "@/lib/utils";
-import { Plus, Pencil, Trash2, Lock } from "lucide-react";
+import { Plus, Pencil, Trash2, Lock, ChevronDown } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { ForecloseDialog } from "@/components/templates/foreclose-dialog";
+
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 type Template = {
   id: string;
@@ -29,6 +31,9 @@ type Template = {
   isActive: boolean;
   foreClosedOn: string | null;
   foreCloseAmount: number | null;
+  pendingAmount: number | null;
+  pendingFromMonth: number | null;
+  pendingFromYear: number | null;
   sortOrder: number;
 };
 
@@ -39,6 +44,11 @@ type SaveData = {
   amount: number;
   isFixed: boolean;
   dueDateDay?: number;
+  updateCurrentMonth?: boolean;
+  pendingAmount?: number | null;
+  pendingFromMonth?: number | null;
+  pendingFromYear?: number | null;
+  clearPending?: boolean;
 };
 
 export function TemplatesClient({ templates: initial }: { templates: Template[] }) {
@@ -70,6 +80,9 @@ export function TemplatesClient({ templates: initial }: { templates: Template[] 
       ...data,
       customCategory: data.customCategory ?? null,
       category: data.customCategory ? "MISCELLANEOUS" : data.category,
+      pendingAmount: data.clearPending ? null : (data.pendingAmount ?? editing.pendingAmount),
+      pendingFromMonth: data.clearPending ? null : (data.pendingFromMonth ?? editing.pendingFromMonth),
+      pendingFromYear: data.clearPending ? null : (data.pendingFromYear ?? editing.pendingFromYear),
     };
     setTemplates((prev) => prev.map((x) => x.id === editing.id ? resolved : x));
     toast.success("Template updated");
@@ -124,7 +137,6 @@ export function TemplatesClient({ templates: initial }: { templates: Template[] 
     setShowAdd(false);
   }
 
-  // Group by display category key (customCategory takes precedence)
   const grouped = templates.reduce<Record<string, Template[]>>((acc, t) => {
     const key = t.customCategory ?? t.category;
     if (!acc[key]) acc[key] = [];
@@ -161,6 +173,8 @@ export function TemplatesClient({ templates: initial }: { templates: Template[] 
             <div className="space-y-2">
               {items.map((t) => {
                 const isClosed = !!t.foreClosedOn;
+                const hasPending = !isClosed && t.pendingAmount != null && t.pendingFromMonth != null && t.pendingFromYear != null;
+                const pendingDir = hasPending && t.pendingAmount! > t.amount ? "↑" : "↓";
                 return (
                   <Card key={t.id} className={cn(!t.isActive && !isClosed ? "opacity-50" : "")}>
                     <CardContent className="p-3 flex items-center gap-3">
@@ -175,6 +189,11 @@ export function TemplatesClient({ templates: initial }: { templates: Template[] 
                           {isClosed && (
                             <Badge className="text-xs bg-zinc-100 text-zinc-500 hover:bg-zinc-100 border-0">
                               Closed · {format(new Date(t.foreClosedOn!), "MMM yyyy")}
+                            </Badge>
+                          )}
+                          {hasPending && (
+                            <Badge className="text-xs bg-amber-50 text-amber-700 hover:bg-amber-50 border border-amber-200">
+                              {pendingDir} {formatCurrency(t.pendingAmount!)} from {MONTHS[(t.pendingFromMonth! - 1)]} {t.pendingFromYear}
                             </Badge>
                           )}
                         </div>
@@ -259,6 +278,7 @@ function TemplateDialog({
   onOpenChange: (v: boolean) => void;
   onSave: (data: SaveData) => Promise<void>;
 }) {
+  const isEditing = !!initial?.id;
   const isExistingCustom = !!initial?.customCategory;
   const [name, setName] = useState(initial?.name ?? "");
   const [category, setCategory] = useState(isExistingCustom ? "__custom__" : (initial?.category ?? ""));
@@ -268,11 +288,35 @@ function TemplateDialog({
   const [dueDateDay, setDueDateDay] = useState(String(initial?.dueDateDay ?? ""));
   const [loading, setLoading] = useState(false);
 
+  // Part 1: apply to current month
+  const [updateCurrentMonth, setUpdateCurrentMonth] = useState(false);
+
+  // Part 2: scheduled future change
+  const [showSchedule, setShowSchedule] = useState(
+    isEditing && initial?.pendingAmount != null
+  );
+  const nextMonth = (() => {
+    const d = new Date(); d.setMonth(d.getMonth() + 1);
+    return { month: d.getMonth() + 1, year: d.getFullYear() };
+  })();
+  const [pendingAmt, setPendingAmt] = useState(
+    initial?.pendingAmount != null ? String(initial.pendingAmount) : ""
+  );
+  const [pendingMonth, setPendingMonth] = useState(
+    initial?.pendingFromMonth ?? nextMonth.month
+  );
+  const [pendingYear, setPendingYear] = useState(
+    initial?.pendingFromYear ?? nextMonth.year
+  );
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!category) return;
     setLoading(true);
     const isCustom = category === "__custom__";
+
+    const pendingValid = showSchedule && pendingAmt && parseFloat(pendingAmt) > 0;
+
     await onSave({
       name,
       category: isCustom ? "MISCELLANEOUS" : category,
@@ -280,6 +324,13 @@ function TemplateDialog({
       amount: parseFloat(amount),
       isFixed,
       dueDateDay: dueDateDay ? parseInt(dueDateDay) : undefined,
+      ...(isEditing && { updateCurrentMonth }),
+      ...(pendingValid && {
+        pendingAmount: parseFloat(pendingAmt),
+        pendingFromMonth: pendingMonth,
+        pendingFromYear: pendingYear,
+      }),
+      ...(!showSchedule && isEditing && initial?.pendingAmount != null && { clearPending: true }),
     });
     setLoading(false);
   }
@@ -289,7 +340,7 @@ function TemplateDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
@@ -341,9 +392,20 @@ function TemplateDialog({
           </div>
 
           <div>
-            <Label className="text-xs">Default Amount (₹)</Label>
+            <Label className="text-xs">
+              {isEditing ? "Current amount (₹)" : "Default Amount (₹)"}
+            </Label>
             <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} required />
           </div>
+
+          {/* Part 1: apply change to current month */}
+          {isEditing && (
+            <div className="flex items-center justify-between rounded-lg border px-3 py-2 bg-muted/30">
+              <Label className="text-xs cursor-pointer">Also update this month's entry</Label>
+              <Switch checked={updateCurrentMonth} onCheckedChange={setUpdateCurrentMonth} />
+            </div>
+          )}
+
           <div className="flex items-center justify-between">
             <Label className="text-xs">Fixed Amount</Label>
             <Switch checked={isFixed} onCheckedChange={setIsFixed} />
@@ -352,6 +414,68 @@ function TemplateDialog({
             <Label className="text-xs">Due Date (day of month, optional)</Label>
             <Input type="number" min="1" max="31" value={dueDateDay} onChange={(e) => setDueDateDay(e.target.value)} placeholder="e.g. 21" />
           </div>
+
+          {/* Part 2: schedule a future amount change */}
+          {isEditing && (
+            <div className="border rounded-lg overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setShowSchedule(v => !v)}
+                className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-medium bg-muted/30 hover:bg-muted/50 transition-colors"
+              >
+                <span>{showSchedule ? "Scheduled amount change" : "Schedule a future amount change"}</span>
+                <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform", showSchedule && "rotate-180")} />
+              </button>
+
+              {showSchedule && (
+                <div className="px-3 pb-3 pt-2 space-y-3">
+                  <div>
+                    <Label className="text-xs">New amount from that month (₹)</Label>
+                    <Input
+                      type="number"
+                      value={pendingAmt}
+                      onChange={(e) => setPendingAmt(e.target.value)}
+                      placeholder="e.g. 25000"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs mb-2 block">Effective from</Label>
+                    <div className="flex flex-wrap gap-1 mb-2">
+                      {MONTHS.map((m, i) => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => setPendingMonth(i + 1)}
+                          className={cn(
+                            "px-2 py-0.5 rounded text-xs font-medium border transition-colors",
+                            pendingMonth === i + 1
+                              ? "bg-zinc-900 text-white border-zinc-900"
+                              : "border-border text-muted-foreground hover:border-zinc-500"
+                          )}
+                        >
+                          {m}
+                        </button>
+                      ))}
+                    </div>
+                    <Input
+                      type="number"
+                      value={pendingYear}
+                      onChange={(e) => setPendingYear(parseInt(e.target.value) || nextMonth.year)}
+                      placeholder="Year"
+                      className="w-24"
+                    />
+                  </div>
+                  {pendingAmt && (
+                    <p className="text-[10px] text-muted-foreground">
+                      From {MONTHS[pendingMonth - 1]} {pendingYear}, this template will use{" "}
+                      <span className="font-semibold text-foreground">{formatCurrency(parseFloat(pendingAmt) || 0)}</span>/month
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           <DialogFooter>
             <Button type="submit" disabled={loading || !isValid} className="w-full">
               {loading ? "Saving..." : "Save"}

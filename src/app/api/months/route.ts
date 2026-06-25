@@ -63,14 +63,26 @@ export async function POST(req: NextRequest) {
     );
 
     for (const t of templates) {
-      let amount = t.amount;
+      // Promote pending amount if its effective month has arrived
+      let baseAmount = t.amount;
+      if (t.pendingAmount != null && t.pendingFromMonth != null && t.pendingFromYear != null) {
+        const kicks = year > t.pendingFromYear ||
+          (year === t.pendingFromYear && month >= t.pendingFromMonth);
+        if (kicks) {
+          baseAmount = t.pendingAmount;
+          await db.lineItemTemplate.update({
+            where: { id: t.id },
+            data: { amount: t.pendingAmount, pendingAmount: null, pendingFromMonth: null, pendingFromYear: null },
+          });
+        }
+      }
 
+      let amount = baseAmount;
       if (t.chitFund) {
         amount = t.chitFund.isLifted
-          ? (t.chitFund.monthlyLiftedAmount ?? t.amount)
+          ? (t.chitFund.monthlyLiftedAmount ?? baseAmount)
           : t.chitFund.monthlyUnliftedAmount;
       } else if (t.category === "CREDIT_CARD" && prevStatements.has(t.id)) {
-        // Bill for this month = last month's card spend
         amount = prevStatements.get(t.id)!;
       }
 
