@@ -74,13 +74,15 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
   const entries = currentMonth?.entries ?? [];
   const adHocItems = currentMonth?.adHocItems ?? [];
 
-  const adHocIncome  = useMemo(() => adHocItems.filter(i => i.type === "INCOME").reduce((s, i)  => s + i.amount, 0), [adHocItems]);
-  const adHocExpense = useMemo(() => adHocItems.filter(i => i.type === "EXPENSE").reduce((s, i) => s + i.amount, 0), [adHocItems]);
-  const totalIncome  = currentMonth ? currentMonth.salaryIncome + currentMonth.freelanceIncome + currentMonth.otherIncome : 0;
-  const grandIncome  = totalIncome + adHocIncome;
+  const adHocIncome    = useMemo(() => adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0), [adHocItems]);
+  const ccAdHocTotal   = useMemo(() => adHocItems.filter(i => i.type === "EXPENSE" && i.category === "CREDIT_CARD").reduce((s, i) => s + i.amount, 0), [adHocItems]);
+  const adHocExpense   = useMemo(() => adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0), [adHocItems]);
+  const totalIncome    = currentMonth ? currentMonth.salaryIncome + currentMonth.freelanceIncome + currentMonth.otherIncome : 0;
+  const grandIncome    = totalIncome + adHocIncome;
   const totalCommitted = useMemo(() => entries.reduce((s, e) => s + e.amount, 0), [entries]);
   const totalPaid      = useMemo(() => entries.filter(e => e.isPaid).reduce((s, e) => s + e.amount, 0), [entries]);
   const totalPending   = totalCommitted - totalPaid;
+  // CC purchases this month pay next month — excluded from current balance
   const balance        = grandIncome - totalCommitted - adHocExpense;
   const paidPercent    = totalCommitted > 0 ? Math.round((totalPaid / totalCommitted) * 100) : 0;
   const pendingCount   = useMemo(() => entries.filter(e => !e.isPaid).length, [entries]);
@@ -302,7 +304,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
           value={formatCurrency(adHocExpense)}
           icon={<CheckCircle2 className="w-4 h-4" />}
           color="text-amber-600"
-          sub={adHocExpense > 0 ? `${adHocItems.filter(i => i.type === "EXPENSE").length} transaction${adHocItems.filter(i => i.type === "EXPENSE").length !== 1 ? "s" : ""}` : "no extra spends"}
+          sub={adHocExpense > 0 ? `${adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").length} transaction${adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").length !== 1 ? "s" : ""}` : "no extra spends"}
         />
         <MetricCard
           label={balance >= 0 ? "Leftover" : "Deficit"}
@@ -312,6 +314,18 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
           sub={balance >= 0 ? "after all spends" : "over income"}
         />
       </div>
+
+      {/* CC next-month liability callout */}
+      {ccAdHocTotal > 0 && (
+        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-blue-50 border border-blue-200 text-sm">
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+            <span className="text-blue-800 font-medium">CC spend this month</span>
+            <span className="text-[10px] text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full">next month's bill</span>
+          </div>
+          <span className="text-blue-900 font-bold">{formatCurrency(ccAdHocTotal)}</span>
+        </div>
+      )}
 
       {/* Progress */}
       <div className="space-y-1.5">
