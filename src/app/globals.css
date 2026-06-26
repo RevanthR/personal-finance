@@ -26,7 +26,11 @@
 }
 
 /* Dark mode intentionally disabled — hardcoded utility colors (blue-50, amber-50, etc.)
-   throughout the UI don't adapt correctly. Force light mode app-wide for now. */
+   throughout the UI don't adapt correctly. Force light mode app-wide for now.
+   Override Tailwind's media-based dark: variant so no dark: class fires. */
+@media (prefers-color-scheme: dark) {
+  :root { color-scheme: light; }
+}
 
 /* ── Map all tokens → Tailwind colour utilities ───────────────────────────── */
 @theme inline {

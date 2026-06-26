@@ -30,7 +30,7 @@ export function Header({ user }: HeaderProps) {
     .slice(0, 2) ?? "U";
 
   return (
-    <header className="h-14 border-b bg-white dark:bg-slate-900 flex items-center justify-between px-4 md:px-6 shrink-0">
+    <header className="h-14 border-b bg-white flex items-center justify-between px-4 md:px-6 shrink-0">
       <div className="md:hidden flex items-center gap-2">
         <div className="w-7 h-7 bg-zinc-900 rounded-lg flex items-center justify-center shrink-0">
           <IndianRupee className="w-3.5 h-3.5 text-white" />
@@ -40,7 +40,7 @@ export function Header({ user }: HeaderProps) {
       <div className="hidden md:block" />
 
       <div className="flex items-center gap-3">
-        <button className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+        <button className="text-slate-400 hover:text-slate-600">
           <Bell className="w-5 h-5" />
         </button>
 
