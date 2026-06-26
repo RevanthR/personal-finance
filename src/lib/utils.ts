@@ -31,6 +31,12 @@ export const CATEGORY_LABELS: Record<string, string> = {
   SAVINGS: "Savings",
   PERSONAL: "Personal",
   MISCELLANEOUS: "Miscellaneous",
+  SALARY: "Salary",
+  FREELANCE: "Freelance",
+  RENTAL: "Rental",
+  BUSINESS: "Business",
+  INVESTMENTS: "Investments",
+  OTHER_INCOME: "Other Income",
 };
 
 export function getCategoryDisplay(category: string, customCategory?: string | null): string {
@@ -49,4 +55,18 @@ export const CATEGORY_COLORS: Record<string, string> = {
   SAVINGS:          "#15803d",
   PERSONAL:         "#1d4ed8",
   MISCELLANEOUS:    "#9ca3af",
+  SALARY:           "#059669",
+  FREELANCE:        "#0891b2",
+  RENTAL:           "#7c3aed",
+  BUSINESS:         "#d97706",
+  INVESTMENTS:      "#0d9488",
+  OTHER_INCOME:     "#6b7280",
 };
+
+export const EXPENSE_CATEGORIES = [
+  "HOUSE_MAINTENANCE", "LOAN", "CHIT_FUND", "CREDIT_CARD", "SAVINGS", "PERSONAL", "MISCELLANEOUS",
+] as const;
+
+export const INCOME_CATEGORIES = [
+  "SALARY", "FREELANCE", "RENTAL", "BUSINESS", "INVESTMENTS", "OTHER_INCOME",
+] as const;

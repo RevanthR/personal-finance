@@ -24,6 +24,7 @@ export type MonthData = {
   total: number | null;
   isPopulated: boolean;
   isCurrent: boolean;
+  hasIncomeChange?: boolean;
 };
 
 type PastFY = {
@@ -38,10 +39,12 @@ export function YearOverviewClient({
   months,
   fyKey,
   pastFYSummaries = [],
+  incomeTemplateCount = 0,
 }: {
   months: MonthData[];
   fyKey: string;
   pastFYSummaries?: PastFY[];
+  incomeTemplateCount?: number;
 }) {
   const totalIncome   = months.reduce((s, m) => s + m.income, 0);
   const totalExpenses = months.reduce((s, m) => s + m.expenses, 0);
@@ -88,7 +91,10 @@ export function YearOverviewClient({
           </div>
           {projCount > 0 && (
             <p className="text-[10px] text-muted-foreground mt-2">
-              {actualCount} month{actualCount !== 1 ? "s" : ""} actual · {projCount} estimated at current run rate
+              {actualCount} month{actualCount !== 1 ? "s" : ""} actual · {projCount} projected
+              {incomeTemplateCount > 0
+                ? ` from ${incomeTemplateCount} income template${incomeTemplateCount !== 1 ? "s" : ""}`
+                : " at current run rate"}
             </p>
           )}
         </CardContent>
@@ -124,17 +130,22 @@ export function YearOverviewClient({
                   )}>
                     {MONTHS[m.month - 1]}
                   </span>
-                  {!m.isPopulated && (
-                    <span className="text-[8px] font-medium text-muted-foreground bg-zinc-200 px-1 py-0.5 rounded">est</span>
-                  )}
-                  {m.isPopulated && !m.isCurrent && m.paid !== null && m.total !== null && (
-                    <span className={cn(
-                      "text-[8px] font-medium px-1 py-0.5 rounded",
-                      m.paid === m.total ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
-                    )}>
-                      {m.paid}/{m.total}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-0.5">
+                    {m.hasIncomeChange && (
+                      <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded">↑</span>
+                    )}
+                    {!m.isPopulated && (
+                      <span className="text-[8px] font-medium text-muted-foreground bg-zinc-200 px-1 py-0.5 rounded">est</span>
+                    )}
+                    {m.isPopulated && !m.isCurrent && m.paid !== null && m.total !== null && (
+                      <span className={cn(
+                        "text-[8px] font-medium px-1 py-0.5 rounded",
+                        m.paid === m.total ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+                      )}>
+                        {m.paid}/{m.total}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Mini income/expense bars */}

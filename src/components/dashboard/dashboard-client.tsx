@@ -31,6 +31,7 @@ interface DashboardClientProps {
   recentMonths: MonthWithDetails[];
   chitFunds: ChitFundWithTemplate[];
   ccTemplates: { id: string; name: string; statementDay: number | null; dueDateDay: number | null }[];
+  suggestedIncome: number;
   todayMonth: number;
   todayYear: number;
   userId: string;
@@ -196,7 +197,7 @@ function CCCardBlock({
   );
 }
 
-export function DashboardClient({ currentMonth: initialMonth, recentMonths, chitFunds, ccTemplates, todayMonth, todayYear }: DashboardClientProps) {
+export function DashboardClient({ currentMonth: initialMonth, recentMonths, chitFunds, ccTemplates, suggestedIncome, todayMonth, todayYear }: DashboardClientProps) {
   const [currentMonth, setCurrentMonth] = useState(initialMonth);
   const [showAdHoc, setShowAdHoc] = useState(false);
   const [showSetup, setShowSetup] = useState(!initialMonth);
@@ -289,6 +290,16 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
     }));
     return { fyIncome, fyExpenses, fyBalance: fyIncome - fyExpenses, trendData };
   }, [recentMonths]);
+
+  // Collapsible groups: track user overrides; default = collapse if all entries paid
+  const [groupToggled, setGroupToggled] = useState<Record<string, boolean>>({});
+  function isGroupCollapsed(key: string, entryItems: { data: EntryWithTemplate }[]): boolean {
+    if (key in groupToggled) return groupToggled[key];
+    return entryItems.length > 0 && entryItems.every(i => i.data.isPaid);
+  }
+  function toggleGroup(key: string, entryItems: { data: EntryWithTemplate }[]) {
+    setGroupToggled(prev => ({ ...prev, [key]: !isGroupCollapsed(key, entryItems) }));
+  }
 
   function openIncomeEdit() {
     if (!currentMonth) return;
@@ -398,7 +409,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
         <Button onClick={() => setShowSetup(true)}>
           <Plus className="w-4 h-4 mr-2" /> Set Up {formatMonthYear(todayMonth, todayYear)}
         </Button>
-        <SetupMonthDialog open={showSetup} onOpenChange={setShowSetup} month={todayMonth} year={todayYear} onConfirm={handleSetupMonth} />
+        <SetupMonthDialog open={showSetup} onOpenChange={setShowSetup} month={todayMonth} year={todayYear} suggestedIncome={suggestedIncome} onConfirm={handleSetupMonth} />
       </div>
     );
   }
@@ -446,7 +457,10 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
       {/* Metric cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <button onClick={openIncomeEdit} className="text-left">
-          <Card className="hover:border-zinc-400 transition-colors cursor-pointer h-full">
+          <Card
+            className="hover:border-zinc-400 transition-colors cursor-pointer h-full"
+            style={{ background: "linear-gradient(135deg, white 0%, #f0fdf4 100%)" }}
+          >
             <CardContent className="p-3">
               <div className="flex items-center justify-between mb-1">
                 <p className="text-xs text-muted-foreground">Income</p>
@@ -464,13 +478,14 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
             </CardContent>
           </Card>
         </button>
-        <MetricCard label="Recurring" value={formatCurrency(totalCommitted)} icon={<TrendingDown className="w-4 h-4" />} color="text-red-600" sub={`${pendingCount} pending`} />
+        <MetricCard label="Recurring" value={formatCurrency(totalCommitted)} icon={<TrendingDown className="w-4 h-4" />} color="text-red-600" sub={`${pendingCount} pending`} gradient="linear-gradient(135deg, white 0%, #fef2f2 100%)" />
         <MetricCard
           label="Unplanned"
           value={formatCurrency(adHocExpense)}
           icon={<CheckCircle2 className="w-4 h-4" />}
           color="text-amber-600"
           sub={adHocExpense > 0 ? `${adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").length} transaction${adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").length !== 1 ? "s" : ""}` : "no extra spends"}
+          gradient="linear-gradient(135deg, white 0%, #fffbeb 100%)"
         />
         <MetricCard
           label={balance >= 0 ? "Leftover" : "Deficit"}
@@ -478,6 +493,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
           icon={balance >= 0 ? <TrendingUp className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
           color={balance >= 0 ? "text-green-600" : "text-red-600"}
           sub={balance >= 0 ? "after all spends" : "over income"}
+          gradient={balance >= 0 ? "linear-gradient(135deg, white 0%, #f0fdf4 100%)" : "linear-gradient(135deg, white 0%, #fef2f2 100%)"}
         />
       </div>
 
@@ -513,61 +529,100 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
               : { cat: groupKey, custom: null };
             const catColor = getCategoryColor(sampleCat.cat, sampleCat.custom);
             const catLabel = getCategoryDisplay(sampleCat.cat, sampleCat.custom);
-            const entryItems = items.filter(i => i.kind === "entry");
+            const entryItems = items.filter(i => i.kind === "entry") as { kind: "entry"; data: EntryWithTemplate }[];
             const txItems = items.filter(i => i.kind === "transaction").map(i => i.data as AdHocItem);
             const catTotal = entryItems.reduce((s, i) => s + i.data.amount, 0);
             const catPaid  = entryItems.reduce((s, i) => s + (i.data.isPaid ? i.data.amount : 0), 0);
-
+            const catCarry = entryItems.reduce((s, i) => s + (i.data.statementAmount ?? 0), 0);
+            const allPaid  = entryItems.length > 0 && entryItems.every(i => i.data.isPaid);
+            const collapsed = isGroupCollapsed(groupKey, entryItems);
             const isCC = groupKey === "CREDIT_CARD";
 
             return (
-              <div key={groupKey}>
-                <div className="flex items-center justify-between mb-1.5 px-0.5">
+              <div key={groupKey} className="relative pl-3">
+                {/* Left accent strip */}
+                <div
+                  className="absolute left-0 top-0 bottom-0 w-[3px] rounded-full"
+                  style={{ backgroundColor: catColor, opacity: 0.5 }}
+                />
+
+                {/* Clickable header */}
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(groupKey, entryItems)}
+                  className="w-full flex items-center justify-between mb-1.5 px-2 py-1.5 rounded-lg transition-colors hover:bg-muted/40"
+                  style={{ background: collapsed ? undefined : `linear-gradient(to right, ${catColor}12, transparent)` }}
+                >
                   <div className="flex items-center gap-1.5">
                     <div className="w-2 h-2 rounded-full" style={{ backgroundColor: catColor }} />
                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       {catLabel}
                     </span>
+                    {allPaid && collapsed && (
+                      <span className="text-[10px] text-green-600 font-medium ml-1">✓</span>
+                    )}
                   </div>
-                  <span className="text-xs text-muted-foreground">
-                    {formatCurrency(catPaid)} / {formatCurrency(catTotal)}
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  {entryItems.map(item => {
-                    if (isCC) {
-                      const cardName = item.data.template.name;
-                      const cardTxs = txItems.filter(t => parseCCCardName(t.notes) === cardName);
-                      return (
-                        <CCCardBlock
-                          key={item.data.id}
-                          entry={item.data}
-                          txItems={cardTxs}
-                          nextMonthName={nextMonthName}
-                          onUpdate={handleEntryUpdate}
-                          onDelete={handleAdHocDelete}
-                          onClearStatement={handleClearStatement}
-                        />
-                      );
-                    }
-                    return <EntryRow key={item.data.id} entry={item.data} onUpdate={handleEntryUpdate} />;
-                  })}
-                  {!isCC && txItems.map(item =>
-                    <TransactionRow key={item.id} item={item} onDelete={handleAdHocDelete} />
-                  )}
-                </div>
+                  <div className="flex items-center gap-2">
+                    {collapsed ? (
+                      <span className="text-xs text-muted-foreground">
+                        {allPaid
+                          ? `${entryItems.length} paid · ${formatCurrency(catTotal)}`
+                          : isCC
+                            ? `${formatCurrency(catTotal)} billed`
+                            : `${formatCurrency(catPaid)} / ${formatCurrency(catTotal)}`}
+                      </span>
+                    ) : isCC ? (
+                      <span className="text-xs text-muted-foreground">
+                        {formatCurrency(catTotal)} billed
+                        {catCarry > 0 && <span className="text-blue-500"> · ↗ {formatCurrency(catCarry)} {nextMonthName}</span>}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        {formatCurrency(catPaid)} / {formatCurrency(catTotal)}
+                      </span>
+                    )}
+                    <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/60 transition-transform duration-200", !collapsed && "rotate-180")} />
+                  </div>
+                </button>
 
-                {/* Orphaned CC transactions (card template deleted but transactions remain) */}
-                {isCC && (() => {
-                  const entryNames = new Set(entryItems.map(i => i.data.template.name));
-                  const orphaned = txItems.filter(t => !entryNames.has(parseCCCardName(t.notes) ?? ""));
-                  return orphaned.length > 0 ? (
-                    <div className="mt-2 rounded-xl border border-dashed border-border px-3 py-2">
-                      <p className="text-[10px] text-muted-foreground mb-1.5">Unmatched transactions</p>
-                      <CCSubcatBreakdown txItems={orphaned} onDelete={handleAdHocDelete} />
-                    </div>
-                  ) : null;
-                })()}
+                {/* Collapsible content */}
+                {!collapsed && (
+                  <div className="space-y-2">
+                    {entryItems.map(item => {
+                      if (isCC) {
+                        const cardName = item.data.template.name;
+                        const cardTxs = txItems.filter(t => parseCCCardName(t.notes) === cardName);
+                        return (
+                          <CCCardBlock
+                            key={item.data.id}
+                            entry={item.data}
+                            txItems={cardTxs}
+                            nextMonthName={nextMonthName}
+                            onUpdate={handleEntryUpdate}
+                            onDelete={handleAdHocDelete}
+                            onClearStatement={handleClearStatement}
+                          />
+                        );
+                      }
+                      return <EntryRow key={item.data.id} entry={item.data} onUpdate={handleEntryUpdate} />;
+                    })}
+                    {!isCC && txItems.map(item =>
+                      <TransactionRow key={item.id} item={item} onDelete={handleAdHocDelete} />
+                    )}
+
+                    {/* Orphaned CC transactions */}
+                    {isCC && (() => {
+                      const entryNames = new Set(entryItems.map(i => i.data.template.name));
+                      const orphaned = txItems.filter(t => !entryNames.has(parseCCCardName(t.notes) ?? ""));
+                      return orphaned.length > 0 ? (
+                        <div className="mt-2 rounded-xl border border-dashed border-border px-3 py-2">
+                          <p className="text-[10px] text-muted-foreground mb-1.5">Unmatched transactions</p>
+                          <CCSubcatBreakdown txItems={orphaned} onDelete={handleAdHocDelete} />
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -653,9 +708,9 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
   );
 }
 
-function MetricCard({ label, value, icon, color, sub }: { label: string; value: string; icon: React.ReactNode; color: string; sub?: string }) {
+function MetricCard({ label, value, icon, color, sub, gradient }: { label: string; value: string; icon: React.ReactNode; color: string; sub?: string; gradient?: string }) {
   return (
-    <Card>
+    <Card style={gradient ? { background: gradient } : undefined}>
       <CardContent className="p-3">
         <div className="flex items-center justify-between mb-1">
           <p className="text-xs text-muted-foreground">{label}</p>

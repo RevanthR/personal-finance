@@ -62,8 +62,8 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
 
   return (
     <div className={cn(
-      "flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all",
-      isPaid ? "bg-muted/40 border-transparent opacity-60" : "bg-card border-border"
+      "flex items-center gap-3 px-3 rounded-xl border transition-all duration-200",
+      isPaid ? "py-1.5 bg-muted/30 border-transparent opacity-50" : "py-2.5 bg-card border-border"
     )}>
       <button
         onClick={handleTogglePaid}
@@ -75,7 +75,7 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
         {isPaid && <Check className="w-3 h-3 text-white" />}
       </button>
 
-      <div className="w-0.5 h-7 rounded-full shrink-0" style={{ backgroundColor: color }} />
+      <div className={cn("w-0.5 rounded-full shrink-0 transition-all duration-200", isPaid ? "h-4" : "h-7")} style={{ backgroundColor: color }} />
 
       <div className="flex-1 min-w-0">
         <p className={cn("text-sm font-medium leading-tight", isPaid && "line-through text-muted-foreground")}>

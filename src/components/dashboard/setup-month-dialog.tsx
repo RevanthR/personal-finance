@@ -19,11 +19,12 @@ interface SetupMonthDialogProps {
   onOpenChange: (open: boolean) => void;
   month: number;
   year: number;
+  suggestedIncome?: number;
   onConfirm: (salaryIncome: number) => Promise<void>;
 }
 
-export function SetupMonthDialog({ open, onOpenChange, month, year, onConfirm }: SetupMonthDialogProps) {
-  const [salary, setSalary] = useState("");
+export function SetupMonthDialog({ open, onOpenChange, month, year, suggestedIncome, onConfirm }: SetupMonthDialogProps) {
+  const [salary, setSalary] = useState(suggestedIncome ? String(suggestedIncome) : "");
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -39,12 +40,14 @@ export function SetupMonthDialog({ open, onOpenChange, month, year, onConfirm }:
         <DialogHeader>
           <DialogTitle>Set Up {formatMonthYear(month, year)}</DialogTitle>
           <DialogDescription>
-            Enter your salary to kick off the month. All your recurring templates will auto-populate.
+            {suggestedIncome
+              ? "Income pre-filled from your templates — adjust if needed, then start the month."
+              : "Enter your income to kick off the month. All your recurring templates will auto-populate."}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <Label>Salary Income (₹)</Label>
+            <Label>Total Income (₹)</Label>
             <Input
               type="number"
               value={salary}
@@ -52,6 +55,11 @@ export function SetupMonthDialog({ open, onOpenChange, month, year, onConfirm }:
               placeholder="e.g. 164000"
               autoFocus
             />
+            {(suggestedIncome ?? 0) > 0 && (
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Pre-filled from income templates · edit if your actual income differs
+              </p>
+            )}
           </div>
           <DialogFooter>
             <Button type="submit" disabled={loading} className="w-full">

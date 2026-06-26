@@ -62,6 +62,15 @@ export default async function MonthsPage() {
     }, 0);
   }
 
+  // Compute which future months have an income step-change from a pending template amount.
+  // Key format: "YEAR-MONTH"
+  const incomeChangeMonths = new Set<string>();
+  for (const t of incomeTemplates) {
+    if (t.pendingAmount != null && t.pendingFromMonth != null && t.pendingFromYear != null) {
+      incomeChangeMonths.add(`${t.pendingFromYear}-${t.pendingFromMonth}`);
+    }
+  }
+
   // Current FY months (actual or projected)
   const currentFYMonths: MonthData[] = fyMonths.map(({ month, year }) => {
     const actual = allMonths.find(m => m.month === month && m.year === year && m.isPopulated);
@@ -77,6 +86,7 @@ export default async function MonthsPage() {
         total: actual.entries.length,
         isPopulated: true,
         isCurrent: month === todayMonth && year === todayYear,
+        hasIncomeChange: false,
       };
     }
     // Projected: sum active expense templates + any yearly template due this month
@@ -91,6 +101,7 @@ export default async function MonthsPage() {
       paid: null, total: null,
       isPopulated: false,
       isCurrent: month === todayMonth && year === todayYear,
+      hasIncomeChange: incomeChangeMonths.has(`${year}-${month}`),
     };
   });
 
@@ -117,6 +128,7 @@ export default async function MonthsPage() {
       months={JSON.parse(JSON.stringify(currentFYMonths))}
       fyKey={fyKey}
       pastFYSummaries={pastFYSummaries}
+      incomeTemplateCount={incomeTemplates.length}
     />
   );
 }

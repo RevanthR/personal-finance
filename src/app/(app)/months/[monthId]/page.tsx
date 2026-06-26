@@ -26,7 +26,7 @@ export default async function MonthDetailPage({
 
   if (!currentMonth) notFound();
 
-  const [recentMonths, chitFunds, ccTemplates] = await Promise.all([
+  const [recentMonths, chitFunds, ccTemplates, incomeTemplates] = await Promise.all([
     db.month.findMany({
       where: { userId: session.user.id },
       orderBy: [{ year: "desc" }, { month: "desc" }],
@@ -41,7 +41,18 @@ export default async function MonthDetailPage({
       where: { userId: session.user.id, category: "CREDIT_CARD", isActive: true },
       select: { id: true, name: true, statementDay: true, dueDateDay: true },
     }),
+    db.lineItemTemplate.findMany({
+      where: { userId: session.user.id, isActive: true },
+    }),
   ]);
+
+  // Sum income templates for the current month, applying any pending changes that have kicked in
+  const suggestedIncome = incomeTemplates.filter(t => t.templateType === "INCOME").reduce((sum, t) => {
+    const { month, year } = currentMonth;
+    const usesPending = t.pendingAmount != null && t.pendingFromMonth != null && t.pendingFromYear != null &&
+      (year > t.pendingFromYear || (year === t.pendingFromYear && month >= t.pendingFromMonth));
+    return sum + (usesPending ? t.pendingAmount! : t.amount);
+  }, 0);
 
   return (
     <DashboardClient
@@ -49,6 +60,7 @@ export default async function MonthDetailPage({
       recentMonths={JSON.parse(JSON.stringify(recentMonths))}
       chitFunds={JSON.parse(JSON.stringify(chitFunds))}
       ccTemplates={JSON.parse(JSON.stringify(ccTemplates))}
+      suggestedIncome={suggestedIncome}
       todayMonth={currentMonth.month}
       todayYear={currentMonth.year}
       userId={session.user.id}
