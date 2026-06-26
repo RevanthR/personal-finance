@@ -1,5 +1,7 @@
 "use client";
 
+import { useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { formatCurrency, getCategoryDisplay, getCategoryColor } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
@@ -28,8 +30,14 @@ interface MonthPreviewClientProps {
 }
 
 export function MonthPreviewClient({ month, year, projIncome, projExpenses, prevUrl, nextUrl }: MonthPreviewClientProps) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
   const totalExpenses = projExpenses.reduce((s, e) => s + e.amount, 0);
   const balance = projIncome - totalExpenses;
+
+  function navigate(url: string) {
+    startTransition(() => router.push(url));
+  }
 
   // Group by category
   const grouped = new Map<string, ProjectedEntry[]>();
@@ -51,19 +59,19 @@ export function MonthPreviewClient({ month, year, projIncome, projExpenses, prev
         <Link href="/months" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="w-3.5 h-3.5" /> Year view
         </Link>
-        <div className="flex items-center gap-2">
-          <Link href={prevUrl} className="p-1.5 rounded-lg border hover:bg-muted transition-colors">
+        <div className={cn("flex items-center gap-2 transition-opacity", isPending && "opacity-50")}>
+          <button onClick={() => navigate(prevUrl)} disabled={isPending} className="p-1.5 rounded-lg border hover:bg-muted transition-colors disabled:cursor-not-allowed">
             <ChevronLeft className="w-4 h-4" />
-          </Link>
+          </button>
           <div className="text-center min-w-[130px]">
             <p className="text-sm font-bold">{MONTH_NAMES[month - 1]} {year}</p>
             <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
               Projected
             </span>
           </div>
-          <Link href={nextUrl} className="p-1.5 rounded-lg border hover:bg-muted transition-colors">
+          <button onClick={() => navigate(nextUrl)} disabled={isPending} className="p-1.5 rounded-lg border hover:bg-muted transition-colors disabled:cursor-not-allowed">
             <ChevronRight className="w-4 h-4" />
-          </Link>
+          </button>
         </div>
         <div className="w-20 shrink-0" />
       </div>

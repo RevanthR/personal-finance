@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useTransition } from "react";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import { formatCurrency, formatMonthYear, getCategoryDisplay, getCategoryColor } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -14,7 +15,6 @@ import {
 import {
   Wallet, TrendingDown, CheckCircle2, AlertCircle, TrendingUp, Plus, Pencil, ChevronDown, Trash2, CreditCard, ChevronLeft, ChevronRight,
 } from "lucide-react";
-import Link from "next/link";
 import { toast } from "sonner";
 import { EntryRow } from "./entry-row";
 import { AdHocDialog, type CCCard } from "./adhoc-dialog";
@@ -205,6 +205,12 @@ function CCCardBlock({
 export function DashboardClient({ currentMonth: initialMonth, recentMonths, chitFunds, ccTemplates, suggestedIncome, todayMonth, todayYear, targetMonth, targetYear, prevUrl, nextUrl }: DashboardClientProps) {
   const viewMonth = targetMonth ?? todayMonth;
   const viewYear  = targetYear  ?? todayYear;
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  function navigate(url: string) {
+    startTransition(() => router.push(url));
+  }
   const [currentMonth, setCurrentMonth] = useState(initialMonth);
   const [showAdHoc, setShowAdHoc] = useState(false);
   const [showSetup, setShowSetup] = useState(!initialMonth);
@@ -469,12 +475,12 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         {prevUrl && nextUrl && (
           <div className="flex items-center gap-3 mb-2">
-            <Link href={prevUrl} className="p-1.5 rounded-lg border hover:bg-muted transition-colors">
+            <button onClick={() => navigate(prevUrl)} disabled={isPending} className="p-1.5 rounded-lg border hover:bg-muted transition-colors disabled:opacity-40">
               <ChevronLeft className="w-4 h-4" />
-            </Link>
-            <Link href={nextUrl} className="p-1.5 rounded-lg border hover:bg-muted transition-colors">
+            </button>
+            <button onClick={() => navigate(nextUrl)} disabled={isPending} className="p-1.5 rounded-lg border hover:bg-muted transition-colors disabled:opacity-40">
               <ChevronRight className="w-4 h-4" />
-            </Link>
+            </button>
           </div>
         )}
         <h2 className="text-2xl font-bold">{formatMonthYear(viewMonth, viewYear)}</h2>
@@ -493,13 +499,13 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           {prevUrl && nextUrl && (
-            <div className="flex items-center gap-1">
-              <Link href={prevUrl} className="p-1.5 rounded-lg border hover:bg-muted transition-colors">
+            <div className={cn("flex items-center gap-1 transition-opacity", isPending && "opacity-50")}>
+              <button onClick={() => navigate(prevUrl)} disabled={isPending} className="p-1.5 rounded-lg border hover:bg-muted transition-colors disabled:cursor-not-allowed">
                 <ChevronLeft className="w-4 h-4" />
-              </Link>
-              <Link href={nextUrl} className="p-1.5 rounded-lg border hover:bg-muted transition-colors">
+              </button>
+              <button onClick={() => navigate(nextUrl)} disabled={isPending} className="p-1.5 rounded-lg border hover:bg-muted transition-colors disabled:cursor-not-allowed">
                 <ChevronRight className="w-4 h-4" />
-              </Link>
+              </button>
             </div>
           )}
           <div>
