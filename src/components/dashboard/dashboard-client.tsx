@@ -27,6 +27,15 @@ const DashboardCharts = dynamic(
   { ssr: false, loading: () => <div className="h-64 rounded-xl bg-muted animate-pulse" /> }
 );
 
+export type ProjectedEntry = {
+  name: string;
+  amount: number;
+  category: string;
+  customCategory: string | null;
+  isFixed: boolean;
+  dueDateDay: number | null;
+};
+
 interface DashboardClientProps {
   currentMonth: MonthWithDetails | null;
   recentMonths: MonthWithDetails[];
@@ -40,6 +49,8 @@ interface DashboardClientProps {
   targetYear?: number;
   prevUrl?: string;
   nextUrl?: string;
+  projectedIncome?: number;
+  projectedEntries?: ProjectedEntry[];
 }
 
 type MonthWithDetails = {
@@ -202,9 +213,11 @@ function CCCardBlock({
   );
 }
 
-export function DashboardClient({ currentMonth: initialMonth, recentMonths, chitFunds, ccTemplates, suggestedIncome, todayMonth, todayYear, targetMonth, targetYear, prevUrl, nextUrl }: DashboardClientProps) {
+export function DashboardClient({ currentMonth: initialMonth, recentMonths, chitFunds, ccTemplates, suggestedIncome, todayMonth, todayYear, targetMonth, targetYear, prevUrl, nextUrl, projectedIncome, projectedEntries }: DashboardClientProps) {
   const viewMonth = targetMonth ?? todayMonth;
   const viewYear  = targetYear  ?? todayYear;
+  const isProjected = projectedEntries != null;
+  const projEntries = projectedEntries ?? [];
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -240,9 +253,25 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
 
   type GroupedItem =
     | { kind: "entry"; data: EntryWithTemplate }
-    | { kind: "transaction"; data: AdHocItem };
+    | { kind: "transaction"; data: AdHocItem }
+    | { kind: "projected"; data: ProjectedEntry };
 
   const { grouped, oneTimeItems } = useMemo(() => {
+    if (isProjected) {
+      const result: Record<string, GroupedItem[]> = {};
+      for (const cat of CATEGORY_ORDER) {
+        const items = projEntries.filter(e => !e.customCategory && e.category === cat);
+        if (items.length) result[cat] = items.map(d => ({ kind: "projected" as const, data: d }));
+      }
+      for (const e of projEntries) {
+        if (e.customCategory) {
+          if (!result[e.customCategory]) result[e.customCategory] = [];
+          result[e.customCategory].push({ kind: "projected" as const, data: e });
+        }
+      }
+      return { grouped: result, oneTimeItems: [] };
+    }
+
     const result: Record<string, GroupedItem[]> = {};
 
     // Template entries grouped by category
@@ -266,7 +295,6 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
         if (result[key]) {
           result[key].push({ kind: "transaction", data: item });
         } else {
-          // Category exists as a key but no template entries — create the group
           result[key] = [{ kind: "transaction", data: item }];
         }
       } else {
@@ -275,10 +303,18 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
     }
 
     return { grouped: result, oneTimeItems: oneTime };
-  }, [entries, adHocItems]);
+  }, [entries, adHocItems, isProjected, projEntries]);
 
   // Enhanced breakdown includes ad-hoc expenses in their categories
   const categoryBreakdown = useMemo(() => {
+    if (isProjected) {
+      return projEntries.map(e => ({
+        key: e.customCategory ?? e.category,
+        value: e.amount,
+        name: getCategoryDisplay(e.category, e.customCategory),
+        color: getCategoryColor(e.category, e.customCategory),
+      })).sort((a, b) => b.value - a.value);
+    }
     const totals: Record<string, { amount: number; templateCat: string; customCat: string | null }> = {};
     for (const e of entries) {
       const key = e.template.customCategory ?? e.template.category;
@@ -299,7 +335,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
         color: getCategoryColor(templateCat, customCat),
       }))
       .sort((a, b) => b.value - a.value);
-  }, [entries, adHocItems]);
+  }, [entries, adHocItems, isProjected, projEntries]);
 
   const { fyIncome, fyExpenses, fyBalance, trendData } = useMemo(() => {
     const fyIncome   = recentMonths.reduce((s, m) => s + m.salaryIncome + m.freelanceIncome + m.otherIncome + m.adHocItems.filter(i => i.type === "INCOME").reduce((a, i) => a + i.amount, 0), 0);
@@ -344,6 +380,17 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
   );
   const variableAmount = totalCommitted - fixedAmount + adHocExpense;
 
+  // Projected-mode display overrides — shadow the actual values when viewing a future month
+  const dispIncome    = isProjected ? (projectedIncome ?? 0) : grandIncome;
+  const dispCommitted = isProjected ? projEntries.reduce((s, e) => s + e.amount, 0) : totalCommitted;
+  const dispAdHoc     = isProjected ? 0 : adHocExpense;
+  const dispBalance   = dispIncome - dispCommitted - dispAdHoc;
+  const dispPaidPct   = isProjected ? 0 : paidPercent;
+  const dispPending   = isProjected ? dispCommitted : totalPending;
+  const dispFixed     = isProjected ? projEntries.filter(e => e.isFixed).reduce((s, e) => s + e.amount, 0) : fixedAmount;
+  const dispVariable  = isProjected ? (dispCommitted - dispFixed) : variableAmount;
+  const dispSavings   = dispIncome > 0 ? Math.round(((dispIncome - dispCommitted - dispAdHoc) / dispIncome) * 100) : 0;
+
   const upcomingPayments = useMemo(() => {
     const isCurrentMonth = currentMonth?.month === todayMonth && currentMonth?.year === todayYear;
     if (!isCurrentMonth) return [];
@@ -363,6 +410,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
   // Collapsible groups: track user overrides; default = collapse if all entries paid
   const [groupToggled, setGroupToggled] = useState<Record<string, boolean>>({});
   function isGroupCollapsed(key: string, entryItems: { data: EntryWithTemplate }[]): boolean {
+    if (isProjected) return false;
     if (key in groupToggled) return groupToggled[key];
     return entryItems.length > 0 && entryItems.every(i => i.data.isPaid);
   }
@@ -470,7 +518,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
     window.location.reload();
   }
 
-  if (!currentMonth) {
+  if (!currentMonth && !isProjected) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         {prevUrl && nextUrl && (
@@ -510,15 +558,26 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
           )}
           <div>
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Monthly Snapshot</p>
-            <h1 className="text-xl font-bold">{formatMonthYear(currentMonth.month, currentMonth.year)}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold">{formatMonthYear(viewMonth, viewYear)}</h1>
+              {isProjected && (
+                <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
+                  Projected
+                </span>
+              )}
+            </div>
             <p className="text-sm text-muted-foreground">
-              {pendingCount > 0 ? `${pendingCount} payments pending` : "All paid ✓"}
+              {isProjected
+                ? `${projEntries.length} expected payments`
+                : pendingCount > 0 ? `${pendingCount} payments pending` : "All paid ✓"}
             </p>
           </div>
         </div>
-        <Button onClick={() => setShowAdHoc(true)} size="sm" variant="outline" className="gap-1.5">
-          <Plus className="w-3.5 h-3.5" /> Add Transaction
-        </Button>
+        {!isProjected && (
+          <Button onClick={() => setShowAdHoc(true)} size="sm" variant="outline" className="gap-1.5">
+            <Plus className="w-3.5 h-3.5" /> Add Transaction
+          </Button>
+        )}
       </div>
 
       {/* FY Summary Strip */}
@@ -548,44 +607,45 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
 
       {/* Metric cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <button onClick={openIncomeEdit} className="text-left">
-          <Card
-            className="hover:border-zinc-400 transition-colors cursor-pointer h-full"
-            style={{ background: "linear-gradient(135deg, white 0%, #f0fdf4 100%)" }}
-          >
-            <CardContent className="p-3">
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-xs text-muted-foreground">Income</p>
-                <div className="flex items-center gap-1">
-                  <span className="text-green-600"><Wallet className="w-4 h-4" /></span>
-                  <Pencil className="w-2.5 h-2.5 text-muted-foreground" />
+        {isProjected ? (
+          <MetricCard label="Est. Income" value={formatCurrency(dispIncome)} icon={<Wallet className="w-4 h-4" />} color="text-green-600" sub="from templates" gradient="linear-gradient(135deg, white 0%, #f0fdf4 100%)" />
+        ) : (
+          <button onClick={openIncomeEdit} className="text-left">
+            <Card className="hover:border-zinc-400 transition-colors cursor-pointer h-full" style={{ background: "linear-gradient(135deg, white 0%, #f0fdf4 100%)" }}>
+              <CardContent className="p-3">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs text-muted-foreground">Income</p>
+                  <div className="flex items-center gap-1">
+                    <span className="text-green-600"><Wallet className="w-4 h-4" /></span>
+                    <Pencil className="w-2.5 h-2.5 text-muted-foreground" />
+                  </div>
                 </div>
-              </div>
-              <p className="text-base font-bold">{formatCurrency(grandIncome)}</p>
-              {(currentMonth.freelanceIncome > 0 || adHocIncome > 0) && (
-                <p className="text-[10px] text-green-600 mt-0.5">
-                  +{formatCurrency(currentMonth.freelanceIncome + adHocIncome)} extra
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </button>
-        <MetricCard label="Recurring" value={formatCurrency(totalCommitted)} icon={<TrendingDown className="w-4 h-4" />} color="text-red-600" sub={`${pendingCount} pending`} gradient="linear-gradient(135deg, white 0%, #fef2f2 100%)" />
+                <p className="text-base font-bold">{formatCurrency(grandIncome)}</p>
+                {(currentMonth!.freelanceIncome > 0 || adHocIncome > 0) && (
+                  <p className="text-[10px] text-green-600 mt-0.5">
+                    +{formatCurrency(currentMonth!.freelanceIncome + adHocIncome)} extra
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </button>
+        )}
+        <MetricCard label="Recurring" value={formatCurrency(dispCommitted)} icon={<TrendingDown className="w-4 h-4" />} color="text-red-600" sub={isProjected ? `${projEntries.length} items` : `${pendingCount} pending`} gradient="linear-gradient(135deg, white 0%, #fef2f2 100%)" />
         <MetricCard
           label="Unplanned"
-          value={formatCurrency(adHocExpense)}
+          value={isProjected ? "—" : formatCurrency(adHocExpense)}
           icon={<CheckCircle2 className="w-4 h-4" />}
           color="text-amber-600"
-          sub={adHocExpense > 0 ? `${adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").length} transaction${adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").length !== 1 ? "s" : ""}` : "no extra spends"}
+          sub={isProjected ? "not yet tracked" : adHocExpense > 0 ? `${adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").length} transaction${adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").length !== 1 ? "s" : ""}` : "no extra spends"}
           gradient="linear-gradient(135deg, white 0%, #fffbeb 100%)"
         />
         <MetricCard
-          label={balance >= 0 ? "Leftover" : "Deficit"}
-          value={formatCurrency(Math.abs(balance))}
-          icon={balance >= 0 ? <TrendingUp className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-          color={balance >= 0 ? "text-green-600" : "text-red-600"}
-          sub={balance >= 0 ? "after all spends" : "over income"}
-          gradient={balance >= 0 ? "linear-gradient(135deg, white 0%, #f0fdf4 100%)" : "linear-gradient(135deg, white 0%, #fef2f2 100%)"}
+          label={dispBalance >= 0 ? "Est. Leftover" : "Est. Deficit"}
+          value={formatCurrency(Math.abs(dispBalance))}
+          icon={dispBalance >= 0 ? <TrendingUp className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+          color={dispBalance >= 0 ? "text-green-600" : "text-red-600"}
+          sub={isProjected ? "if no unplanned spend" : dispBalance >= 0 ? "after all spends" : "over income"}
+          gradient={dispBalance >= 0 ? "linear-gradient(135deg, white 0%, #f0fdf4 100%)" : "linear-gradient(135deg, white 0%, #fef2f2 100%)"}
         />
       </div>
 
@@ -603,11 +663,11 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
       {/* Progress */}
       <div className="space-y-1.5">
         <div className="flex justify-between text-xs text-muted-foreground">
-          <span>Settled {formatCurrency(totalPaid)}</span>
-          <span className="font-semibold text-foreground">{paidPercent}%</span>
-          <span>Pending {formatCurrency(totalPending)}</span>
+          <span>{isProjected ? "Paid —" : `Settled ${formatCurrency(totalPaid)}`}</span>
+          <span className="font-semibold text-foreground">{dispPaidPct}%</span>
+          <span>{isProjected ? `Projected ${formatCurrency(dispPending)}` : `Pending ${formatCurrency(dispPending)}`}</span>
         </div>
-        <Progress value={paidPercent} className="h-1.5" />
+        <Progress value={dispPaidPct} className="h-1.5" />
       </div>
 
       {/* Two-column layout on desktop */}
@@ -615,18 +675,24 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
         {/* Entries */}
         <div className="lg:col-span-2 space-y-4">
           {Object.entries(grouped).map(([groupKey, items]) => {
-            const firstEntry = items.find(i => i.kind === "entry");
+            const firstEntry   = items.find(i => i.kind === "entry");
+            const firstProj    = items.find(i => i.kind === "projected");
             const sampleCat = firstEntry?.kind === "entry"
               ? { cat: firstEntry.data.template.category, custom: firstEntry.data.template.customCategory }
-              : { cat: groupKey, custom: null };
+              : firstProj?.kind === "projected"
+                ? { cat: firstProj.data.category, custom: firstProj.data.customCategory }
+                : { cat: groupKey, custom: null };
             const catColor = getCategoryColor(sampleCat.cat, sampleCat.custom);
             const catLabel = getCategoryDisplay(sampleCat.cat, sampleCat.custom);
-            const entryItems = items.filter(i => i.kind === "entry") as { kind: "entry"; data: EntryWithTemplate }[];
+            const entryItems    = items.filter(i => i.kind === "entry") as { kind: "entry"; data: EntryWithTemplate }[];
+            const projectedItems = items.filter(i => i.kind === "projected") as { kind: "projected"; data: ProjectedEntry }[];
             const txItems = items.filter(i => i.kind === "transaction").map(i => i.data as AdHocItem);
-            const catTotal = entryItems.reduce((s, i) => s + i.data.amount, 0);
+            const catTotal = isProjected
+              ? projectedItems.reduce((s, i) => s + i.data.amount, 0)
+              : entryItems.reduce((s, i) => s + i.data.amount, 0);
             const catPaid  = entryItems.reduce((s, i) => s + (i.data.isPaid ? i.data.amount : 0), 0);
             const catCarry = entryItems.reduce((s, i) => s + (i.data.statementAmount ?? 0), 0);
-            const allPaid  = entryItems.length > 0 && entryItems.every(i => i.data.isPaid);
+            const allPaid  = !isProjected && entryItems.length > 0 && entryItems.every(i => i.data.isPaid);
             const collapsed = isGroupCollapsed(groupKey, entryItems);
             const isCC = groupKey === "CREDIT_CARD";
 
@@ -654,7 +720,9 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    {collapsed ? (
+                    {isProjected ? (
+                      <span className="text-xs text-muted-foreground">{formatCurrency(catTotal)}</span>
+                    ) : collapsed ? (
                       <span className="text-xs text-muted-foreground">
                         {allPaid
                           ? `${entryItems.length} paid · ${formatCurrency(catTotal)}`
@@ -672,13 +740,16 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
                         {formatCurrency(catPaid)} / {formatCurrency(catTotal)}
                       </span>
                     )}
-                    <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/60 transition-transform duration-200", !collapsed && "rotate-180")} />
+                    {!isProjected && <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/60 transition-transform duration-200", !collapsed && "rotate-180")} />}
                   </div>
                 </button>
 
                 {/* Collapsible content */}
                 {!collapsed && (
                   <div className="space-y-2">
+                    {projectedItems.map((item, idx) => (
+                      <ProjectedEntryRow key={idx} entry={item.data} />
+                    ))}
                     {entryItems.map(item => {
                       if (isCC) {
                         const cardName = item.data.template.name;
@@ -738,22 +809,22 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
             categoryBreakdown={categoryBreakdown}
             trendData={trendData}
             chitFunds={chitFunds}
-            ccSubcatBreakdown={ccSubcatBreakdown}
-            savingsRate={savingsRate}
-            expensesDelta={expensesDelta}
-            prevMonthName={prevMonthName}
-            fixedAmount={fixedAmount}
-            variableAmount={variableAmount}
-            upcomingPayments={upcomingPayments}
+            ccSubcatBreakdown={isProjected ? [] : ccSubcatBreakdown}
+            savingsRate={dispSavings}
+            expensesDelta={isProjected ? null : expensesDelta}
+            prevMonthName={isProjected ? null : prevMonthName}
+            fixedAmount={dispFixed}
+            variableAmount={dispVariable}
+            upcomingPayments={isProjected ? [] : upcomingPayments}
           />
         </div>
       </div>
 
-      {/* Income Edit Dialog */}
-      <Dialog open={showIncomeEdit} onOpenChange={setShowIncomeEdit}>
+      {/* Income Edit Dialog — hidden for projected months */}
+      <Dialog open={!isProjected && showIncomeEdit} onOpenChange={setShowIncomeEdit}>
         <DialogContent className="max-w-xs">
           <DialogHeader>
-            <DialogTitle>Edit Income — {formatMonthYear(currentMonth.month, currentMonth.year)}</DialogTitle>
+            <DialogTitle>Edit Income — {formatMonthYear(currentMonth?.month ?? viewMonth, currentMonth?.year ?? viewYear)}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div>
@@ -796,12 +867,14 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
         </DialogContent>
       </Dialog>
 
-      <AdHocDialog
-        open={showAdHoc}
-        onOpenChange={setShowAdHoc}
-        onAdd={handleAdHocAdd}
-        ccCards={ccTemplates.map(t => ({ templateId: t.id, name: t.name } satisfies CCCard))}
-      />
+      {!isProjected && (
+        <AdHocDialog
+          open={showAdHoc}
+          onOpenChange={setShowAdHoc}
+          onAdd={handleAdHocAdd}
+          ccCards={ccTemplates.map(t => ({ templateId: t.id, name: t.name } satisfies CCCard))}
+        />
+      )}
     </div>
   );
 }
@@ -818,6 +891,24 @@ function MetricCard({ label, value, icon, color, sub, gradient }: { label: strin
         {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
       </CardContent>
     </Card>
+  );
+}
+
+function ProjectedEntryRow({ entry }: { entry: ProjectedEntry }) {
+  return (
+    <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl border bg-card opacity-75">
+      <div className="w-0.5 h-7 rounded-full shrink-0 bg-zinc-300" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium">{entry.name}</p>
+        <p className="text-[10px] text-muted-foreground">
+          {entry.dueDateDay ? `due ${entry.dueDateDay}th` : "projected"}
+          {entry.isFixed ? " · fixed" : ""}
+        </p>
+      </div>
+      <span className="text-sm font-semibold text-muted-foreground shrink-0">
+        {formatCurrency(entry.amount)}
+      </span>
+    </div>
   );
 }
 

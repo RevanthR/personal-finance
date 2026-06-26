@@ -2,7 +2,6 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
-import { MonthPreviewClient } from "@/components/dashboard/month-preview-client";
 import { getCurrentMonthYear } from "@/lib/utils";
 
 function isTemplateActiveInMonth(
@@ -77,14 +76,23 @@ export default async function DashboardPage({
         dueDateDay: t.dueDateDay,
       }));
 
+    // Use the same DashboardClient layout with projected data — consistent UX
     return (
-      <MonthPreviewClient
-        month={targetMonth}
-        year={targetYear}
-        projIncome={projIncome}
-        projExpenses={projExpenses}
+      <DashboardClient
+        currentMonth={null}
+        recentMonths={[]}
+        chitFunds={[]}
+        ccTemplates={[]}
+        suggestedIncome={0}
+        todayMonth={todayMonth}
+        todayYear={todayYear}
+        userId={userId}
+        targetMonth={targetMonth}
+        targetYear={targetYear}
         prevUrl={prevUrl}
         nextUrl={nextUrl}
+        projectedIncome={projIncome}
+        projectedEntries={projExpenses}
       />
     );
   }
