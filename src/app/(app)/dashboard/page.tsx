@@ -63,7 +63,7 @@ export default async function DashboardPage({
         : Promise.resolve(null),
       db.month.findUnique({
         where: { userId_month_year: { userId, month: targetMonth, year: targetYear } },
-        select: { adHocItems: { where: { type: "INCOME" }, select: { amount: true } } },
+        select: { adHocItems: { select: { amount: true, type: true } } },
       }),
     ]);
 
@@ -84,7 +84,9 @@ export default async function DashboardPage({
       return sum + (kicks ? t.pendingAmount! : t.amount);
     }, 0);
 
-    const adHocIncomeInMonth = futureMonthRecord?.adHocItems.reduce((s, i) => s + i.amount, 0) ?? 0;
+    const adHocIncomeInMonth = futureMonthRecord?.adHocItems
+      .filter(i => i.type === "INCOME")
+      .reduce((s, i) => s + i.amount, 0) ?? 0;
     const projIncome = templateIncome + adHocIncomeInMonth;
 
     const projExpenses = expenseTemplates

@@ -226,7 +226,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
   }
   const [currentMonth, setCurrentMonth] = useState(initialMonth);
   const [showAdHoc, setShowAdHoc] = useState(false);
-  const [showSetup, setShowSetup] = useState(!initialMonth);
+  const [showSetup, setShowSetup] = useState(!initialMonth && projectedEntries == null);
   const [showIncomeEdit, setShowIncomeEdit] = useState(false);
   const [salaryVal, setSalaryVal] = useState("");
   const [freelanceVal, setFreelanceVal] = useState("");
