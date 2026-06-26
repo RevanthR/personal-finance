@@ -126,6 +126,8 @@ model LineItemTemplate {
   frequency        Frequency      @default(MONTHLY)
   dueMonth         Int?
   templateType     TemplateType   @default(EXPENSE)
+  endsOnMonth      Int?
+  endsOnYear       Int?
   sortOrder        Int            @default(0)
   createdAt        DateTime       @default(now())
   entries          MonthlyEntry[]

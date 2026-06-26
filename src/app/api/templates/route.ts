@@ -36,6 +36,8 @@ export async function POST(req: NextRequest) {
       frequency: body.frequency ?? "MONTHLY",
       dueMonth: body.dueMonth ?? null,
       templateType: (body.templateType ?? "EXPENSE") as TemplateType,
+      endsOnMonth: body.endsOnMonth ?? null,
+      endsOnYear: body.endsOnYear ?? null,
       sortOrder: body.sortOrder ?? 0,
     },
   });

@@ -82,6 +82,11 @@ export async function POST(req: NextRequest) {
       // Yearly templates only appear in their designated month
       if (t.frequency === "YEARLY" && t.dueMonth !== month) continue;
 
+      // Skip templates that have ended before this month
+      if (t.endsOnYear != null && t.endsOnMonth != null) {
+        if (year > t.endsOnYear || (year === t.endsOnYear && month > t.endsOnMonth)) continue;
+      }
+
       // Promote pending amount if its effective month has arrived
       let baseAmount = t.amount;
       if (t.pendingAmount != null && t.pendingFromMonth != null && t.pendingFromYear != null) {

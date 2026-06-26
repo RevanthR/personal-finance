@@ -264,21 +264,29 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
     return { grouped: result, oneTimeItems: oneTime };
   }, [entries, adHocItems]);
 
-  const categoryBreakdown = useMemo(() => Object.entries(
-    entries.reduce<Record<string, number>>((acc, e) => {
+  // Enhanced breakdown includes ad-hoc expenses in their categories
+  const categoryBreakdown = useMemo(() => {
+    const totals: Record<string, { amount: number; templateCat: string; customCat: string | null }> = {};
+    for (const e of entries) {
       const key = e.template.customCategory ?? e.template.category;
-      acc[key] = (acc[key] || 0) + e.amount;
-      return acc;
-    }, {})
-  ).map(([key, value]) => {
-    const entry = entries.find(e => (e.template.customCategory ?? e.template.category) === key);
-    return {
-      key,
-      name: getCategoryDisplay(entry?.template.category ?? key, entry?.template.customCategory),
-      value,
-      color: getCategoryColor(entry?.template.category ?? key, entry?.template.customCategory),
-    };
-  }), [entries]);
+      if (!totals[key]) totals[key] = { amount: 0, templateCat: e.template.category, customCat: e.template.customCategory };
+      totals[key].amount += e.amount;
+    }
+    for (const item of adHocItems) {
+      if (item.type === "EXPENSE" && item.category && item.category !== "CREDIT_CARD") {
+        const key = item.category;
+        if (!totals[key]) totals[key] = { amount: 0, templateCat: key, customCat: null };
+        totals[key].amount += item.amount;
+      }
+    }
+    return Object.entries(totals)
+      .map(([key, { amount, templateCat, customCat }]) => ({
+        key, value: amount,
+        name: getCategoryDisplay(templateCat, customCat),
+        color: getCategoryColor(templateCat, customCat),
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [entries, adHocItems]);
 
   const { fyIncome, fyExpenses, fyBalance, trendData } = useMemo(() => {
     const fyIncome   = recentMonths.reduce((s, m) => s + m.salaryIncome + m.freelanceIncome + m.otherIncome + m.adHocItems.filter(i => i.type === "INCOME").reduce((a, i) => a + i.amount, 0), 0);
@@ -290,6 +298,54 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
     }));
     return { fyIncome, fyExpenses, fyBalance: fyIncome - fyExpenses, trendData };
   }, [recentMonths]);
+
+  const ccSubcatBreakdown = useMemo(() => {
+    const totals: Record<string, number> = {};
+    for (const item of adHocItems) {
+      if (item.category === "CREDIT_CARD") {
+        const sub = parseCCSubcat(item.notes);
+        totals[sub] = (totals[sub] || 0) + item.amount;
+      }
+    }
+    return Object.entries(totals).sort((a, b) => b[1] - a[1]).map(([name, amount]) => ({ name, amount }));
+  }, [adHocItems]);
+
+  const savingsRate = grandIncome > 0 ? Math.round((balance / grandIncome) * 100) : 0;
+
+  const { prevMonthName, expensesDelta } = useMemo(() => {
+    const prev = [...recentMonths]
+      .filter(m => !(m.month === currentMonth?.month && m.year === currentMonth?.year))
+      .sort((a, b) => b.year - a.year || b.month - a.month)[0];
+    if (!prev) return { prevMonthName: null, expensesDelta: null };
+    const prevExp = prev.entries.reduce((s, e) => s + e.amount, 0)
+      + prev.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0);
+    return {
+      prevMonthName: MONTHS[prev.month - 1],
+      expensesDelta: (totalCommitted + adHocExpense) - prevExp,
+    };
+  }, [recentMonths, currentMonth, totalCommitted, adHocExpense]);
+
+  const fixedAmount = useMemo(
+    () => entries.filter(e => e.template.isFixed).reduce((s, e) => s + e.amount, 0),
+    [entries]
+  );
+  const variableAmount = totalCommitted - fixedAmount + adHocExpense;
+
+  const upcomingPayments = useMemo(() => {
+    const isCurrentMonth = currentMonth?.month === todayMonth && currentMonth?.year === todayYear;
+    if (!isCurrentMonth) return [];
+    const today = new Date().getDate();
+    return entries
+      .filter(e => !e.isPaid && e.template.dueDateDay != null)
+      .map(e => ({
+        name: e.template.name,
+        amount: e.amount,
+        dueDay: e.template.dueDateDay!,
+        overdue: e.template.dueDateDay! < today,
+      }))
+      .sort((a, b) => a.dueDay - b.dueDay)
+      .slice(0, 6);
+  }, [entries, currentMonth, todayMonth, todayYear]);
 
   // Collapsible groups: track user overrides; default = collapse if all entries paid
   const [groupToggled, setGroupToggled] = useState<Record<string, boolean>>({});
@@ -419,6 +475,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Monthly Snapshot</p>
           <h1 className="text-xl font-bold">{formatMonthYear(currentMonth.month, currentMonth.year)}</h1>
           <p className="text-sm text-muted-foreground">
             {pendingCount > 0 ? `${pendingCount} payments pending` : "All paid ✓"}
@@ -554,7 +611,6 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
                   style={{ background: collapsed ? undefined : `linear-gradient(to right, ${catColor}12, transparent)` }}
                 >
                   <div className="flex items-center gap-1.5">
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: catColor }} />
                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       {catLabel}
                     </span>
@@ -647,6 +703,13 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
             categoryBreakdown={categoryBreakdown}
             trendData={trendData}
             chitFunds={chitFunds}
+            ccSubcatBreakdown={ccSubcatBreakdown}
+            savingsRate={savingsRate}
+            expensesDelta={expensesDelta}
+            prevMonthName={prevMonthName}
+            fixedAmount={fixedAmount}
+            variableAmount={variableAmount}
+            upcomingPayments={upcomingPayments}
           />
         </div>
       </div>

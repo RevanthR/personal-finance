@@ -29,7 +29,7 @@ export async function PATCH(
       ...(body.statementDay !== undefined && { statementDay: body.statementDay }),
       ...(body.frequency !== undefined && { frequency: body.frequency }),
       ...(body.dueMonth !== undefined && { dueMonth: body.dueMonth }),
-      ...(body.templateType !== undefined && { templateType: body.templateType }),
+      // templateType is not in the Prisma updateMany runtime validation — skip it in PATCH
       ...(body.isActive !== undefined && { isActive: body.isActive }),
       ...(body.sortOrder !== undefined && { sortOrder: body.sortOrder }),
       ...(body.foreClosedOn !== undefined && { foreClosedOn: new Date(body.foreClosedOn) }),
@@ -39,6 +39,10 @@ export async function PATCH(
       ...(body.pendingFromMonth !== undefined && { pendingFromMonth: body.pendingFromMonth }),
       ...(body.pendingFromYear !== undefined && { pendingFromYear: body.pendingFromYear }),
       ...(body.clearPending && { pendingAmount: null, pendingFromMonth: null, pendingFromYear: null }),
+      // End date
+      ...(body.endsOnMonth !== undefined && { endsOnMonth: body.endsOnMonth }),
+      ...(body.endsOnYear !== undefined && { endsOnYear: body.endsOnYear }),
+      ...(body.clearEndDate && { endsOnMonth: null, endsOnYear: null }),
     },
   });
 

@@ -27,7 +27,7 @@ export default async function MonthsPage() {
     ...Array.from({ length: 3 }, (_, i) => ({ month: i + 1, year: fyStart + 1 })),
   ];
 
-  const [allMonths, allTemplates] = await Promise.all([
+  const [allMonths, allTemplates, currentMonthFull] = await Promise.all([
     db.month.findMany({
       where: { userId },
       include: { entries: true, adHocItems: true },
@@ -35,6 +35,14 @@ export default async function MonthsPage() {
     }),
     db.lineItemTemplate.findMany({
       where: { userId, isActive: true, foreClosedOn: null },
+      include: { chitFund: true },
+    }),
+    db.month.findUnique({
+      where: { userId_month_year: { userId, month: todayMonth, year: todayYear } },
+      include: {
+        entries: { include: { template: true } },
+        adHocItems: true,
+      },
     }),
   ]);
 
@@ -71,6 +79,19 @@ export default async function MonthsPage() {
     }
   }
 
+  // Returns false if a template has ended before the given projected month
+  function isTemplateActiveInMonth(
+    t: (typeof allTemplates)[number],
+    projMonth: number,
+    projYear: number,
+  ): boolean {
+    if (t.endsOnYear != null && t.endsOnMonth != null) {
+      if (projYear > t.endsOnYear) return false;
+      if (projYear === t.endsOnYear && projMonth > t.endsOnMonth) return false;
+    }
+    return true;
+  }
+
   // Current FY months (actual or projected)
   const currentFYMonths: MonthData[] = fyMonths.map(({ month, year }) => {
     const actual = allMonths.find(m => m.month === month && m.year === year && m.isPopulated);
@@ -87,13 +108,25 @@ export default async function MonthsPage() {
         isPopulated: true,
         isCurrent: month === todayMonth && year === todayYear,
         hasIncomeChange: false,
+        endingTemplateNames: [],
       };
     }
-    // Projected: sum active expense templates + any yearly template due this month
-    const projExpenses = expenseTemplates
-      .filter(t => t.frequency === "MONTHLY" || (t.frequency === "YEARLY" && t.dueMonth === month))
-      .reduce((s, t) => s + t.amount, 0);
+    // Projected: sum active expense templates that haven't ended yet
+    const activeThisMonth = expenseTemplates.filter(t =>
+      (t.frequency === "MONTHLY" || (t.frequency === "YEARLY" && t.dueMonth === month)) &&
+      isTemplateActiveInMonth(t, month, year)
+    );
+    const projExpenses = activeThisMonth.reduce((s, t) => s + t.amount, 0);
     const projIncome = getProjectedIncome(month, year);
+
+    // Templates that were active last month but not this month
+    const prevM = month === 1 ? 12 : month - 1;
+    const prevY = month === 1 ? year - 1 : year;
+    const endingTemplateNames = expenseTemplates
+      .filter(t => t.frequency === "MONTHLY")
+      .filter(t => isTemplateActiveInMonth(t, prevM, prevY) && !isTemplateActiveInMonth(t, month, year))
+      .map(t => t.name);
+
     return {
       id: null, month, year,
       income: projIncome, expenses: projExpenses,
@@ -102,6 +135,7 @@ export default async function MonthsPage() {
       isPopulated: false,
       isCurrent: month === todayMonth && year === todayYear,
       hasIncomeChange: incomeChangeMonths.has(`${year}-${month}`),
+      endingTemplateNames,
     };
   });
 
@@ -123,12 +157,94 @@ export default async function MonthsPage() {
     .map(([fy, d]) => ({ fy, ...d, balance: d.income - d.expenses }))
     .sort((a, b) => b.fy.localeCompare(a.fy));
 
+  // Current month insights (null if month not set up yet)
+  type InsightData = {
+    categoryBreakdown: { key: string; name: string; value: number; color: string }[];
+    ccSubcatBreakdown: { name: string; amount: number }[];
+    savingsRate: number;
+    totalIncome: number;
+    totalExpenses: number;
+    upcomingPayments: { name: string; amount: number; dueDay: number; overdue: boolean }[];
+  } | null;
+
+  let currentMonthInsights: InsightData = null;
+  if (currentMonthFull?.isPopulated) {
+    const cm = currentMonthFull;
+    const cmIncome = cm.salaryIncome + cm.freelanceIncome + cm.otherIncome
+      + cm.adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0);
+    const cmExpenses = cm.entries.reduce((s, e) => s + e.amount, 0)
+      + cm.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0);
+
+    // Category breakdown — entries grouped by template.category
+    const catMap = new Map<string, number>();
+    for (const e of cm.entries) {
+      const cat = e.template.customCategory ?? e.template.category;
+      catMap.set(cat, (catMap.get(cat) ?? 0) + e.amount);
+    }
+    for (const a of cm.adHocItems) {
+      if (a.type === "EXPENSE" && a.category !== "CREDIT_CARD") {
+        const cat = a.category ?? "MISCELLANEOUS";
+        catMap.set(cat, (catMap.get(cat) ?? 0) + a.amount);
+      }
+    }
+    const COLORS: Record<string, string> = {
+      HOUSE_MAINTENANCE: "#fb923c", LOAN: "#f87171", CHIT_FUND: "#a78bfa",
+      CREDIT_CARD: "#60a5fa", SAVINGS: "#34d399", PERSONAL: "#f472b6",
+      MISCELLANEOUS: "#94a3b8",
+    };
+    const categoryBreakdown = [...catMap.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([key, value]) => ({
+        key,
+        name: key.split("_").map(w => w[0] + w.slice(1).toLowerCase()).join(" "),
+        value,
+        color: COLORS[key] ?? "#94a3b8",
+      }));
+
+    // CC sub-category breakdown from adHocItems notes ("CardName · Subcategory")
+    const ccMap = new Map<string, number>();
+    for (const a of cm.adHocItems) {
+      if (a.type === "EXPENSE" && a.category === "CREDIT_CARD" && a.notes) {
+        const parts = a.notes.split("·");
+        const subcat = parts.length > 1 ? parts[1].trim() : "Other";
+        ccMap.set(subcat, (ccMap.get(subcat) ?? 0) + a.amount);
+      }
+    }
+    const ccSubcatBreakdown = [...ccMap.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, amount]) => ({ name, amount }));
+
+    // Upcoming unpaid entries with due dates
+    const today = todayMonth;
+    const upcomingPayments = cm.entries
+      .filter(e => !e.isPaid && e.template.dueDateDay != null)
+      .map(e => ({
+        name: e.template.name,
+        amount: e.amount,
+        dueDay: e.template.dueDateDay!,
+        overdue: e.template.dueDateDay! < today,
+      }))
+      .sort((a, b) => a.dueDay - b.dueDay)
+      .slice(0, 6);
+
+    currentMonthInsights = {
+      categoryBreakdown,
+      ccSubcatBreakdown,
+      savingsRate: cmIncome > 0 ? Math.round(((cmIncome - cmExpenses) / cmIncome) * 100) : 0,
+      totalIncome: cmIncome,
+      totalExpenses: cmExpenses,
+      upcomingPayments,
+    };
+  }
+
   return (
     <YearOverviewClient
       months={JSON.parse(JSON.stringify(currentFYMonths))}
       fyKey={fyKey}
       pastFYSummaries={pastFYSummaries}
       incomeTemplateCount={incomeTemplates.length}
+      currentMonthInsights={JSON.parse(JSON.stringify(currentMonthInsights))}
     />
   );
 }

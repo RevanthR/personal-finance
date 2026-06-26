@@ -13,6 +13,39 @@ const YearChart = dynamic(
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
+function ordinal(n: number) {
+  const s = ["th","st","nd","rd"], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+function RankedList({ items, total }: { items: { name: string; value: number; color?: string }[]; total: number }) {
+  const max = items[0]?.value ?? 1;
+  return (
+    <div className="space-y-2">
+      {items.map(item => {
+        const pct = total > 0 ? Math.round((item.value / total) * 100) : 0;
+        return (
+          <div key={item.name}>
+            <div className="flex items-center justify-between mb-0.5">
+              <div className="flex items-center gap-1.5 min-w-0">
+                {item.color && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: item.color }} />}
+                <span className="text-xs text-foreground truncate">{item.name}</span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-[10px] text-muted-foreground">{pct}%</span>
+                <span className="text-xs font-medium">₹{(item.value / 1000).toFixed(1)}k</span>
+              </div>
+            </div>
+            <div className="h-1 rounded-full bg-zinc-100 overflow-hidden">
+              <div className="h-full rounded-full bg-zinc-400" style={{ width: `${(item.value / max) * 100}%`, opacity: 0.6 }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export type MonthData = {
   id: string | null;
   month: number;
@@ -25,6 +58,7 @@ export type MonthData = {
   isPopulated: boolean;
   isCurrent: boolean;
   hasIncomeChange?: boolean;
+  endingTemplateNames?: string[];
 };
 
 type PastFY = {
@@ -35,16 +69,27 @@ type PastFY = {
   count: number;
 };
 
+type InsightData = {
+  categoryBreakdown: { key: string; name: string; value: number; color: string }[];
+  ccSubcatBreakdown: { name: string; amount: number }[];
+  savingsRate: number;
+  totalIncome: number;
+  totalExpenses: number;
+  upcomingPayments: { name: string; amount: number; dueDay: number; overdue: boolean }[];
+} | null;
+
 export function YearOverviewClient({
   months,
   fyKey,
   pastFYSummaries = [],
   incomeTemplateCount = 0,
+  currentMonthInsights = null,
 }: {
   months: MonthData[];
   fyKey: string;
   pastFYSummaries?: PastFY[];
   incomeTemplateCount?: number;
+  currentMonthInsights?: InsightData;
 }) {
   const totalIncome   = months.reduce((s, m) => s + m.income, 0);
   const totalExpenses = months.reduce((s, m) => s + m.expenses, 0);
@@ -55,7 +100,9 @@ export function YearOverviewClient({
   const maxMonthIncome = Math.max(...months.map(m => m.income));
 
   return (
-    <div className="space-y-5 max-w-3xl mx-auto">
+    <div className="flex flex-col lg:flex-row gap-6 max-w-5xl mx-auto items-start">
+    {/* ── Left: Year overview ── */}
+    <div className="flex-1 min-w-0 space-y-5">
       {/* Header */}
       <div>
         <h1 className="text-xl font-bold">{fyKey}</h1>
@@ -130,9 +177,17 @@ export function YearOverviewClient({
                   )}>
                     {MONTHS[m.month - 1]}
                   </span>
-                  <div className="flex items-center gap-0.5">
+                  <div className="flex items-center gap-0.5 flex-wrap justify-end">
                     {m.hasIncomeChange && (
                       <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded">↑</span>
+                    )}
+                    {(m.endingTemplateNames?.length ?? 0) > 0 && (
+                      <span
+                        title={m.endingTemplateNames?.join(", ")}
+                        className="text-[8px] font-bold text-rose-600 bg-rose-50 px-1 py-0.5 rounded"
+                      >
+                        ↓{m.endingTemplateNames!.length}
+                      </span>
                     )}
                     {!m.isPopulated && (
                       <span className="text-[8px] font-medium text-muted-foreground bg-zinc-200 px-1 py-0.5 rounded">est</span>
@@ -214,6 +269,93 @@ export function YearOverviewClient({
           ))}
         </div>
       )}
+    </div>
+
+    {/* ── Right: Current month insights ── */}
+    {currentMonthInsights && (
+      <div className="w-full lg:w-72 shrink-0 space-y-3">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          This month
+        </p>
+
+        {/* Savings health */}
+        <Card>
+          <CardContent className="p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Savings rate</span>
+              <span className={cn(
+                "text-sm font-bold",
+                currentMonthInsights.savingsRate >= 20 ? "text-green-600"
+                  : currentMonthInsights.savingsRate >= 0 ? "text-amber-600"
+                  : "text-red-600"
+              )}>
+                {currentMonthInsights.savingsRate}%
+              </span>
+            </div>
+            <div className="h-1.5 rounded-full bg-zinc-100 overflow-hidden">
+              <div
+                className={cn("h-full rounded-full transition-all", currentMonthInsights.savingsRate >= 20 ? "bg-green-500" : currentMonthInsights.savingsRate >= 0 ? "bg-amber-500" : "bg-red-500")}
+                style={{ width: `${Math.max(0, Math.min(100, currentMonthInsights.savingsRate))}%` }}
+              />
+            </div>
+            <div className="flex justify-between text-[10px] text-muted-foreground">
+              <span>In: {formatCurrency(currentMonthInsights.totalIncome)}</span>
+              <span>Out: {formatCurrency(currentMonthInsights.totalExpenses)}</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Top spending categories */}
+        {currentMonthInsights.categoryBreakdown.length > 0 && (
+          <Card>
+            <CardContent className="p-3">
+              <p className="text-xs font-semibold mb-2.5">Top spend</p>
+              <RankedList
+                items={currentMonthInsights.categoryBreakdown}
+                total={currentMonthInsights.totalExpenses}
+              />
+            </CardContent>
+          </Card>
+        )}
+
+        {/* CC subcategory breakdown */}
+        {currentMonthInsights.ccSubcatBreakdown.length > 0 && (
+          <Card>
+            <CardContent className="p-3">
+              <p className="text-xs font-semibold mb-2.5">Card spend by type</p>
+              <RankedList
+                items={currentMonthInsights.ccSubcatBreakdown.map(i => ({ name: i.name, value: i.amount }))}
+                total={currentMonthInsights.ccSubcatBreakdown.reduce((s, i) => s + i.amount, 0)}
+              />
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Upcoming unpaid entries */}
+        {currentMonthInsights.upcomingPayments.length > 0 && (
+          <Card>
+            <CardContent className="p-3">
+              <p className="text-xs font-semibold mb-2">Upcoming</p>
+              <div className="space-y-1.5">
+                {currentMonthInsights.upcomingPayments.map(p => (
+                  <div key={p.name} className="flex items-center justify-between">
+                    <div className="min-w-0">
+                      <p className="text-xs truncate">{p.name}</p>
+                      <p className={cn("text-[10px]", p.overdue ? "text-red-500" : "text-muted-foreground")}>
+                        {p.overdue ? "overdue" : `due ${ordinal(p.dueDay)}`}
+                      </p>
+                    </div>
+                    <span className="text-xs font-medium shrink-0 ml-2">
+                      {formatCurrency(p.amount)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    )}
     </div>
   );
 }

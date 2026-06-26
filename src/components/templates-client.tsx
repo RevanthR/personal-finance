@@ -39,8 +39,12 @@ type Template = {
   frequency: string;
   dueMonth: number | null;
   templateType: string;
+  endsOnMonth: number | null;
+  endsOnYear: number | null;
   sortOrder: number;
+  chitFund: { startDate: string; durationMonths: number } | null;
 };
+
 
 type SaveData = {
   name: string;
@@ -58,13 +62,23 @@ type SaveData = {
   pendingFromMonth?: number | null;
   pendingFromYear?: number | null;
   clearPending?: boolean;
+  endsOnMonth?: number | null;
+  endsOnYear?: number | null;
+  clearEndDate?: boolean;
 };
 
-export function TemplatesClient({ templates: initial }: { templates: Template[] }) {
+export function TemplatesClient({
+  templates: initial,
+  recentIncome,
+}: {
+  templates: Template[];
+  recentIncome: { salary: number; freelance: number; other: number } | null;
+}) {
   const [templates, setTemplates] = useState(initial);
   const [editing, setEditing] = useState<Template | null>(null);
   const [foreclosing, setForeclosing] = useState<Template | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [importLoading, setImportLoading] = useState(false);
 
   async function toggleActive(t: Template) {
     const res = await fetch(`/api/templates/${t.id}`, {
@@ -92,6 +106,8 @@ export function TemplatesClient({ templates: initial }: { templates: Template[] 
       pendingAmount: data.clearPending ? null : (data.pendingAmount ?? editing.pendingAmount),
       pendingFromMonth: data.clearPending ? null : (data.pendingFromMonth ?? editing.pendingFromMonth),
       pendingFromYear: data.clearPending ? null : (data.pendingFromYear ?? editing.pendingFromYear),
+      endsOnMonth: data.clearEndDate ? null : (data.endsOnMonth ?? editing.endsOnMonth),
+      endsOnYear: data.clearEndDate ? null : (data.endsOnYear ?? editing.endsOnYear),
       statementDay: data.statementDay ?? editing.statementDay,
       frequency: data.frequency ?? editing.frequency,
       dueMonth: data.dueMonth !== undefined ? data.dueMonth : editing.dueMonth,
@@ -148,6 +164,32 @@ export function TemplatesClient({ templates: initial }: { templates: Template[] 
     setTemplates((prev) => [...prev, t]);
     toast.success("Template added");
     setShowAdd(false);
+  }
+
+  async function handleImportIncome() {
+    if (!recentIncome) return;
+    setImportLoading(true);
+    const toImport = [
+      { name: "Salary", category: "SALARY", amount: recentIncome.salary },
+      { name: "Freelance", category: "FREELANCE", amount: recentIncome.freelance },
+      { name: "Other Income", category: "OTHER_INCOME", amount: recentIncome.other },
+    ].filter(i => i.amount > 0);
+
+    const created: Template[] = [];
+    for (const item of toImport) {
+      const res = await fetch("/api/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...item, isFixed: true, frequency: "MONTHLY", templateType: "INCOME" }),
+      });
+      if (res.ok) {
+        const t = await res.json();
+        created.push({ ...t, templateType: "INCOME" });
+      }
+    }
+    setTemplates(prev => [...prev, ...created]);
+    setImportLoading(false);
+    if (created.length > 0) toast.success(`Imported ${created.length} income template${created.length !== 1 ? "s" : ""}`);
   }
 
   const incomeTemplates = templates.filter(t => t.templateType === "INCOME");
@@ -217,13 +259,49 @@ export function TemplatesClient({ templates: initial }: { templates: Template[] 
             </div>
           )}
 
-          {incomeTemplates.length === 0 && (
+          {incomeTemplates.length === 0 && recentIncome && (recentIncome.salary + recentIncome.freelance + recentIncome.other) > 0 ? (
+            <div className="rounded-xl border border-dashed border-green-200 bg-green-50/40 p-4">
+              <p className="text-xs font-semibold text-green-800 mb-1">Import from your history</p>
+              <p className="text-[11px] text-green-700/70 mb-3">
+                We found recurring income from your recent months. Create templates so future months auto-fill.
+              </p>
+              <div className="space-y-1 mb-3">
+                {recentIncome.salary > 0 && (
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-green-700">Salary</span>
+                    <span className="font-medium text-green-800 tabular-nums">{formatCurrency(recentIncome.salary)}/mo</span>
+                  </div>
+                )}
+                {recentIncome.freelance > 0 && (
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-green-700">Freelance</span>
+                    <span className="font-medium text-green-800 tabular-nums">{formatCurrency(recentIncome.freelance)}/mo</span>
+                  </div>
+                )}
+                {recentIncome.other > 0 && (
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-green-700">Other Income</span>
+                    <span className="font-medium text-green-800 tabular-nums">{formatCurrency(recentIncome.other)}/mo</span>
+                  </div>
+                )}
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleImportIncome}
+                disabled={importLoading}
+                className="border-green-300 text-green-700 hover:bg-green-100 hover:text-green-800"
+              >
+                {importLoading ? "Importing…" : "Import as templates"}
+              </Button>
+            </div>
+          ) : incomeTemplates.length === 0 ? (
             <div className="text-center py-10 text-muted-foreground text-sm">
               No income templates yet.
               <br />
               <button className="mt-2 text-xs underline" onClick={() => setShowAdd(true)}>Add one</button>
             </div>
-          )}
+          ) : null}
 
           {/* Income grouped by category */}
           {Object.entries(groupedIncome).map(([key, items]) => {
@@ -255,6 +333,11 @@ export function TemplatesClient({ templates: initial }: { templates: Template[] 
                               {hasPending && (
                                 <Badge className="text-xs bg-amber-50 text-amber-700 hover:bg-amber-50 border border-amber-200">
                                   {pendingDir} {formatCurrency(t.pendingAmount!)} from {MONTHS[(t.pendingFromMonth! - 1)]} {t.pendingFromYear}
+                                </Badge>
+                              )}
+                              {t.endsOnMonth != null && t.endsOnYear != null && (
+                                <Badge className="text-xs bg-rose-50 text-rose-600 hover:bg-rose-50 border border-rose-200">
+                                  Ends {MONTHS[t.endsOnMonth - 1]} {t.endsOnYear}
                                 </Badge>
                               )}
                             </div>
@@ -330,6 +413,11 @@ export function TemplatesClient({ templates: initial }: { templates: Template[] 
                               {hasPending && (
                                 <Badge className="text-xs bg-amber-50 text-amber-700 hover:bg-amber-50 border border-amber-200">
                                   {pendingDir} {formatCurrency(t.pendingAmount!)} from {MONTHS[(t.pendingFromMonth! - 1)]} {t.pendingFromYear}
+                                </Badge>
+                              )}
+                              {!isClosed && t.endsOnMonth != null && t.endsOnYear != null && (
+                                <Badge className="text-xs bg-rose-50 text-rose-600 hover:bg-rose-50 border border-rose-200">
+                                  Ends {MONTHS[t.endsOnMonth - 1]} {t.endsOnYear}
                                 </Badge>
                               )}
                             </div>
@@ -467,13 +555,22 @@ function TemplateDialog({
     initial?.pendingFromYear ?? nextMonth.year
   );
 
+  // End date
+  const hasExistingEndDate = initial?.endsOnMonth != null && initial?.endsOnYear != null;
+  const [endsType, setEndsType] = useState<"indefinite" | "date">(hasExistingEndDate ? "date" : "indefinite");
+  const defaultEndMonth = (() => { const d = new Date(); d.setMonth(d.getMonth() + 12); return d.getMonth() + 1; })();
+  const defaultEndYear  = (() => { const d = new Date(); d.setMonth(d.getMonth() + 12); return d.getFullYear(); })();
+  const [endsOnMonth, setEndsOnMonth] = useState<number>(initial?.endsOnMonth ?? defaultEndMonth);
+  const [endsOnYear,  setEndsOnYear]  = useState<number>(initial?.endsOnYear  ?? defaultEndYear);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!category) return;
     setLoading(true);
     const isCustom = category === "__custom__";
-
     const pendingValid = showSchedule && pendingAmt && parseFloat(pendingAmt) > 0;
+    const endDateValid = endsType === "date";
+    const hadEndDate = initial?.endsOnMonth != null;
 
     await onSave({
       name,
@@ -493,6 +590,8 @@ function TemplateDialog({
         pendingFromYear: pendingYear,
       }),
       ...(!showSchedule && isEditing && initial?.pendingAmount != null && { clearPending: true }),
+      ...(endDateValid && { endsOnMonth, endsOnYear }),
+      ...(endsType === "indefinite" && hadEndDate && { clearEndDate: true }),
     });
     setLoading(false);
   }
@@ -721,6 +820,62 @@ function TemplateDialog({
                       <span className="font-semibold text-foreground">{formatCurrency(parseFloat(pendingAmt) || 0)}</span>/month
                     </p>
                   )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {!isIncome && (
+            <div className="border rounded-lg overflow-hidden">
+              <div className="flex items-center justify-between px-3 py-2.5 bg-muted/30">
+                <span className="text-xs font-medium">End date</span>
+                <div className="flex gap-1">
+                  {(["indefinite", "date"] as const).map(v => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setEndsType(v)}
+                      className={cn(
+                        "px-2.5 py-1 rounded text-xs font-medium border transition-colors",
+                        endsType === v
+                          ? "bg-zinc-900 text-white border-zinc-900"
+                          : "border-border text-muted-foreground hover:border-zinc-500"
+                      )}
+                    >
+                      {v === "indefinite" ? "Indefinite" : "Set month"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {endsType === "date" && (
+                <div className="px-3 pb-3 pt-2 space-y-2">
+                  <div className="flex flex-wrap gap-1">
+                    {MONTHS.map((m, i) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setEndsOnMonth(i + 1)}
+                        className={cn(
+                          "px-2 py-0.5 rounded text-xs font-medium border transition-colors",
+                          endsOnMonth === i + 1
+                            ? "bg-zinc-900 text-white border-zinc-900"
+                            : "border-border text-muted-foreground hover:border-zinc-500"
+                        )}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                  <Input
+                    type="number"
+                    value={endsOnYear}
+                    onChange={e => setEndsOnYear(parseInt(e.target.value) || defaultEndYear)}
+                    placeholder="Year"
+                    className="w-24"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Template will not appear in projections after {MONTHS[endsOnMonth - 1]} {endsOnYear}
+                  </p>
                 </div>
               )}
             </div>
