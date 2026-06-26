@@ -226,12 +226,23 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
   }
   const [currentMonth, setCurrentMonth] = useState(initialMonth);
   const [showAdHoc, setShowAdHoc] = useState(false);
-  const [showSetup, setShowSetup] = useState(!initialMonth && projectedEntries == null);
+  const [showSetup, setShowSetup] = useState(!initialMonth && !isProjected);
   const [showIncomeEdit, setShowIncomeEdit] = useState(false);
   const [salaryVal, setSalaryVal] = useState("");
   const [freelanceVal, setFreelanceVal] = useState("");
   const [otherVal, setOtherVal] = useState("");
   const [incomeLoading, setIncomeLoading] = useState(false);
+
+  // Sync local state when the viewed month changes (client-side navigation reuses this component)
+  const [lastMonthKey, setLastMonthKey] = useState(`${viewMonth}-${viewYear}`);
+  const monthKey = `${viewMonth}-${viewYear}`;
+  if (monthKey !== lastMonthKey) {
+    setLastMonthKey(monthKey);
+    setCurrentMonth(initialMonth);
+    setShowSetup(!initialMonth && !isProjected);
+    setShowAdHoc(false);
+    setShowIncomeEdit(false);
+  }
 
   const entries = currentMonth?.entries ?? [];
   const adHocItems = currentMonth?.adHocItems ?? [];
