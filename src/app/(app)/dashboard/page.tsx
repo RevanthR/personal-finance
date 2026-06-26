@@ -50,7 +50,7 @@ export default async function DashboardPage({
       (targetYear === todayYear && targetMonth === todayMonth + 1) ||
       (todayMonth === 12 && targetMonth === 1 && targetYear === todayYear + 1);
 
-    const [allTemplates, currentMonthRecord] = await Promise.all([
+    const [allTemplates, currentMonthRecord, futureMonthRecord] = await Promise.all([
       db.lineItemTemplate.findMany({
         where: { userId, isActive: true, foreClosedOn: null },
         include: { chitFund: true },
@@ -61,6 +61,10 @@ export default async function DashboardPage({
             select: { entries: { select: { templateId: true, statementAmount: true } } },
           })
         : Promise.resolve(null),
+      db.month.findUnique({
+        where: { userId_month_year: { userId, month: targetMonth, year: targetYear } },
+        select: { adHocItems: { where: { type: "INCOME" }, select: { amount: true } } },
+      }),
     ]);
 
     // CC statement amounts: what's already accumulated for next month's bill
@@ -74,11 +78,14 @@ export default async function DashboardPage({
     const incomeTemplates  = allTemplates.filter(t => t.templateType === "INCOME");
     const expenseTemplates = allTemplates.filter(t => t.templateType !== "INCOME");
 
-    const projIncome = incomeTemplates.reduce((sum, t) => {
+    const templateIncome = incomeTemplates.reduce((sum, t) => {
       const kicks = t.pendingAmount != null && t.pendingFromYear != null && t.pendingFromMonth != null &&
         (targetYear > t.pendingFromYear || (targetYear === t.pendingFromYear && targetMonth >= t.pendingFromMonth));
       return sum + (kicks ? t.pendingAmount! : t.amount);
     }, 0);
+
+    const adHocIncomeInMonth = futureMonthRecord?.adHocItems.reduce((s, i) => s + i.amount, 0) ?? 0;
+    const projIncome = templateIncome + adHocIncomeInMonth;
 
     const projExpenses = expenseTemplates
       .filter(t =>
