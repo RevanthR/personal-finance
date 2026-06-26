@@ -29,7 +29,7 @@ export default async function MonthsPage() {
     ...Array.from({ length: 3 }, (_, i) => ({ month: i + 1, year: fyStart + 1 })),
   ];
 
-  const [allMonths, allTemplates, currentMonthFull] = await Promise.all([
+  const [allMonths, allTemplates, currentMonthFull, pendingReceivables] = await Promise.all([
     db.month.findMany({
       where: { userId },
       include: { entries: true, adHocItems: true },
@@ -45,6 +45,9 @@ export default async function MonthsPage() {
         entries: { include: { template: true } },
         adHocItems: true,
       },
+    }),
+    db.receivable.findMany({
+      where: { userId, status: "PENDING", expectedDate: { not: null } },
     }),
   ]);
 
@@ -141,7 +144,16 @@ export default async function MonthsPage() {
       }
       return s + amount;
     }, 0);
-    const projIncome = getProjectedIncome(month, year);
+    // Add pending receivables whose expectedDate falls in this projected month
+    const receivableIncome = pendingReceivables
+      .filter((r) => {
+        if (!r.expectedDate) return false;
+        const d = new Date(r.expectedDate);
+        return d.getFullYear() === year && d.getMonth() + 1 === month;
+      })
+      .reduce((s, r) => s + r.expectedAmount, 0);
+
+    const projIncome = getProjectedIncome(month, year) + receivableIncome;
 
     // Templates that were active last month but not this month
     const prevM = month === 1 ? 12 : month - 1;

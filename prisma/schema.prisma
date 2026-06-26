@@ -69,6 +69,7 @@ model User {
   months            Month[]
   templates         LineItemTemplate[]
   chitFunds         ChitFund[]
+  receivables       Receivable[]
   pushSubscriptions PushSubscription[]
 }
 
@@ -148,6 +149,7 @@ model Month {
   createdAt       DateTime       @default(now())
   entries         MonthlyEntry[]
   adHocItems      AdHocItem[]
+  receivables     Receivable[]
 
   @@unique([userId, month, year])
 }
@@ -202,6 +204,35 @@ model AdHocItem {
   date      DateTime
   notes     String?
   createdAt DateTime  @default(now())
+}
+
+enum ReceivableCategory {
+  INVESTMENT
+  PERSONAL_LOAN
+  CUSTOM
+}
+
+enum ReceivableStatus {
+  PENDING
+  RECEIVED
+}
+
+model Receivable {
+  id              String             @id @default(cuid())
+  userId          String
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category        ReceivableCategory
+  customCategory  String?
+  description     String
+  expectedAmount  Float
+  expectedDate    DateTime?
+  status          ReceivableStatus   @default(PENDING)
+  receivedAmount  Float?
+  receivedDate    DateTime?
+  receivedMonthId String?
+  receivedMonth   Month?             @relation(fields: [receivedMonthId], references: [id])
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
 }
 
 // Web Push subscription per device
