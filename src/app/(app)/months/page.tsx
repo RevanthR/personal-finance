@@ -144,7 +144,7 @@ export default async function MonthsPage() {
       }
       return s + amount;
     }, 0);
-    // Add pending receivables whose expectedDate falls in this projected month
+    // Pending receivables whose expectedDate falls in this projected month
     const receivableIncome = pendingReceivables
       .filter((r) => {
         if (!r.expectedDate) return false;
@@ -153,7 +153,13 @@ export default async function MonthsPage() {
       })
       .reduce((s, r) => s + r.expectedAmount, 0);
 
-    const projIncome = getProjectedIncome(month, year) + receivableIncome;
+    // AdHocItems already recorded in a not-yet-populated month record (e.g. received receivables)
+    const nonPopMonth = allMonths.find(m => m.month === month && m.year === year && !m.isPopulated);
+    const existingAdHocIncome = nonPopMonth
+      ? nonPopMonth.adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0)
+      : 0;
+
+    const projIncome = getProjectedIncome(month, year) + receivableIncome + existingAdHocIncome;
 
     // Templates that were active last month but not this month
     const prevM = month === 1 ? 12 : month - 1;

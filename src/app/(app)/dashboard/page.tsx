@@ -50,7 +50,7 @@ export default async function DashboardPage({
       (targetYear === todayYear && targetMonth === todayMonth + 1) ||
       (todayMonth === 12 && targetMonth === 1 && targetYear === todayYear + 1);
 
-    const [allTemplates, currentMonthRecord, futureMonthRecord] = await Promise.all([
+    const [allTemplates, currentMonthRecord, futureMonthRecord, pendingReceivables] = await Promise.all([
       db.lineItemTemplate.findMany({
         where: { userId, isActive: true, foreClosedOn: null },
         include: { chitFund: true },
@@ -64,6 +64,10 @@ export default async function DashboardPage({
       db.month.findUnique({
         where: { userId_month_year: { userId, month: targetMonth, year: targetYear } },
         select: { adHocItems: { select: { amount: true, type: true } } },
+      }),
+      db.receivable.findMany({
+        where: { userId, status: "PENDING", expectedDate: { not: null } },
+        select: { expectedAmount: true, expectedDate: true },
       }),
     ]);
 
@@ -84,10 +88,20 @@ export default async function DashboardPage({
       return sum + (kicks ? t.pendingAmount! : t.amount);
     }, 0);
 
+    // AdHocItems already in this month's record (e.g. received receivables)
     const adHocIncomeInMonth = futureMonthRecord?.adHocItems
       .filter(i => i.type === "INCOME")
       .reduce((s, i) => s + i.amount, 0) ?? 0;
-    const projIncome = templateIncome + adHocIncomeInMonth;
+
+    // Pending receivables whose expected date falls in this projected month
+    const receivableIncome = pendingReceivables
+      .filter(r => {
+        const d = new Date(r.expectedDate!);
+        return d.getFullYear() === targetYear && d.getMonth() + 1 === targetMonth;
+      })
+      .reduce((s, r) => s + r.expectedAmount, 0);
+
+    const projIncome = templateIncome + adHocIncomeInMonth + receivableIncome;
 
     const projExpenses = expenseTemplates
       .filter(t =>
