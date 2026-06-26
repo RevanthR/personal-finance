@@ -637,7 +637,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
             </Card>
           </button>
         )}
-        <MetricCard label="Recurring" value={formatCurrency(dispCommitted)} icon={<TrendingDown className="w-4 h-4" />} color="text-red-600" sub={isProjected ? `${projEntries.length} items` : `${pendingCount} pending`} gradient="linear-gradient(135deg, white 0%, #fef2f2 100%)" />
+        <MetricCard label="Expenditure" value={formatCurrency(dispCommitted)} icon={<TrendingDown className="w-4 h-4" />} color="text-red-600" sub={isProjected ? `${projEntries.length} items` : `${pendingCount} pending`} gradient="linear-gradient(135deg, white 0%, #fef2f2 100%)" />
         <MetricCard
           label="Unplanned"
           value={isProjected ? "—" : formatCurrency(adHocExpense)}
