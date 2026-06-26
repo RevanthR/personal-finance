@@ -12,8 +12,9 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Wallet, TrendingDown, CheckCircle2, AlertCircle, TrendingUp, Plus, Pencil, ChevronDown, Trash2, CreditCard,
+  Wallet, TrendingDown, CheckCircle2, AlertCircle, TrendingUp, Plus, Pencil, ChevronDown, Trash2, CreditCard, ChevronLeft, ChevronRight,
 } from "lucide-react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { EntryRow } from "./entry-row";
 import { AdHocDialog, type CCCard } from "./adhoc-dialog";
@@ -35,6 +36,10 @@ interface DashboardClientProps {
   todayMonth: number;
   todayYear: number;
   userId: string;
+  targetMonth?: number;
+  targetYear?: number;
+  prevUrl?: string;
+  nextUrl?: string;
 }
 
 type MonthWithDetails = {
@@ -197,7 +202,9 @@ function CCCardBlock({
   );
 }
 
-export function DashboardClient({ currentMonth: initialMonth, recentMonths, chitFunds, ccTemplates, suggestedIncome, todayMonth, todayYear }: DashboardClientProps) {
+export function DashboardClient({ currentMonth: initialMonth, recentMonths, chitFunds, ccTemplates, suggestedIncome, todayMonth, todayYear, targetMonth, targetYear, prevUrl, nextUrl }: DashboardClientProps) {
+  const viewMonth = targetMonth ?? todayMonth;
+  const viewYear  = targetYear  ?? todayYear;
   const [currentMonth, setCurrentMonth] = useState(initialMonth);
   const [showAdHoc, setShowAdHoc] = useState(false);
   const [showSetup, setShowSetup] = useState(!initialMonth);
@@ -451,7 +458,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
   async function handleSetupMonth(salaryIncome: number) {
     const res = await fetch("/api/months", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ month: todayMonth, year: todayYear, salaryIncome }),
+      body: JSON.stringify({ month: viewMonth, year: viewYear, salaryIncome }),
     });
     if (!res.ok) { toast.error("Failed to set up month"); return; }
     window.location.reload();
@@ -460,12 +467,22 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
   if (!currentMonth) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <h2 className="text-2xl font-bold">{formatMonthYear(todayMonth, todayYear)}</h2>
+        {prevUrl && nextUrl && (
+          <div className="flex items-center gap-3 mb-2">
+            <Link href={prevUrl} className="p-1.5 rounded-lg border hover:bg-muted transition-colors">
+              <ChevronLeft className="w-4 h-4" />
+            </Link>
+            <Link href={nextUrl} className="p-1.5 rounded-lg border hover:bg-muted transition-colors">
+              <ChevronRight className="w-4 h-4" />
+            </Link>
+          </div>
+        )}
+        <h2 className="text-2xl font-bold">{formatMonthYear(viewMonth, viewYear)}</h2>
         <p className="text-muted-foreground">Set up this month to start tracking</p>
         <Button onClick={() => setShowSetup(true)}>
-          <Plus className="w-4 h-4 mr-2" /> Set Up {formatMonthYear(todayMonth, todayYear)}
+          <Plus className="w-4 h-4 mr-2" /> Set Up {formatMonthYear(viewMonth, viewYear)}
         </Button>
-        <SetupMonthDialog open={showSetup} onOpenChange={setShowSetup} month={todayMonth} year={todayYear} suggestedIncome={suggestedIncome} onConfirm={handleSetupMonth} />
+        <SetupMonthDialog open={showSetup} onOpenChange={setShowSetup} month={viewMonth} year={viewYear} suggestedIncome={suggestedIncome} onConfirm={handleSetupMonth} />
       </div>
     );
   }
@@ -474,12 +491,24 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Monthly Snapshot</p>
-          <h1 className="text-xl font-bold">{formatMonthYear(currentMonth.month, currentMonth.year)}</h1>
-          <p className="text-sm text-muted-foreground">
-            {pendingCount > 0 ? `${pendingCount} payments pending` : "All paid ✓"}
-          </p>
+        <div className="flex items-center gap-3">
+          {prevUrl && nextUrl && (
+            <div className="flex items-center gap-1">
+              <Link href={prevUrl} className="p-1.5 rounded-lg border hover:bg-muted transition-colors">
+                <ChevronLeft className="w-4 h-4" />
+              </Link>
+              <Link href={nextUrl} className="p-1.5 rounded-lg border hover:bg-muted transition-colors">
+                <ChevronRight className="w-4 h-4" />
+              </Link>
+            </div>
+          )}
+          <div>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Monthly Snapshot</p>
+            <h1 className="text-xl font-bold">{formatMonthYear(currentMonth.month, currentMonth.year)}</h1>
+            <p className="text-sm text-muted-foreground">
+              {pendingCount > 0 ? `${pendingCount} payments pending` : "All paid ✓"}
+            </p>
+          </div>
         </div>
         <Button onClick={() => setShowAdHoc(true)} size="sm" variant="outline" className="gap-1.5">
           <Plus className="w-3.5 h-3.5" /> Add Transaction

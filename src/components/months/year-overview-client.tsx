@@ -167,7 +167,7 @@ export function YearOverviewClient({
                   ? "bg-green-50 border-green-400 ring-1 ring-green-300"
                   : m.isPopulated
                     ? "bg-card border-border hover:border-zinc-400 transition-colors cursor-pointer"
-                    : "bg-zinc-50 border-dashed border-zinc-200"
+                    : "bg-zinc-50 border-dashed border-zinc-200 hover:border-zinc-400 transition-colors cursor-pointer"
               )}>
                 {/* Month + tag */}
                 <div className="flex items-center justify-between mb-2">
@@ -235,10 +235,14 @@ export function YearOverviewClient({
               </div>
             );
 
-            return m.isPopulated && m.id ? (
-              <Link key={`${m.year}-${m.month}`} href={`/months/${m.id}`}>{cell}</Link>
-            ) : (
-              <div key={`${m.year}-${m.month}`}>{cell}</div>
+            const href = m.isPopulated && m.id
+              ? `/months/${m.id}`
+              : m.isCurrent
+                ? "/dashboard"
+                : `/dashboard?month=${m.month}&year=${m.year}`;
+
+            return (
+              <Link key={`${m.year}-${m.month}`} href={href}>{cell}</Link>
             );
           })}
         </div>
