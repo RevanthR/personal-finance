@@ -46,10 +46,30 @@ export default async function DashboardPage({
 
   // ── Future month → projected view ─────────────────────────────────────────
   if (isFuture) {
-    const allTemplates = await db.lineItemTemplate.findMany({
-      where: { userId, isActive: true, foreClosedOn: null },
-      include: { chitFund: true },
-    });
+    const isImmediateNext =
+      (targetYear === todayYear && targetMonth === todayMonth + 1) ||
+      (todayMonth === 12 && targetMonth === 1 && targetYear === todayYear + 1);
+
+    const [allTemplates, currentMonthRecord] = await Promise.all([
+      db.lineItemTemplate.findMany({
+        where: { userId, isActive: true, foreClosedOn: null },
+        include: { chitFund: true },
+      }),
+      isImmediateNext
+        ? db.month.findUnique({
+            where: { userId_month_year: { userId, month: todayMonth, year: todayYear } },
+            select: { entries: { select: { templateId: true, statementAmount: true } } },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    // CC statement amounts: what's already accumulated for next month's bill
+    const ccStatements = new Map<string, number>();
+    for (const e of currentMonthRecord?.entries ?? []) {
+      if (e.statementAmount != null && e.statementAmount > 0) {
+        ccStatements.set(e.templateId, e.statementAmount);
+      }
+    }
 
     const incomeTemplates  = allTemplates.filter(t => t.templateType === "INCOME");
     const expenseTemplates = allTemplates.filter(t => t.templateType !== "INCOME");
@@ -67,9 +87,11 @@ export default async function DashboardPage({
       )
       .map(t => ({
         name: t.name,
-        amount: t.chitFund
-          ? (t.chitFund.isLifted ? (t.chitFund.monthlyLiftedAmount ?? t.amount) : t.chitFund.monthlyUnliftedAmount)
-          : t.amount,
+        amount: t.category === "CREDIT_CARD" && ccStatements.has(t.id)
+          ? ccStatements.get(t.id)!
+          : t.chitFund
+            ? (t.chitFund.isLifted ? (t.chitFund.monthlyLiftedAmount ?? t.amount) : t.chitFund.monthlyUnliftedAmount)
+            : t.amount,
         category: t.category,
         customCategory: t.customCategory,
         isFixed: t.isFixed,

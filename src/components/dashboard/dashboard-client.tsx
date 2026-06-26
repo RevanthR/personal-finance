@@ -308,11 +308,18 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
   // Enhanced breakdown includes ad-hoc expenses in their categories
   const categoryBreakdown = useMemo(() => {
     if (isProjected) {
-      return projEntries.map(e => ({
-        key: e.customCategory ?? e.category,
-        value: e.amount,
-        name: getCategoryDisplay(e.category, e.customCategory),
-        color: getCategoryColor(e.category, e.customCategory),
+      // Aggregate by category so multiple CC templates don't produce duplicate keys/names
+      const totals = new Map<string, { amount: number; category: string; customCategory: string | null }>();
+      for (const e of projEntries) {
+        const key = e.customCategory ?? e.category;
+        if (!totals.has(key)) totals.set(key, { amount: 0, category: e.category, customCategory: e.customCategory });
+        totals.get(key)!.amount += e.amount;
+      }
+      return [...totals.entries()].map(([, { amount, category, customCategory }]) => ({
+        key: customCategory ?? category,
+        value: amount,
+        name: getCategoryDisplay(category, customCategory),
+        color: getCategoryColor(category, customCategory),
       })).sort((a, b) => b.value - a.value);
     }
     const totals: Record<string, { amount: number; templateCat: string; customCat: string | null }> = {};
@@ -410,8 +417,8 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
   // Collapsible groups: track user overrides; default = collapse if all entries paid
   const [groupToggled, setGroupToggled] = useState<Record<string, boolean>>({});
   function isGroupCollapsed(key: string, entryItems: { data: EntryWithTemplate }[]): boolean {
-    if (isProjected) return false;
     if (key in groupToggled) return groupToggled[key];
+    // projected: entryItems is empty → defaults to expanded (false); actual: collapses when all paid
     return entryItems.length > 0 && entryItems.every(i => i.data.isPaid);
   }
   function toggleGroup(key: string, entryItems: { data: EntryWithTemplate }[]) {
@@ -740,7 +747,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
                         {formatCurrency(catPaid)} / {formatCurrency(catTotal)}
                       </span>
                     )}
-                    {!isProjected && <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/60 transition-transform duration-200", !collapsed && "rotate-180")} />}
+                    <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/60 transition-transform duration-200", !collapsed && "rotate-180")} />
                   </div>
                 </button>
 

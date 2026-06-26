@@ -20,6 +20,8 @@ export default async function MonthsPage() {
   const todayMonth = now.getMonth() + 1;
   const todayYear = now.getFullYear();
   const { fyStart, fyKey } = getFY(todayMonth, todayYear);
+  const nextM = todayMonth === 12 ? 1  : todayMonth + 1;
+  const nextY = todayMonth === 12 ? todayYear + 1 : todayYear;
 
   // All 12 months of the current FY: Apr(fyStart)→Mar(fyStart+1)
   const fyMonths = [
@@ -45,6 +47,17 @@ export default async function MonthsPage() {
       },
     }),
   ]);
+
+  // CC statement amounts from current month — used to make the next-month projection more accurate
+  // (statementAmount reflects actual post-close charges, not the template default)
+  const ccStatements = new Map<string, number>();
+  if (currentMonthFull?.isPopulated) {
+    for (const e of currentMonthFull.entries) {
+      if (e.template.category === "CREDIT_CARD" && e.statementAmount != null && e.statementAmount > 0) {
+        ccStatements.set(e.templateId, e.statementAmount);
+      }
+    }
+  }
 
   // templateType may be null for pre-existing rows (DB DEFAULT not backfilled by Prisma 7)
   // Use !== "INCOME" so null rows are treated as EXPENSE
@@ -116,7 +129,18 @@ export default async function MonthsPage() {
       (t.frequency === "MONTHLY" || (t.frequency === "YEARLY" && t.dueMonth === month)) &&
       isTemplateActiveInMonth(t, month, year)
     );
-    const projExpenses = activeThisMonth.reduce((s, t) => s + t.amount, 0);
+    const isImmediateNext = month === nextM && year === nextY;
+    const projExpenses = activeThisMonth.reduce((s, t) => {
+      let amount = t.amount;
+      if (t.chitFund) {
+        amount = t.chitFund.isLifted
+          ? (t.chitFund.monthlyLiftedAmount ?? t.amount)
+          : t.chitFund.monthlyUnliftedAmount;
+      } else if (t.category === "CREDIT_CARD" && isImmediateNext && ccStatements.has(t.id)) {
+        amount = ccStatements.get(t.id)!;
+      }
+      return s + amount;
+    }, 0);
     const projIncome = getProjectedIncome(month, year);
 
     // Templates that were active last month but not this month
