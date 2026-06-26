@@ -626,7 +626,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
       {/* Metric cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {isProjected ? (
-          <MetricCard label="Est. Income" value={formatCurrency(dispIncome)} icon={<Wallet className="w-4 h-4" />} color="text-green-600" sub="from templates" gradient="linear-gradient(135deg, white 0%, #f0fdf4 100%)" />
+          <MetricCard label="Est. Income" value={formatCurrency(dispIncome)} icon={<Wallet className="w-4 h-4" />} color="text-green-600" sub="projected" gradient="linear-gradient(135deg, white 0%, #f0fdf4 100%)" />
         ) : (
           <button onClick={openIncomeEdit} className="text-left">
             <Card className="hover:border-zinc-400 transition-colors cursor-pointer h-full" style={{ background: "linear-gradient(135deg, white 0%, #f0fdf4 100%)" }}>
