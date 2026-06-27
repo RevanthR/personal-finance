@@ -7,7 +7,7 @@ import {
   LayoutDashboard,
   Calendar,
   TrendingUp,
-  Settings,
+  SlidersHorizontal,
   ShieldCheck,
   ChevronLeft,
   Menu,
@@ -19,7 +19,7 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/months", label: "Monthly View", icon: Calendar },
   { href: "/receivables", label: "Receivables", icon: TrendingUp },
-  { href: "/templates", label: "Templates", icon: Settings },
+  { href: "/templates", label: "Configuration", mobileLabel: "Config", icon: SlidersHorizontal },
 ];
 
 interface SidebarProps {
@@ -111,7 +111,7 @@ export function Sidebar({ isAdmin }: SidebarProps) {
       {/* Mobile bottom nav — floating pill, lifted above iPhone home indicator */}
       <nav className="md:hidden fixed left-4 right-4 z-50" style={{ bottom: "calc(1rem + env(safe-area-inset-bottom))" }}>
         <div className="flex items-center justify-around bg-slate-950/95 backdrop-blur-md rounded-2xl px-2 py-2 shadow-2xl border border-slate-800">
-          {navItems.map(({ href, label, icon: Icon }) => {
+          {navItems.map(({ href, label, mobileLabel, icon: Icon }) => {
             const active = pathname === href || pathname.startsWith(href + "/");
             return (
               <Link
@@ -123,7 +123,7 @@ export function Sidebar({ isAdmin }: SidebarProps) {
                 )}
               >
                 <Icon className="w-5 h-5" />
-                <span className="text-[10px] font-medium">{label.split(" ")[0]}</span>
+                <span className="text-[10px] font-medium">{mobileLabel ?? label.split(" ")[0]}</span>
               </Link>
             );
           })}

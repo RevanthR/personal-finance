@@ -114,7 +114,7 @@ export function TemplatesClient({
       templateType: data.templateType ?? editing.templateType,
     };
     setTemplates((prev) => prev.map((x) => x.id === editing.id ? resolved : x));
-    toast.success("Template updated");
+    toast.success("Item updated");
     setEditing(null);
   }
 
@@ -162,7 +162,7 @@ export function TemplatesClient({
     if (!res.ok) { toast.error("Failed to add"); return; }
     const t = await res.json();
     setTemplates((prev) => [...prev, t]);
-    toast.success("Template added");
+    toast.success("Item added");
     setShowAdd(false);
   }
 
@@ -220,13 +220,13 @@ export function TemplatesClient({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Recurring Templates</h1>
+          <h1 className="text-2xl font-bold">Configuration</h1>
           <p className="text-sm text-muted-foreground">
             {templates.filter((t) => t.isActive).length} active · auto-populate each month
           </p>
         </div>
         <Button onClick={() => { setShowAdd(true); }}>
-          <Plus className="w-4 h-4 mr-1" /> Add Template
+          <Plus className="w-4 h-4 mr-1" /> Add Item
         </Button>
       </div>
 
@@ -473,7 +473,7 @@ export function TemplatesClient({
       {editing && (
         <TemplateDialog
           open
-          title="Edit Template"
+          title="Edit Item"
           initial={editing}
           onOpenChange={(v) => !v && setEditing(null)}
           onSave={saveEdit}
@@ -491,7 +491,7 @@ export function TemplatesClient({
 
       <TemplateDialog
         open={showAdd}
-        title="Add Template"
+        title="Add Item"
         defaultType={activeTab === "income" ? "INCOME" : "EXPENSE"}
         onOpenChange={setShowAdd}
         onSave={addTemplate}

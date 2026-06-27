@@ -100,7 +100,7 @@ export function YearOverviewClient({
   const maxMonthIncome = Math.max(...months.map(m => m.income));
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 max-w-5xl mx-auto items-start">
+    <div className="flex flex-col lg:flex-row gap-6 max-w-5xl mx-auto lg:items-start">
     {/* ── Left: Year overview ── */}
     <div className="flex-1 min-w-0 space-y-5">
       {/* Header */}
