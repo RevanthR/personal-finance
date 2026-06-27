@@ -10,10 +10,10 @@ const sections = [
     color: "text-indigo-500",
     bg: "bg-indigo-50",
     lines: [
-      "Your monthly snapshot — income, recurring expenses, and what's left over.",
-      "Mark recurring items as paid as you settle them through the month.",
-      "The progress bar at the top shows how many recurring items are settled vs. still pending.",
-      'Use "Add Transaction" for one-off spends (a cash purchase, a bonus) that don\'t repeat.',
+      "Your monthly view of income, expenses, and what is left over.",
+      "Mark each recurring item as paid once you settle it.",
+      "The progress bar shows how many items are settled this month.",
+      'Tap "Add Transaction" to log a one-off spend or income that will not repeat next month.',
     ],
   },
   {
@@ -22,10 +22,10 @@ const sections = [
     color: "text-blue-500",
     bg: "bg-blue-50",
     lines: [
-      "Your full financial year (Apr – Mar) in one view.",
-      "Solid months are past actuals. Dashed months are projections based on your active configuration items.",
-      "Click any past month to drill into its full breakdown.",
-      "The chart overlays income vs. expenses and tracks your running balance across the year.",
+      "Shows your full financial year from April to March.",
+      "Solid months are real data. Dashed months are estimates based on your active items.",
+      "Tap any past month to see its full breakdown.",
+      "The chart shows income vs. expenses and your running balance through the year.",
     ],
   },
   {
@@ -34,11 +34,11 @@ const sections = [
     color: "text-violet-500",
     bg: "bg-violet-50",
     lines: [
-      "Recurring items that auto-fill every month — salary, EMIs, rent, credit card bills, chit contributions.",
-      "Add your income sources first so Dashboard can calculate your leftover accurately.",
-      "Set a due date on expense items and the Dashboard will flag what's overdue.",
-      "Yearly items (like insurance premiums) appear only in the month they're due.",
-      'Use "Foreclose" to settle and close a loan — it stops appearing in future months.',
+      "Set up recurring items that auto-fill every month: salary, EMIs, rent, credit card bills, chit contributions.",
+      "Add your income sources first so the app can calculate your monthly leftover correctly.",
+      "Set a due date on any item so the Dashboard can flag it when it is overdue.",
+      "Yearly items like insurance only appear in the month they are due.",
+      'Tap "Foreclose" on a loan once it is fully paid. It will stop showing up in future months.',
     ],
   },
   {
@@ -47,9 +47,9 @@ const sections = [
     color: "text-emerald-500",
     bg: "bg-emerald-50",
     lines: [
-      "Track money others owe you — personal loans you've given and chit lifts you're waiting on.",
-      "Set an expected date and the Monthly View will include it in that month's income projection.",
-      "Mark as received when the money arrives — it's added as income to that month's Dashboard.",
+      "Track money that others owe you. This includes personal loans and chit fund lifts.",
+      "Set an expected date and that month's forecast will include this amount as income.",
+      "Tap Mark as Received when the money comes in. It gets added as income for that month.",
     ],
   },
   {
@@ -58,10 +58,10 @@ const sections = [
     color: "text-amber-500",
     bg: "bg-amber-50",
     lines: [
-      "A chit fund is a rotating savings scheme — every member contributes monthly and takes turns lifting the full pot.",
-      "Before your lift: your contribution is treated as a savings investment, not an expense.",
-      "After your lift: your contribution becomes an expense as you pay back the group.",
-      "Track total value, accumulated savings, and lift history from this page.",
+      "A group savings scheme where every member pays in monthly and takes turns receiving the full pot.",
+      "Before you lift: your monthly payment is treated as savings, not an expense.",
+      "After you lift: your monthly payment becomes an expense since you are paying back the group.",
+      "Track total value, savings built up, and lift history from this page.",
     ],
   },
   {
@@ -70,10 +70,10 @@ const sections = [
     color: "text-rose-500",
     bg: "bg-rose-50",
     lines: [
-      "Logs a one-time item for the current month — it doesn't repeat next month.",
-      "Expense categories: House, Loan, Credit Card, Personal, Misc.",
-      "For credit card spends, pick the card and a category (Food, Travel, etc.). These group under the card on Dashboard and carry forward to next month's bill automatically.",
-      "Income types: Bonus, Freelance, Refund, Other — added directly to this month's income total.",
+      "Logs a one-off item for the current month only. It will not carry over to next month.",
+      "Expense types: House, Loan, Credit Card, Personal, Misc.",
+      "For credit card spends, pick the card and a spend type like Food or Travel. These are grouped under that card and roll into next month's bill.",
+      "Income types: Bonus, Freelance, Refund, Other. These are added directly to this month's income.",
     ],
   },
 ];

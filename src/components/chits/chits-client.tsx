@@ -85,7 +85,7 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
         <div>
           <h1 className="text-2xl font-bold">Chit Funds</h1>
           <p className="text-sm text-muted-foreground">
-            Monthly rotating savings — contribute now, lift the pot when it's your turn · {activeChits.length} active
+            Pay in every month, lift the full pot when it is your turn · {activeChits.length} active
           </p>
         </div>
         <Button onClick={() => setShowAdd(true)}>
