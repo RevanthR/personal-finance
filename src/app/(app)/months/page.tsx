@@ -1,4 +1,5 @@
-import { auth } from "@/lib/auth";
+import { getSession } from "@/lib/get-session";
+import { getActiveTemplates } from "@/lib/cached-queries";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { YearOverviewClient, type MonthData } from "@/components/months/year-overview-client";
@@ -12,7 +13,7 @@ function getFY(month: number, year: number) {
 }
 
 export default async function MonthsPage() {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
 
@@ -35,10 +36,7 @@ export default async function MonthsPage() {
       include: { entries: true, adHocItems: true },
       orderBy: [{ year: "asc" }, { month: "asc" }],
     }),
-    db.lineItemTemplate.findMany({
-      where: { userId, isActive: true, foreClosedOn: null },
-      include: { chitFund: true },
-    }),
+    getActiveTemplates(userId),
     db.month.findUnique({
       where: { userId_month_year: { userId, month: todayMonth, year: todayYear } },
       include: {

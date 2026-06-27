@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { getSession } from "@/lib/get-session";
 import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/shared/sidebar";
 import { Header } from "@/components/shared/header";
@@ -6,7 +6,7 @@ import { NavProgress } from "@/components/shared/nav-progress";
 import { Suspense } from "react";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user) redirect("/login");
 
   const isAdmin = session.user.role === "ADMIN";

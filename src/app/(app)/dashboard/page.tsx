@@ -1,4 +1,5 @@
-import { auth } from "@/lib/auth";
+import { getSession } from "@/lib/get-session";
+import { getActiveTemplates } from "@/lib/cached-queries";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
@@ -24,7 +25,7 @@ export default async function DashboardPage({
 }: {
   searchParams: Promise<{ month?: string; year?: string }>;
 }) {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
 
@@ -51,10 +52,7 @@ export default async function DashboardPage({
       (todayMonth === 12 && targetMonth === 1 && targetYear === todayYear + 1);
 
     const [allTemplates, currentMonthRecord, futureMonthRecord, pendingReceivables] = await Promise.all([
-      db.lineItemTemplate.findMany({
-        where: { userId, isActive: true, foreClosedOn: null },
-        include: { chitFund: true },
-      }),
+      getActiveTemplates(userId),
       isImmediateNext
         ? db.month.findUnique({
             where: { userId_month_year: { userId, month: todayMonth, year: todayYear } },
@@ -158,7 +156,12 @@ export default async function DashboardPage({
       where: { userId },
       orderBy: [{ year: "desc" }, { month: "desc" }],
       take: 6,
-      include: { entries: true, adHocItems: true },
+      select: {
+        id: true, month: true, year: true,
+        salaryIncome: true, freelanceIncome: true, otherIncome: true,
+        entries: { select: { amount: true } },
+        adHocItems: { select: { type: true, amount: true, category: true } },
+      },
     }),
     db.chitFund.findMany({
       where: { userId },

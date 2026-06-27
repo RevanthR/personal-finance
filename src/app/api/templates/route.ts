@@ -2,6 +2,8 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { Category, TemplateType } from "@/generated/prisma/client";
+import { revalidateTag } from "next/cache";
+import { templateCacheTag } from "@/lib/cached-queries";
 
 export async function GET() {
   const session = await auth();
@@ -42,5 +44,6 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  revalidateTag(templateCacheTag, {});
   return NextResponse.json(template, { status: 201 });
 }

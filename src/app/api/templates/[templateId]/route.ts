@@ -2,6 +2,8 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { Category } from "@/generated/prisma/client";
+import { revalidateTag } from "next/cache";
+import { templateCacheTag } from "@/lib/cached-queries";
 
 export async function PATCH(
   req: NextRequest,
@@ -84,6 +86,7 @@ export async function PATCH(
     }
   }
 
+  revalidateTag(templateCacheTag, {});
   return NextResponse.json({ ok: true });
 }
 
@@ -100,5 +103,6 @@ export async function DELETE(
     where: { id: templateId, userId: session.user.id },
   });
 
+  revalidateTag(templateCacheTag, {});
   return NextResponse.json({ ok: true });
 }

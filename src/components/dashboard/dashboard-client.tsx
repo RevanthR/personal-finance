@@ -17,14 +17,23 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { EntryRow } from "./entry-row";
-import { AdHocDialog, type CCCard } from "./adhoc-dialog";
-import { SetupMonthDialog } from "./setup-month-dialog";
+import type { CCCard } from "./adhoc-dialog";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
 const DashboardCharts = dynamic(
   () => import("./dashboard-charts").then(m => m.DashboardCharts),
   { ssr: false, loading: () => <div className="h-64 rounded-xl bg-muted animate-pulse" /> }
+);
+
+const AdHocDialog = dynamic(
+  () => import("./adhoc-dialog").then(m => m.AdHocDialog),
+  { ssr: false }
+);
+
+const SetupMonthDialog = dynamic(
+  () => import("./setup-month-dialog").then(m => m.SetupMonthDialog),
+  { ssr: false }
 );
 
 export type ProjectedEntry = {
@@ -38,7 +47,7 @@ export type ProjectedEntry = {
 
 interface DashboardClientProps {
   currentMonth: MonthWithDetails | null;
-  recentMonths: MonthWithDetails[];
+  recentMonths: RecentMonthSummary[];
   chitFunds: ChitFundWithTemplate[];
   ccTemplates: { id: string; name: string; statementDay: number | null; dueDateDay: number | null }[];
   suggestedIncome: number;
@@ -59,6 +68,13 @@ type MonthWithDetails = {
   isPopulated: boolean;
   entries: EntryWithTemplate[];
   adHocItems: AdHocItem[];
+};
+
+type RecentMonthSummary = {
+  id: string; month: number; year: number;
+  salaryIncome: number; freelanceIncome: number; otherIncome: number;
+  entries: { amount: number }[];
+  adHocItems: { type: string; amount: number; category: string | null }[];
 };
 
 type EntryWithTemplate = {
@@ -571,6 +587,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
             <div className={cn("flex items-center flex-1 rounded-xl border bg-muted/40 overflow-hidden transition-opacity", isPending && "opacity-50")}>
               <button
                 onClick={() => navigate(prevUrl)}
+                onMouseEnter={() => router.prefetch(prevUrl)}
                 disabled={isPending}
                 className="flex items-center justify-center h-10 px-3 hover:bg-muted transition-colors disabled:cursor-not-allowed shrink-0"
                 aria-label="Previous month"
@@ -589,6 +606,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
 
               <button
                 onClick={() => navigate(nextUrl)}
+                onMouseEnter={() => router.prefetch(nextUrl)}
                 disabled={isPending}
                 className="flex items-center justify-center h-10 px-3 hover:bg-muted transition-colors disabled:cursor-not-allowed shrink-0"
                 aria-label="Next month"
@@ -613,7 +631,6 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
             <Button onClick={() => setShowAdHoc(true)} size="sm" variant="outline" className="gap-1.5 shrink-0 h-10">
               <Plus className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Add Transaction</span>
-              <span className="sm:hidden">Add</span>
             </Button>
           )}
         </div>

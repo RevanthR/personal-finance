@@ -1,6 +1,8 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
+import { templateCacheTag } from "@/lib/cached-queries";
 
 // PATCH — update chit (including lift action)
 export async function PATCH(
@@ -75,6 +77,8 @@ export async function PATCH(
         },
       });
     }
+
+    revalidateTag(templateCacheTag, {});
   }
 
   return NextResponse.json(updated);
