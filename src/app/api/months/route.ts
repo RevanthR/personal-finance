@@ -59,8 +59,8 @@ export async function POST(req: NextRequest) {
           select: {
             templateId: true, statementAmount: true,
             isPaid: true, amount: true, paidAmount: true,
+            template: { select: { category: true, name: true } },
           },
-          include: { template: { select: { category: true, name: true } } },
         },
       },
     });

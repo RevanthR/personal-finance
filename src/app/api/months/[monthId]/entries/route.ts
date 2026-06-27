@@ -18,7 +18,7 @@ export async function PATCH(
   const paymentData: Record<string, unknown> = {};
 
   if (paidAmount !== undefined) {
-    const entry = await db.monthlyEntry.findUnique({
+    const entry = await db.monthlyEntry.findFirst({
       where: { id: entryId, monthId, month: { userId: session.user.id } },
       select: { amount: true },
     });
