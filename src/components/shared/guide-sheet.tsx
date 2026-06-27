@@ -13,7 +13,7 @@ const sections = [
       "Your monthly snapshot — income, recurring expenses, and what's left over.",
       "Mark recurring items as paid as you settle them through the month.",
       "The progress bar at the top shows how many recurring items are settled vs. still pending.",
-      "Use "Add Transaction" for one-off spends (a cash purchase, a bonus) that don't repeat.",
+      'Use "Add Transaction" for one-off spends (a cash purchase, a bonus) that don\'t repeat.',
     ],
   },
   {
@@ -38,7 +38,7 @@ const sections = [
       "Add your income sources first so Dashboard can calculate your leftover accurately.",
       "Set a due date on expense items and the Dashboard will flag what's overdue.",
       "Yearly items (like insurance premiums) appear only in the month they're due.",
-      "Use "Foreclose" to settle and close a loan — it stops appearing in future months.",
+      'Use "Foreclose" to settle and close a loan — it stops appearing in future months.',
     ],
   },
   {
