@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
+import { usePrivacy } from "@/contexts/privacy-context";
 import { cn } from "@/lib/utils";
 import { TrendingUp, TrendingDown, Calendar } from "lucide-react";
 import {
@@ -41,6 +42,8 @@ function RankedList({
   items: { name: string; value: number; color?: string }[];
   total: number;
 }) {
+  const { hidden } = usePrivacy();
+  const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const max = items[0]?.value ?? 1;
   return (
     <div className="space-y-2.5">
@@ -61,7 +64,7 @@ function RankedList({
               </div>
               <div className="flex items-center gap-2 shrink-0 ml-2">
                 <span className="text-[10px] text-muted-foreground">{pct}%</span>
-                <span className="text-xs font-medium tabular-nums">{formatCurrency(item.value)}</span>
+                <span className="text-xs font-medium tabular-nums">{fmt(item.value)}</span>
               </div>
             </div>
             <div className="h-[3px] rounded-full bg-muted">
@@ -93,6 +96,8 @@ export function DashboardCharts({
   variableAmount,
   upcomingPayments,
 }: DashboardChartsProps) {
+  const { hidden } = usePrivacy();
+  const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const totalSpend = categoryBreakdown.reduce((s, i) => s + i.value, 0);
   const ccTotal = ccSubcatBreakdown.reduce((s, i) => s + i.amount, 0);
   const totalFixed = fixedAmount + variableAmount;
@@ -127,7 +132,7 @@ export function DashboardCharts({
                   ? <TrendingUp className="w-3 h-3 text-rose-400" />
                   : <TrendingDown className="w-3 h-3 text-emerald-500" />}
                 <span className={cn("text-xs font-medium tabular-nums", expensesDelta > 0 ? "text-rose-500" : "text-emerald-600")}>
-                  {expensesDelta > 0 ? "+" : "-"}{formatCurrency(Math.abs(expensesDelta))}
+                  {expensesDelta > 0 ? "+" : "-"}{fmt(Math.abs(expensesDelta))}
                 </span>
               </div>
             </div>
@@ -149,8 +154,8 @@ export function DashboardCharts({
                 <div className="h-full flex-1" style={{ backgroundColor: "#f59e0b", opacity: 0.35 }} />
               </div>
               <div className="flex justify-between mt-0.5">
-                <span className="text-[9px] text-muted-foreground/60">Fixed {formatCurrency(fixedAmount)}</span>
-                <span className="text-[9px] text-muted-foreground/60">Variable {formatCurrency(variableAmount)}</span>
+                <span className="text-[9px] text-muted-foreground/60">Fixed {fmt(fixedAmount)}</span>
+                <span className="text-[9px] text-muted-foreground/60">Variable {fmt(variableAmount)}</span>
               </div>
             </div>
           )}
@@ -211,7 +216,7 @@ export function DashboardCharts({
                     {p.overdue ? "Overdue" : `Due ${ordinal(p.dueDay)}`}
                   </p>
                 </div>
-                <span className="text-xs font-medium shrink-0 ml-2 tabular-nums">{formatCurrency(p.amount)}</span>
+                <span className="text-xs font-medium shrink-0 ml-2 tabular-nums">{fmt(p.amount)}</span>
               </div>
             ))}
           </CardContent>
@@ -237,7 +242,7 @@ export function DashboardCharts({
                 />
                 <YAxis hide />
                 <Tooltip
-                  formatter={(v) => formatCurrency(Number(v))}
+                  formatter={(v) => fmt(Number(v))}
                   contentStyle={{ fontSize: 11, borderRadius: 8, border: "1px solid #e5e7eb" }}
                 />
                 <Legend wrapperStyle={{ fontSize: 10 }} iconSize={8} />
@@ -264,7 +269,7 @@ export function DashboardCharts({
                   <p className="text-xs font-medium truncate">{chit.template.name}</p>
                   {chit.isLifted
                     ? <p className="text-[10px] text-muted-foreground">Lifted</p>
-                    : <p className="text-[10px] text-emerald-600">Saved {formatCurrency(chit.accumulatedSavings)}</p>
+                    : <p className="text-[10px] text-emerald-600">Saved {fmt(chit.accumulatedSavings)}</p>
                   }
                 </div>
                 <span className={cn(

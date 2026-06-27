@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { formatCurrency, getCategoryDisplay, getCategoryColor } from "@/lib/utils";
+import { usePrivacy } from "@/contexts/privacy-context";
 import { Clock, Check, IndianRupee } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -36,6 +37,8 @@ interface EntryRowProps {
 }
 
 export function EntryRow({ entry, onUpdate }: EntryRowProps) {
+  const { hidden } = usePrivacy();
+  const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const [optimisticPaid, setOptimisticPaid] = useState(entry.isPaid);
   const [optimisticPaidAmount, setOptimisticPaidAmount] = useState(entry.paidAmount);
   const [editingAmount, setEditingAmount] = useState(false);
@@ -164,8 +167,8 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
 
           {isPartial && !editingAmount ? (
             <div className="text-right">
-              <p className="text-xs text-amber-600 font-semibold">{formatCurrency(paidAmount!)} paid</p>
-              <p className="text-[10px] text-muted-foreground">{formatCurrency(outstanding)} left</p>
+              <p className="text-xs text-amber-600 font-semibold">{fmt(paidAmount!)} paid</p>
+              <p className="text-[10px] text-muted-foreground">{fmt(outstanding)} left</p>
             </div>
           ) : editingAmount ? (
             <input
@@ -185,7 +188,7 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
                 !entry.template.isFixed && !isPaid && "cursor-pointer hover:text-zinc-600 underline decoration-dotted underline-offset-2"
               )}
             >
-              {formatCurrency(entry.amount)}
+              {fmt(entry.amount)}
             </span>
           )}
         </div>
@@ -199,12 +202,12 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
           <div className="space-y-3 py-1">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Total due</span>
-              <span className="font-semibold">{formatCurrency(entry.amount)}</span>
+              <span className="font-semibold">{fmt(entry.amount)}</span>
             </div>
             {paidAmount != null && paidAmount > 0 && (
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Already paid</span>
-                <span className="text-amber-600 font-semibold">{formatCurrency(paidAmount)}</span>
+                <span className="text-amber-600 font-semibold">{fmt(paidAmount)}</span>
               </div>
             )}
             <div>
@@ -215,7 +218,7 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
                 value={partialVal}
                 onChange={e => setPartialVal(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter") handleSavePartial(); }}
-                placeholder={`max ${formatCurrency(outstanding)}`}
+                placeholder={`max ${fmt(outstanding)}`}
                 className="mt-1"
                 autoFocus
               />
@@ -226,7 +229,7 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
               className="w-full text-xs"
               onClick={() => { setPartialVal(String(outstanding)); }}
             >
-              Pay remaining {formatCurrency(outstanding)}
+              Pay remaining {fmt(outstanding)}
             </Button>
           </div>
           <DialogFooter>

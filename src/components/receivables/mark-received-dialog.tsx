@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatCurrency } from "@/lib/utils";
+import { usePrivacy } from "@/contexts/privacy-context";
 
 interface MarkReceivedDialogProps {
   open: boolean;
@@ -24,6 +25,8 @@ interface MarkReceivedDialogProps {
 }
 
 export function MarkReceivedDialog({ open, onOpenChange, receivable, onConfirm }: MarkReceivedDialogProps) {
+  const { hidden } = usePrivacy();
+  const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const now = new Date();
   const [receivedAmount, setReceivedAmount] = useState(String(receivable.expectedAmount));
   const [receivedMonth, setReceivedMonth] = useState(String(now.getMonth() + 1));
@@ -54,7 +57,7 @@ export function MarkReceivedDialog({ open, onOpenChange, receivable, onConfirm }
         <DialogHeader>
           <DialogTitle>Mark as Received</DialogTitle>
           <DialogDescription>
-            {receivable.description} · Expected {formatCurrency(receivable.expectedAmount)}
+            {receivable.description} · Expected {fmt(receivable.expectedAmount)}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">

@@ -12,10 +12,8 @@ import {
   ChevronLeft,
   Menu,
   IndianRupee,
-  BookOpen,
 } from "lucide-react";
 import { useState } from "react";
-import { GuidePanel } from "./guide-sheet";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -31,7 +29,6 @@ interface SidebarProps {
 export function Sidebar({ isAdmin }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-  const [guideOpen, setGuideOpen] = useState(false);
 
   return (
     <>
@@ -110,20 +107,6 @@ export function Sidebar({ isAdmin }: SidebarProps) {
           )}
         </nav>
 
-        {/* Guide button — bottom of sidebar */}
-        <div className="p-2 border-t border-slate-800">
-          <button
-            onClick={() => setGuideOpen(true)}
-            className={cn(
-              "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium w-full transition-colors text-slate-400 hover:bg-slate-800 hover:text-white",
-              collapsed && "justify-center"
-            )}
-            aria-label="Open guide"
-          >
-            <BookOpen className="w-4 h-4 shrink-0" />
-            {!collapsed && <span>Guide</span>}
-          </button>
-        </div>
       </aside>
 
       {/* Mobile bottom nav — floating pill, lifted above iPhone home indicator */}
@@ -145,20 +128,8 @@ export function Sidebar({ isAdmin }: SidebarProps) {
               </Link>
             );
           })}
-          {/* Guide button */}
-          <button
-            onClick={() => setGuideOpen(true)}
-            className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-xs transition-colors text-slate-500 hover:text-white"
-            aria-label="Open guide"
-          >
-            <BookOpen className="w-5 h-5" />
-            <span className="text-[10px] font-medium">Guide</span>
-          </button>
         </div>
       </nav>
-
-      {/* Guide panel — shared between desktop + mobile triggers */}
-      <GuidePanel open={guideOpen} onClose={() => setGuideOpen(false)} />
     </>
   );
 }

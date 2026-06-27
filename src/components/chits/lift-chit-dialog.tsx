@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatCurrency } from "@/lib/utils";
+import { usePrivacy } from "@/contexts/privacy-context";
 
 interface LiftChitDialogProps {
   open: boolean;
@@ -26,6 +27,8 @@ const MONTHS = [
 ];
 
 export function LiftChitDialog({ open, onOpenChange, chit, onLift }: LiftChitDialogProps) {
+  const { hidden } = usePrivacy();
+  const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const now = new Date();
   const [liftedAmount, setLiftedAmount] = useState(String(chit.totalValue));
   const [usedFor, setUsedFor] = useState("");
@@ -63,7 +66,7 @@ export function LiftChitDialog({ open, onOpenChange, chit, onLift }: LiftChitDia
               type="number"
               value={liftedAmount}
               onChange={(e) => setLiftedAmount(e.target.value)}
-              placeholder={formatCurrency(chit.totalValue)}
+              placeholder={fmt(chit.totalValue)}
               required
             />
           </div>

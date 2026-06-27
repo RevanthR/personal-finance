@@ -4,6 +4,7 @@ import { useState, useMemo, useTransition } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { formatCurrency, formatMonthYear, getCategoryDisplay, getCategoryColor } from "@/lib/utils";
+import { usePrivacy } from "@/contexts/privacy-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -112,6 +113,8 @@ function parseCCCardName(notes: string | null): string | null {
 }
 
 function CCSubcatBreakdown({ txItems, onDelete }: { txItems: AdHocItem[]; onDelete: (id: string) => void }) {
+  const { hidden } = usePrivacy();
+  const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
 
   const sections: [string, AdHocItem[]][] = CC_SUBCATEGORIES.reduce<[string, AdHocItem[]][]>((acc, sub) => {
@@ -137,7 +140,7 @@ function CCSubcatBreakdown({ txItems, onDelete }: { txItems: AdHocItem[]; onDele
                 <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{subcat}</span>
                 <span className="text-[10px] text-muted-foreground/60">({txs.length})</span>
               </div>
-              <span className="text-[10px] text-muted-foreground font-medium">{formatCurrency(subtotal)}</span>
+              <span className="text-[10px] text-muted-foreground font-medium">{fmt(subtotal)}</span>
             </button>
             {open && (
               <div className="space-y-1 mt-1 mb-1">
@@ -161,6 +164,8 @@ function CCCardBlock({
   onDelete: (id: string) => void;
   onClearStatement: (entryId: string) => Promise<void>;
 }) {
+  const { hidden } = usePrivacy();
+  const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const statementDay = entry.template.statementDay;
   const nextBillTotal = entry.statementAmount ?? 0;
 
@@ -210,7 +215,7 @@ function CCCardBlock({
               → {nextMonthName} bill
             </span>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-blue-700">{formatCurrency(nextBillTotal)}</span>
+              <span className="text-xs font-semibold text-blue-700">{fmt(nextBillTotal)}</span>
               {/* Show clear button when balance is stale (no transactions but amount > 0) */}
               {postCloseTxs.length === 0 && (
                 <button
@@ -230,6 +235,8 @@ function CCCardBlock({
 }
 
 export function DashboardClient({ currentMonth: initialMonth, recentMonths, chitFunds, ccTemplates, suggestedIncome, todayMonth, todayYear, targetMonth, targetYear, prevUrl, nextUrl, projectedIncome, projectedEntries }: DashboardClientProps) {
+  const { hidden } = usePrivacy();
+  const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const viewMonth = targetMonth ?? todayMonth;
   const viewYear  = targetYear  ?? todayYear;
   const isProjected = projectedEntries != null;
@@ -651,16 +658,16 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <p className="text-[10px] text-slate-400">Income</p>
-                <p className="text-sm font-bold text-green-400">{formatCurrency(fyIncome)}</p>
+                <p className="text-sm font-bold text-green-400">{fmt(fyIncome)}</p>
               </div>
               <div>
                 <p className="text-[10px] text-slate-400">Expenses</p>
-                <p className="text-sm font-bold text-red-400">{formatCurrency(fyExpenses)}</p>
+                <p className="text-sm font-bold text-red-400">{fmt(fyExpenses)}</p>
               </div>
               <div>
                 <p className="text-[10px] text-slate-400">{fyBalance >= 0 ? "Leftover" : "Deficit"}</p>
                 <p className={cn("text-sm font-bold", fyBalance >= 0 ? "text-green-400" : "text-red-400")}>
-                  {fyBalance >= 0 ? "+" : "-"}{formatCurrency(Math.abs(fyBalance))}
+                  {fyBalance >= 0 ? "+" : "-"}{fmt(Math.abs(fyBalance))}
                 </p>
               </div>
             </div>
@@ -671,7 +678,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
       {/* Metric cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {isProjected ? (
-          <MetricCard label="Est. Income" value={formatCurrency(dispIncome)} icon={<Wallet className="w-4 h-4" />} color="text-green-600" sub="projected" gradient="linear-gradient(135deg, white 0%, #f0fdf4 100%)" />
+          <MetricCard label="Est. Income" value={fmt(dispIncome)} icon={<Wallet className="w-4 h-4" />} color="text-green-600" sub="projected" gradient="linear-gradient(135deg, white 0%, #f0fdf4 100%)" />
         ) : (
           <button onClick={openIncomeEdit} className="text-left">
             <Card className="hover:border-zinc-400 transition-colors cursor-pointer h-full" style={{ background: "linear-gradient(135deg, white 0%, #f0fdf4 100%)" }}>
@@ -683,20 +690,20 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
                     <Pencil className="w-2.5 h-2.5 text-muted-foreground" />
                   </div>
                 </div>
-                <p className="text-base font-bold">{formatCurrency(grandIncome)}</p>
+                <p className="text-base font-bold">{fmt(grandIncome)}</p>
                 {(currentMonth!.freelanceIncome > 0 || adHocIncome > 0) && (
                   <p className="text-[10px] text-green-600 mt-0.5">
-                    +{formatCurrency(currentMonth!.freelanceIncome + adHocIncome)} extra
+                    +{fmt(currentMonth!.freelanceIncome + adHocIncome)} extra
                   </p>
                 )}
               </CardContent>
             </Card>
           </button>
         )}
-        <MetricCard label="Expenditure" value={formatCurrency(dispCommitted)} icon={<TrendingDown className="w-4 h-4" />} color="text-red-600" sub={isProjected ? `${projEntries.length} items` : `${pendingCount} pending`} gradient="linear-gradient(135deg, white 0%, #fef2f2 100%)" />
+        <MetricCard label="Expenditure" value={fmt(dispCommitted)} icon={<TrendingDown className="w-4 h-4" />} color="text-red-600" sub={isProjected ? `${projEntries.length} items` : `${pendingCount} pending`} gradient="linear-gradient(135deg, white 0%, #fef2f2 100%)" />
         <MetricCard
           label="Unplanned"
-          value={isProjected ? "—" : formatCurrency(adHocExpense)}
+          value={isProjected ? "—" : fmt(adHocExpense)}
           icon={<CheckCircle2 className="w-4 h-4" />}
           color="text-amber-600"
           sub={isProjected ? "not yet tracked" : adHocExpense > 0 ? `${adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").length} transaction${adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").length !== 1 ? "s" : ""}` : "no extra spends"}
@@ -704,7 +711,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
         />
         <MetricCard
           label={dispBalance >= 0 ? "Est. Leftover" : "Est. Deficit"}
-          value={formatCurrency(Math.abs(dispBalance))}
+          value={fmt(Math.abs(dispBalance))}
           icon={dispBalance >= 0 ? <TrendingUp className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
           color={dispBalance >= 0 ? "text-green-600" : "text-red-600"}
           sub={isProjected ? "if no unplanned spend" : dispBalance >= 0 ? "after all spends" : "over income"}
@@ -719,16 +726,16 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
             <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
             <span className="text-sm text-blue-800 font-medium">Total carrying to {nextMonthName}</span>
           </div>
-          <span className="text-sm text-blue-900 font-bold">{formatCurrency(ccStatementTotal)}</span>
+          <span className="text-sm text-blue-900 font-bold">{fmt(ccStatementTotal)}</span>
         </div>
       )}
 
       {/* Progress */}
       <div className="space-y-1.5">
         <div className="flex justify-between text-xs text-muted-foreground">
-          <span>{isProjected ? "Paid —" : `Settled ${formatCurrency(totalPaid)}`}</span>
+          <span>{isProjected ? "Paid —" : `Settled ${fmt(totalPaid)}`}</span>
           <span className="font-semibold text-foreground">{dispPaidPct}%</span>
-          <span>{isProjected ? `Projected ${formatCurrency(dispPending)}` : `Pending ${formatCurrency(dispPending)}`}</span>
+          <span>{isProjected ? `Projected ${fmt(dispPending)}` : `Pending ${fmt(dispPending)}`}</span>
         </div>
         <Progress value={dispPaidPct} className="h-1.5" />
       </div>
@@ -784,23 +791,23 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
                   </div>
                   <div className="flex items-center gap-2">
                     {isProjected ? (
-                      <span className="text-xs text-muted-foreground">{formatCurrency(catTotal)}</span>
+                      <span className="text-xs text-muted-foreground">{fmt(catTotal)}</span>
                     ) : collapsed ? (
                       <span className="text-xs text-muted-foreground">
                         {allPaid
-                          ? `${entryItems.length} paid · ${formatCurrency(catTotal)}`
+                          ? `${entryItems.length} paid · ${fmt(catTotal)}`
                           : isCC
-                            ? `${formatCurrency(catTotal)} billed`
-                            : `${formatCurrency(catPaid)} / ${formatCurrency(catTotal)}`}
+                            ? `${fmt(catTotal)} billed`
+                            : `${fmt(catPaid)} / ${fmt(catTotal)}`}
                       </span>
                     ) : isCC ? (
                       <span className="text-xs text-muted-foreground">
-                        {formatCurrency(catTotal)} billed
-                        {catCarry > 0 && <span className="text-blue-500"> · ↗ {formatCurrency(catCarry)} {nextMonthName}</span>}
+                        {fmt(catTotal)} billed
+                        {catCarry > 0 && <span className="text-blue-500"> · ↗ {fmt(catCarry)} {nextMonthName}</span>}
                       </span>
                     ) : (
                       <span className="text-xs text-muted-foreground">
-                        {formatCurrency(catPaid)} / {formatCurrency(catTotal)}
+                        {fmt(catPaid)} / {fmt(catTotal)}
                       </span>
                     )}
                     <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/60 transition-transform duration-200", !collapsed && "rotate-180")} />
@@ -958,6 +965,8 @@ function MetricCard({ label, value, icon, color, sub, gradient }: { label: strin
 }
 
 function ProjectedEntryRow({ entry }: { entry: ProjectedEntry }) {
+  const { hidden } = usePrivacy();
+  const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   return (
     <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl border bg-card opacity-75">
       <div className="w-0.5 h-7 rounded-full shrink-0 bg-zinc-300" />
@@ -969,13 +978,15 @@ function ProjectedEntryRow({ entry }: { entry: ProjectedEntry }) {
         </p>
       </div>
       <span className="text-sm font-semibold text-muted-foreground shrink-0">
-        {formatCurrency(entry.amount)}
+        {fmt(entry.amount)}
       </span>
     </div>
   );
 }
 
 function TransactionRow({ item, onDelete }: { item: AdHocItem; onDelete: (id: string) => void }) {
+  const { hidden } = usePrivacy();
+  const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const isCarryForward = item.notes === "carry_forward";
   return (
     <div className={cn(
@@ -996,7 +1007,7 @@ function TransactionRow({ item, onDelete }: { item: AdHocItem; onDelete: (id: st
         </p>
       </div>
       <span className={cn("text-sm font-semibold shrink-0", item.type === "INCOME" ? "text-green-600" : "text-red-600")}>
-        {item.type === "INCOME" ? "+" : "-"}{formatCurrency(item.amount)}
+        {item.type === "INCOME" ? "+" : "-"}{fmt(item.amount)}
       </span>
       <Button variant="ghost" size="sm" onClick={() => onDelete(item.id)} className="h-7 w-7 p-0 text-muted-foreground hover:text-red-600">
         <Trash2 className="w-3.5 h-3.5" />

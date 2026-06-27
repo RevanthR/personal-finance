@@ -18,6 +18,7 @@ import { Plus, Pencil, Trash2, Lock, ChevronDown, TrendingUp } from "lucide-reac
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { ForecloseDialog } from "@/components/templates/foreclose-dialog";
+import { usePrivacy } from "@/contexts/privacy-context";
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -74,6 +75,8 @@ export function TemplatesClient({
   templates: Template[];
   recentIncome: { salary: number; freelance: number; other: number } | null;
 }) {
+  const { hidden } = usePrivacy();
+  const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const [templates, setTemplates] = useState(initial);
   const [editing, setEditing] = useState<Template | null>(null);
   const [foreclosing, setForeclosing] = useState<Template | null>(null);
@@ -222,7 +225,7 @@ export function TemplatesClient({
         <div>
           <h1 className="text-2xl font-bold">Configuration</h1>
           <p className="text-sm text-muted-foreground">
-            Recurring items that auto-fill every month · {templates.filter((t) => t.isActive).length} active
+            {templates.filter((t) => t.isActive).length} active recurring items
           </p>
         </div>
         <Button size="sm" onClick={() => setShowAdd(true)}>
@@ -246,13 +249,13 @@ export function TemplatesClient({
                   <TrendingUp className="w-3.5 h-3.5 text-green-600" />
                   <span className="text-xs font-semibold text-green-800 uppercase tracking-wider">Recurring Income</span>
                 </div>
-                <span className="text-base font-bold text-green-700">{formatCurrency(monthlyIncome)}<span className="text-xs font-normal text-green-600">/mo</span></span>
+                <span className="text-base font-bold text-green-700">{fmt(monthlyIncome)}<span className="text-xs font-normal text-green-600">/mo</span></span>
               </div>
               {pendingIncomeChanges.map(t => (
                 <div key={t.id} className="flex items-center justify-between text-xs">
                   <span className="text-green-700">{t.name}</span>
                   <span className="text-amber-700 font-medium">
-                    ↑ {formatCurrency(t.pendingAmount!)} from {MONTHS[(t.pendingFromMonth! - 1)]} {t.pendingFromYear}
+                    ↑ {fmt(t.pendingAmount!)} from {MONTHS[(t.pendingFromMonth! - 1)]} {t.pendingFromYear}
                   </span>
                 </div>
               ))}
@@ -269,19 +272,19 @@ export function TemplatesClient({
                 {recentIncome.salary > 0 && (
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-green-700">Salary</span>
-                    <span className="font-medium text-green-800 tabular-nums">{formatCurrency(recentIncome.salary)}/mo</span>
+                    <span className="font-medium text-green-800 tabular-nums">{fmt(recentIncome.salary)}/mo</span>
                   </div>
                 )}
                 {recentIncome.freelance > 0 && (
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-green-700">Freelance</span>
-                    <span className="font-medium text-green-800 tabular-nums">{formatCurrency(recentIncome.freelance)}/mo</span>
+                    <span className="font-medium text-green-800 tabular-nums">{fmt(recentIncome.freelance)}/mo</span>
                   </div>
                 )}
                 {recentIncome.other > 0 && (
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-green-700">Other Income</span>
-                    <span className="font-medium text-green-800 tabular-nums">{formatCurrency(recentIncome.other)}/mo</span>
+                    <span className="font-medium text-green-800 tabular-nums">{fmt(recentIncome.other)}/mo</span>
                   </div>
                 )}
               </div>
@@ -332,7 +335,7 @@ export function TemplatesClient({
                               )}
                               {hasPending && (
                                 <Badge className="text-xs bg-amber-50 text-amber-700 hover:bg-amber-50 border border-amber-200">
-                                  {pendingDir} {formatCurrency(t.pendingAmount!)} from {MONTHS[(t.pendingFromMonth! - 1)]} {t.pendingFromYear}
+                                  {pendingDir} {fmt(t.pendingAmount!)} from {MONTHS[(t.pendingFromMonth! - 1)]} {t.pendingFromYear}
                                 </Badge>
                               )}
                               {t.endsOnMonth != null && t.endsOnYear != null && (
@@ -341,7 +344,7 @@ export function TemplatesClient({
                                 </Badge>
                               )}
                             </div>
-                            <p className="text-xs text-muted-foreground">{formatCurrency(t.amount)}/{t.frequency === "YEARLY" ? "year" : "month"}</p>
+                            <p className="text-xs text-muted-foreground">{fmt(t.amount)}/{t.frequency === "YEARLY" ? "year" : "month"}</p>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
                             <Switch checked={t.isActive} onCheckedChange={() => toggleActive(t)} />
@@ -412,7 +415,7 @@ export function TemplatesClient({
                               )}
                               {hasPending && (
                                 <Badge className="text-xs bg-amber-50 text-amber-700 hover:bg-amber-50 border border-amber-200">
-                                  {pendingDir} {formatCurrency(t.pendingAmount!)} from {MONTHS[(t.pendingFromMonth! - 1)]} {t.pendingFromYear}
+                                  {pendingDir} {fmt(t.pendingAmount!)} from {MONTHS[(t.pendingFromMonth! - 1)]} {t.pendingFromYear}
                                 </Badge>
                               )}
                               {!isClosed && t.endsOnMonth != null && t.endsOnYear != null && (
@@ -423,8 +426,8 @@ export function TemplatesClient({
                             </div>
                             <p className="text-xs text-muted-foreground">
                               {isClosed && t.foreCloseAmount
-                                ? `Settled ${formatCurrency(t.foreCloseAmount)}`
-                                : `${formatCurrency(t.amount)}/${t.frequency === "YEARLY" ? "year" : "month"}`}
+                                ? `Settled ${fmt(t.foreCloseAmount)}`
+                                : `${fmt(t.amount)}/${t.frequency === "YEARLY" ? "year" : "month"}`}
                               {!isClosed && t.category === "CREDIT_CARD" && (t.statementDay || t.dueDateDay) && (
                                 <span className="ml-1.5 text-blue-500">
                                   {t.statementDay ? `· closes ${t.statementDay}th` : ""}
@@ -515,6 +518,8 @@ function TemplateDialog({
   onOpenChange: (v: boolean) => void;
   onSave: (data: SaveData) => Promise<void>;
 }) {
+  const { hidden } = usePrivacy();
+  const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const isEditing = !!initial?.id;
   const isExistingCustom = !!initial?.customCategory;
   const [name, setName] = useState(initial?.name ?? "");
@@ -817,7 +822,7 @@ function TemplateDialog({
                   {pendingAmt && (
                     <p className="text-[10px] text-muted-foreground">
                       From {MONTHS[pendingMonth - 1]} {pendingYear}, this template will use{" "}
-                      <span className="font-semibold text-foreground">{formatCurrency(parseFloat(pendingAmt) || 0)}</span>/month
+                      <span className="font-semibold text-foreground">{fmt(parseFloat(pendingAmt) || 0)}</span>/month
                     </p>
                   )}
                 </div>

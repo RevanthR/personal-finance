@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { formatCurrency } from "@/lib/utils";
+import { usePrivacy } from "@/contexts/privacy-context";
 import { Plus, TrendingUp, TrendingDown } from "lucide-react";
 import { toast } from "sonner";
 import { AddChitDialog } from "./add-chit-dialog";
@@ -33,6 +34,8 @@ interface ChitsClientProps {
 }
 
 export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
+  const { hidden } = usePrivacy();
+  const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const [chits, setChits] = useState(initialChits);
   const [showAdd, setShowAdd] = useState(false);
   const [liftingChit, setLiftingChit] = useState<Chit | null>(null);
@@ -85,7 +88,7 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
         <div>
           <h1 className="text-2xl font-bold">Chit Funds</h1>
           <p className="text-sm text-muted-foreground">
-            Pay in every month, lift the full pot when it is your turn · {activeChits.length} active
+            {activeChits.length} active · {fmt(totalSavings)} saved up
           </p>
         </div>
         <Button onClick={() => setShowAdd(true)}>
@@ -105,14 +108,14 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground mb-1">Monthly Commitment</p>
             <p className="text-2xl font-bold">
-              {formatCurrency(activeChits.reduce((s, c) => s + c.monthlyUnliftedAmount, 0))}
+              {fmt(activeChits.reduce((s, c) => s + c.monthlyUnliftedAmount, 0))}
             </p>
           </CardContent>
         </Card>
         <Card className="col-span-2 md:col-span-1">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground mb-1">Total Savings Accumulated</p>
-            <p className="text-2xl font-bold text-green-600">{formatCurrency(totalSavings)}</p>
+            <p className="text-2xl font-bold text-green-600">{fmt(totalSavings)}</p>
           </CardContent>
         </Card>
       </div>
@@ -144,11 +147,11 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div>
                         <p className="text-xs text-muted-foreground">Total Value</p>
-                        <p className="font-semibold">{formatCurrency(chit.totalValue)}</p>
+                        <p className="font-semibold">{fmt(chit.totalValue)}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Monthly</p>
-                        <p className="font-semibold">{formatCurrency(chit.monthlyUnliftedAmount)}</p>
+                        <p className="font-semibold">{fmt(chit.monthlyUnliftedAmount)}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Started</p>
@@ -164,7 +167,7 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
                       <div className="flex justify-between text-xs mb-1">
                         <span className="text-muted-foreground">Accumulated savings</span>
                         <span className="font-medium text-green-600">
-                          {formatCurrency(chit.accumulatedSavings)} ({progressPercent}%)
+                          {fmt(chit.accumulatedSavings)} ({progressPercent}%)
                         </span>
                       </div>
                       <Progress value={progressPercent} className="h-1.5" />
@@ -208,7 +211,7 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div>
                       <p className="text-xs text-muted-foreground">Lifted Amount</p>
-                      <p className="font-semibold">{formatCurrency(chit.liftedAmount ?? 0)}</p>
+                      <p className="font-semibold">{fmt(chit.liftedAmount ?? 0)}</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">Lifted On</p>
@@ -218,7 +221,7 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">Monthly (now)</p>
-                      <p className="font-semibold">{formatCurrency(chit.monthlyLiftedAmount ?? 0)}</p>
+                      <p className="font-semibold">{fmt(chit.monthlyLiftedAmount ?? 0)}</p>
                     </div>
                   </div>
                   {chit.liftedUsedFor && (

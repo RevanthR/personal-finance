@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
+import { usePrivacy } from "@/contexts/privacy-context";
 import { Plus, TrendingUp, TrendingDown, Wallet, Clock, CheckCircle2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -65,6 +66,8 @@ const CATEGORY_COLORS: Record<string, string> = {
 type Tab = "pending" | "received";
 
 export function ReceivablesClient({ chits: initialChits, receivables: initialReceivables }: ReceivablesClientProps) {
+  const { hidden } = usePrivacy();
+  const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const [chits, setChits] = useState(initialChits);
   const [receivables, setReceivables] = useState(initialReceivables);
   const [tab, setTab] = useState<Tab>("pending");
@@ -142,7 +145,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
         <div className="min-w-0">
           <h1 className="text-xl font-bold sm:text-2xl">Receivables</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Money others owe you. Chit lifts and personal loans · {unliftedChits.length + pendingReceivables.length} pending, {formatCurrency(totalPending)} expected
+            {unliftedChits.length + pendingReceivables.length} pending · {fmt(totalPending)} expected
           </p>
         </div>
         <div className="flex gap-2 shrink-0">
@@ -167,7 +170,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
           <CardContent className="p-3 sm:p-4">
             <p className="text-[11px] text-muted-foreground mb-1">Chit Savings</p>
             <p className="text-xl font-bold sm:text-2xl text-amber-600 truncate">
-              {formatCurrency(unliftedChits.reduce((s, c) => s + c.accumulatedSavings, 0))}
+              {fmt(unliftedChits.reduce((s, c) => s + c.accumulatedSavings, 0))}
             </p>
           </CardContent>
         </Card>
@@ -181,7 +184,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
           <CardContent className="p-3 sm:p-4">
             <p className="text-[11px] text-muted-foreground mb-1">Expected</p>
             <p className="text-xl font-bold sm:text-2xl text-green-600 truncate">
-              {formatCurrency(pendingReceivables.reduce((s, r) => s + r.expectedAmount, 0))}
+              {fmt(pendingReceivables.reduce((s, r) => s + r.expectedAmount, 0))}
             </p>
           </CardContent>
         </Card>
@@ -227,15 +230,15 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                         <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                           <div>
                             <p className="text-[11px] text-muted-foreground">Total Value</p>
-                            <p className="font-semibold">{formatCurrency(chit.totalValue)}</p>
+                            <p className="font-semibold">{fmt(chit.totalValue)}</p>
                           </div>
                           <div>
                             <p className="text-[11px] text-muted-foreground">Accumulated</p>
-                            <p className="font-semibold text-amber-600">{formatCurrency(chit.accumulatedSavings)} <span className="text-xs font-normal">({pct}%)</span></p>
+                            <p className="font-semibold text-amber-600">{fmt(chit.accumulatedSavings)} <span className="text-xs font-normal">({pct}%)</span></p>
                           </div>
                           <div>
                             <p className="text-[11px] text-muted-foreground">Monthly</p>
-                            <p className="font-semibold">{formatCurrency(chit.monthlyUnliftedAmount)}</p>
+                            <p className="font-semibold">{fmt(chit.monthlyUnliftedAmount)}</p>
                           </div>
                           <div>
                             <p className="text-[11px] text-muted-foreground">Started</p>
@@ -274,7 +277,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                       <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                         <div>
                           <p className="text-[11px] text-muted-foreground">Expected</p>
-                          <p className="font-semibold text-green-600">{formatCurrency(r.expectedAmount)}</p>
+                          <p className="font-semibold text-green-600">{fmt(r.expectedAmount)}</p>
                         </div>
                         <div>
                           <p className="text-[11px] text-muted-foreground">Due By</p>
@@ -329,7 +332,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                       <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                         <div>
                           <p className="text-[11px] text-muted-foreground">Amount Received</p>
-                          <p className="font-semibold">{formatCurrency(chit.liftedAmount ?? 0)}</p>
+                          <p className="font-semibold">{fmt(chit.liftedAmount ?? 0)}</p>
                         </div>
                         <div>
                           <p className="text-[11px] text-muted-foreground">Lifted On</p>
@@ -339,7 +342,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                         </div>
                         <div>
                           <p className="text-[11px] text-muted-foreground">Monthly Now</p>
-                          <p className="font-semibold">{formatCurrency(chit.monthlyLiftedAmount ?? 0)}</p>
+                          <p className="font-semibold">{fmt(chit.monthlyLiftedAmount ?? 0)}</p>
                         </div>
                       </div>
                       {chit.liftedUsedFor && (
@@ -372,7 +375,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                       <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                         <div>
                           <p className="text-[11px] text-muted-foreground">Received</p>
-                          <p className="font-semibold text-green-600">{formatCurrency(r.receivedAmount ?? r.expectedAmount)}</p>
+                          <p className="font-semibold text-green-600">{fmt(r.receivedAmount ?? r.expectedAmount)}</p>
                         </div>
                         <div>
                           <p className="text-[11px] text-muted-foreground">On</p>
@@ -382,7 +385,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                         </div>
                         <div>
                           <p className="text-[11px] text-muted-foreground">Expected</p>
-                          <p className="font-semibold text-muted-foreground">{formatCurrency(r.expectedAmount)}</p>
+                          <p className="font-semibold text-muted-foreground">{fmt(r.expectedAmount)}</p>
                         </div>
                         <div>
                           <p className="text-[11px] text-muted-foreground">Category</p>

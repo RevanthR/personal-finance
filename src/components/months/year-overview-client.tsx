@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
+import { usePrivacy } from "@/contexts/privacy-context";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -19,6 +20,8 @@ function ordinal(n: number) {
 }
 
 function RankedList({ items, total }: { items: { name: string; value: number; color?: string }[]; total: number }) {
+  const { hidden } = usePrivacy();
+  const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const max = items[0]?.value ?? 1;
   return (
     <div className="space-y-2">
@@ -33,7 +36,7 @@ function RankedList({ items, total }: { items: { name: string; value: number; co
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <span className="text-[10px] text-muted-foreground">{pct}%</span>
-                <span className="text-xs font-medium">₹{(item.value / 1000).toFixed(1)}k</span>
+                <span className="text-xs font-medium">{hidden ? "••••" : `₹${(item.value / 1000).toFixed(1)}k`}</span>
               </div>
             </div>
             <div className="h-1 rounded-full bg-zinc-100 overflow-hidden">
@@ -91,6 +94,8 @@ export function YearOverviewClient({
   incomeTemplateCount?: number;
   currentMonthInsights?: InsightData;
 }) {
+  const { hidden } = usePrivacy();
+  const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const totalIncome   = months.reduce((s, m) => s + m.income, 0);
   const totalExpenses = months.reduce((s, m) => s + m.expenses, 0);
   const yearEndBalance = totalIncome - totalExpenses;
@@ -107,7 +112,7 @@ export function YearOverviewClient({
       <div>
         <h1 className="text-xl font-bold">{fyKey}</h1>
         <p className="text-sm text-muted-foreground">
-          Your financial year at a glance · {actualCount} actual, {projCount} projected
+          {actualCount} actual · {projCount} projected
         </p>
       </div>
 
@@ -124,16 +129,16 @@ export function YearOverviewClient({
             "text-3xl font-bold tracking-tight",
             yearEndBalance >= 0 ? "text-green-700" : "text-red-700"
           )}>
-            {yearEndBalance >= 0 ? "+" : "−"}{formatCurrency(Math.abs(yearEndBalance))}
+            {yearEndBalance >= 0 ? "+" : "−"}{fmt(Math.abs(yearEndBalance))}
           </p>
           <div className="flex gap-5 mt-2.5 text-xs">
             <div>
               <span className="text-muted-foreground">Income  </span>
-              <span className="text-green-700 font-semibold">{formatCurrency(totalIncome)}</span>
+              <span className="text-green-700 font-semibold">{fmt(totalIncome)}</span>
             </div>
             <div>
               <span className="text-muted-foreground">Expenses  </span>
-              <span className="text-red-700 font-semibold">{formatCurrency(totalExpenses)}</span>
+              <span className="text-red-700 font-semibold">{fmt(totalExpenses)}</span>
             </div>
           </div>
           {projCount > 0 && (
@@ -227,10 +232,10 @@ export function YearOverviewClient({
                   "text-xs font-bold",
                   m.balance >= 0 ? "text-green-600" : "text-red-600"
                 )}>
-                  {m.balance >= 0 ? "+" : "−"}{formatCurrency(Math.abs(m.balance))}
+                  {m.balance >= 0 ? "+" : "−"}{fmt(Math.abs(m.balance))}
                 </p>
                 <p className="text-[9px] mt-0.5 text-muted-foreground">
-                  {formatCurrency(m.expenses)} spent
+                  {fmt(m.expenses)} spent
                 </p>
               </div>
             );
@@ -265,9 +270,9 @@ export function YearOverviewClient({
                   "text-sm font-bold",
                   fy.balance >= 0 ? "text-green-600" : "text-red-600"
                 )}>
-                  {fy.balance >= 0 ? "+" : "−"}{formatCurrency(Math.abs(fy.balance))}
+                  {fy.balance >= 0 ? "+" : "−"}{fmt(Math.abs(fy.balance))}
                 </p>
-                <p className="text-[10px] text-muted-foreground">{formatCurrency(fy.income)} in</p>
+                <p className="text-[10px] text-muted-foreground">{fmt(fy.income)} in</p>
               </div>
             </div>
           ))}
@@ -303,8 +308,8 @@ export function YearOverviewClient({
               />
             </div>
             <div className="flex justify-between text-[10px] text-muted-foreground">
-              <span>In: {formatCurrency(currentMonthInsights.totalIncome)}</span>
-              <span>Out: {formatCurrency(currentMonthInsights.totalExpenses)}</span>
+              <span>In: {fmt(currentMonthInsights.totalIncome)}</span>
+              <span>Out: {fmt(currentMonthInsights.totalExpenses)}</span>
             </div>
           </CardContent>
         </Card>
@@ -350,7 +355,7 @@ export function YearOverviewClient({
                       </p>
                     </div>
                     <span className="text-xs font-medium shrink-0 ml-2">
-                      {formatCurrency(p.amount)}
+                      {fmt(p.amount)}
                     </span>
                   </div>
                 ))}

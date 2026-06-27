@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { formatCurrency } from "@/lib/utils";
+import { usePrivacy } from "@/contexts/privacy-context";
 import { format } from "date-fns";
 
 interface ForecloseDialogProps {
@@ -24,6 +25,8 @@ interface ForecloseDialogProps {
 }
 
 export function ForecloseDialog({ open, onOpenChange, template, onForeclose }: ForecloseDialogProps) {
+  const { hidden } = usePrivacy();
+  const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [amount, setAmount] = useState(String(template.amount));
   const [note, setNote] = useState("");
@@ -64,7 +67,7 @@ export function ForecloseDialog({ open, onOpenChange, template, onForeclose }: F
               autoFocus
             />
             <p className="text-xs text-muted-foreground mt-1">
-              Regular EMI was {formatCurrency(template.amount)}/month
+              Regular EMI was {fmt(template.amount)}/month
             </p>
           </div>
 

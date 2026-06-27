@@ -5,11 +5,14 @@ import {
   Cell, ResponsiveContainer, ReferenceLine,
 } from "recharts";
 import { formatCurrency } from "@/lib/utils";
+import { usePrivacy } from "@/contexts/privacy-context";
 import type { MonthData } from "./year-overview-client";
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 export function YearChart({ months }: { months: MonthData[] }) {
+  const { hidden } = usePrivacy();
+  const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const lastActualIdx = months.reduce((last, m, i) => (m.isPopulated ? i : last), -1);
 
   const data = months.map((m, i) => ({
@@ -33,7 +36,7 @@ export function YearChart({ months }: { months: MonthData[] }) {
           <YAxis hide />
           <ReferenceLine y={0} stroke="#e4e4e7" strokeWidth={1} />
           <Tooltip
-            formatter={(v: unknown, name: unknown) => [formatCurrency(Number(v)), String(name)]}
+            formatter={(v: unknown, name: unknown) => [fmt(Number(v)), String(name)]}
             contentStyle={{ fontSize: 11, border: "1px solid #e4e4e7", borderRadius: 8, padding: "6px 10px" }}
             labelStyle={{ fontWeight: 600, marginBottom: 2 }}
           />
