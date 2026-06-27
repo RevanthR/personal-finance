@@ -49,18 +49,44 @@ export async function POST(req: NextRequest) {
       include: { chitFund: true },
     });
 
-    // Find previous month to carry CC statement amounts forward
+    // Find previous month to carry CC statement amounts + unpaid balances forward
     const prevMonthNum = month === 1 ? 12 : month - 1;
     const prevYear = month === 1 ? year - 1 : year;
     const prevMonth = await db.month.findUnique({
       where: { userId_month_year: { userId: session.user.id, month: prevMonthNum, year: prevYear } },
-      include: { entries: { select: { templateId: true, statementAmount: true } } },
+      include: {
+        entries: {
+          select: {
+            templateId: true, statementAmount: true,
+            isPaid: true, amount: true, paidAmount: true,
+          },
+          include: { template: { select: { category: true, name: true } } },
+        },
+      },
     });
     const prevStatements = new Map(
       (prevMonth?.entries ?? [])
         .filter(e => e.statementAmount != null)
         .map(e => [e.templateId, e.statementAmount!])
     );
+
+    // Carry-forward: unpaid/partially-paid entries from previous month
+    // Excluded: LOAN and CHIT_FUND (intentional — those are tracked differently)
+    const CARRY_FORWARD_EXCLUDE = new Set(["LOAN", "CHIT_FUND"]);
+    const prevCCOutstanding = new Map<string, number>(); // templateId → outstanding
+    const nonCCCarryForwards: { name: string; amount: number; category: string }[] = [];
+    for (const e of prevMonth?.entries ?? []) {
+      if (e.isPaid) continue;
+      const cat = e.template.category;
+      if (CARRY_FORWARD_EXCLUDE.has(cat)) continue;
+      const outstanding = e.amount - (e.paidAmount ?? 0);
+      if (outstanding <= 0) continue;
+      if (cat === "CREDIT_CARD") {
+        prevCCOutstanding.set(e.templateId, outstanding);
+      } else {
+        nonCCCarryForwards.push({ name: e.template.name, amount: outstanding, category: cat });
+      }
+    }
 
     for (const t of templates) {
       // Income templates don't create entries — they just inform income pre-fill.
@@ -106,14 +132,30 @@ export async function POST(req: NextRequest) {
         amount = t.chitFund.isLifted
           ? (t.chitFund.monthlyLiftedAmount ?? baseAmount)
           : t.chitFund.monthlyUnliftedAmount;
-      } else if (t.category === "CREDIT_CARD" && prevStatements.has(t.id)) {
-        amount = prevStatements.get(t.id)!;
+      } else if (t.category === "CREDIT_CARD") {
+        amount = prevStatements.get(t.id) ?? baseAmount;
+        amount += prevCCOutstanding.get(t.id) ?? 0;
       }
 
       await db.monthlyEntry.upsert({
         where: { monthId_templateId: { monthId: monthRecord.id, templateId: t.id } },
         create: { monthId: monthRecord.id, templateId: t.id, amount },
         update: {},
+      });
+    }
+
+    // Create carry-forward AdHocItems for non-CC unpaid balances from previous month
+    for (const cf of nonCCCarryForwards) {
+      await db.adHocItem.create({
+        data: {
+          monthId: monthRecord.id,
+          name: `↩ ${cf.name}`,
+          amount: cf.amount,
+          type: "EXPENSE",
+          category: cf.category as import("@/generated/prisma/client").Category,
+          date: new Date(year, month - 1, 1),
+          notes: "carry_forward",
+        },
       });
     }
 

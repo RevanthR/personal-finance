@@ -12,13 +12,36 @@ export async function PATCH(
 
   const { monthId } = await params;
   const body = await req.json();
-  const { entryId, isPaid, amount, notes, statementAmount } = body;
+  const { entryId, isPaid, amount, notes, statementAmount, paidAmount } = body;
 
-  // Single query: update only if the entry belongs to this user's month
+  // Resolve payment state — paidAmount takes precedence over isPaid toggle
+  const paymentData: Record<string, unknown> = {};
+
+  if (paidAmount !== undefined) {
+    const entry = await db.monthlyEntry.findUnique({
+      where: { id: entryId, monthId, month: { userId: session.user.id } },
+      select: { amount: true },
+    });
+    const dupeAmount = amount ?? entry?.amount ?? 0;
+    const paid = Number(paidAmount);
+    if (paid >= dupeAmount) {
+      // Paid in full
+      paymentData.isPaid = true;
+      paymentData.paidOn = new Date();
+      paymentData.paidAmount = null;
+    } else {
+      paymentData.paidAmount = paid > 0 ? paid : null;
+    }
+  } else if (isPaid !== undefined) {
+    paymentData.isPaid = isPaid;
+    paymentData.paidOn = isPaid ? new Date() : null;
+    if (!isPaid) paymentData.paidAmount = null; // reset partial when un-paying
+  }
+
   const updated = await db.monthlyEntry.update({
     where: { id: entryId, monthId, month: { userId: session.user.id } },
     data: {
-      ...(isPaid !== undefined && { isPaid, paidOn: isPaid ? new Date() : null }),
+      ...paymentData,
       ...(amount !== undefined && { amount }),
       ...(notes !== undefined && { notes }),
       ...(statementAmount !== undefined && { statementAmount: statementAmount === null ? null : Number(statementAmount) }),

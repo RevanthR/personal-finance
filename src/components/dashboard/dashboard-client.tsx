@@ -78,7 +78,7 @@ type RecentMonthSummary = {
 };
 
 type EntryWithTemplate = {
-  id: string; amount: number; isPaid: boolean; paidOn: string | null; notes: string | null; templateId: string;
+  id: string; amount: number; isPaid: boolean; paidOn: string | null; paidAmount: number | null; notes: string | null; templateId: string;
   statementAmount: number | null;
   template: { id: string; name: string; category: string; customCategory: string | null; isFixed: boolean; dueDateDay: number | null; statementDay: number | null; chitFund: { isLifted: boolean; accumulatedSavings: number } | null };
 };
@@ -157,7 +157,7 @@ function CCCardBlock({
   entry: EntryWithTemplate;
   txItems: AdHocItem[];
   nextMonthName: string;
-  onUpdate: (id: string, updates: { isPaid?: boolean; amount?: number; notes?: string }) => Promise<void>;
+  onUpdate: (id: string, updates: { isPaid?: boolean; amount?: number; notes?: string; paidAmount?: number }) => Promise<void>;
   onDelete: (id: string) => void;
   onClearStatement: (entryId: string) => Promise<void>;
 }) {
@@ -478,7 +478,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
     toast.success("Income updated");
   }
 
-  async function handleEntryUpdate(entryId: string, updates: { isPaid?: boolean; amount?: number; notes?: string }) {
+  async function handleEntryUpdate(entryId: string, updates: { isPaid?: boolean; amount?: number; notes?: string; paidAmount?: number }) {
     if (!currentMonth) return;
     const res = await fetch(`/api/months/${currentMonth.id}/entries`, {
       method: "PATCH",
@@ -491,6 +491,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
       ...prev, entries: prev.entries.map(e => e.id === entryId ? { ...e, ...updated } : e),
     } : prev);
     if (updates.isPaid !== undefined) toast.success(updates.isPaid ? "Marked paid ✓" : "Marked pending");
+    if (updates.paidAmount !== undefined && !updated.isPaid) toast.success("Partial payment recorded");
   }
 
   async function handleAdHocAdd(item: { name: string; amount: number; type: string; category?: string; date: string; notes?: string; ccTemplateId?: string }) {
@@ -975,12 +976,24 @@ function ProjectedEntryRow({ entry }: { entry: ProjectedEntry }) {
 }
 
 function TransactionRow({ item, onDelete }: { item: AdHocItem; onDelete: (id: string) => void }) {
+  const isCarryForward = item.notes === "carry_forward";
   return (
-    <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl border bg-card">
+    <div className={cn(
+      "flex items-center gap-3 px-3 py-2.5 rounded-xl border bg-card",
+      isCarryForward && "border-amber-200 bg-amber-50/40"
+    )}>
       <div className={cn("w-0.5 h-7 rounded-full shrink-0", item.type === "INCOME" ? "bg-green-600" : "bg-red-600")} />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium">{item.name}</p>
-        <p className="text-xs text-muted-foreground">{format(new Date(item.date), "dd MMM")}{item.notes ? ` · ${item.notes}` : ""}</p>
+        <div className="flex items-center gap-1.5">
+          <p className="text-sm font-medium">{item.name}</p>
+          {isCarryForward && (
+            <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-1 py-0.5 rounded">carried fwd</span>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {format(new Date(item.date), "dd MMM")}
+          {item.notes && !isCarryForward ? ` · ${item.notes}` : ""}
+        </p>
       </div>
       <span className={cn("text-sm font-semibold shrink-0", item.type === "INCOME" ? "text-green-600" : "text-red-600")}>
         {item.type === "INCOME" ? "+" : "-"}{formatCurrency(item.amount)}
