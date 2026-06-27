@@ -562,40 +562,67 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          {prevUrl && nextUrl && (
-            <div className={cn("flex items-center gap-1 transition-opacity", isPending && "opacity-50")}>
-              <button onClick={() => navigate(prevUrl)} disabled={isPending} className="p-1.5 rounded-lg border hover:bg-muted transition-colors disabled:cursor-not-allowed">
-                <ChevronLeft className="w-4 h-4" />
+      <div className="space-y-2">
+        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Monthly Snapshot</p>
+
+        <div className="flex items-center gap-2">
+          {/* Month navigation pill */}
+          {prevUrl && nextUrl ? (
+            <div className={cn("flex items-center flex-1 rounded-xl border bg-muted/40 overflow-hidden transition-opacity", isPending && "opacity-50")}>
+              <button
+                onClick={() => navigate(prevUrl)}
+                disabled={isPending}
+                className="flex items-center justify-center h-10 px-3 hover:bg-muted transition-colors disabled:cursor-not-allowed shrink-0"
+                aria-label="Previous month"
+              >
+                <ChevronLeft className="w-4 h-4 text-muted-foreground" />
               </button>
-              <button onClick={() => navigate(nextUrl)} disabled={isPending} className="p-1.5 rounded-lg border hover:bg-muted transition-colors disabled:cursor-not-allowed">
-                <ChevronRight className="w-4 h-4" />
+
+              <div className="flex-1 flex items-center justify-center gap-2 py-2">
+                <span className="text-base font-bold">{formatMonthYear(viewMonth, viewYear)}</span>
+                {isProjected && (
+                  <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full">
+                    Projected
+                  </span>
+                )}
+              </div>
+
+              <button
+                onClick={() => navigate(nextUrl)}
+                disabled={isPending}
+                className="flex items-center justify-center h-10 px-3 hover:bg-muted transition-colors disabled:cursor-not-allowed shrink-0"
+                aria-label="Next month"
+              >
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
               </button>
+            </div>
+          ) : (
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <span className="text-base font-bold">{formatMonthYear(viewMonth, viewYear)}</span>
+                {isProjected && (
+                  <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full">
+                    Projected
+                  </span>
+                )}
+              </div>
             </div>
           )}
-          <div>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Monthly Snapshot</p>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold">{formatMonthYear(viewMonth, viewYear)}</h1>
-              {isProjected && (
-                <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
-                  Projected
-                </span>
-              )}
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {isProjected
-                ? `${projEntries.length} expected payments`
-                : pendingCount > 0 ? `${pendingCount} payments pending` : "All paid ✓"}
-            </p>
-          </div>
+
+          {!isProjected && (
+            <Button onClick={() => setShowAdHoc(true)} size="sm" variant="outline" className="gap-1.5 shrink-0 h-10">
+              <Plus className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Add Transaction</span>
+              <span className="sm:hidden">Add</span>
+            </Button>
+          )}
         </div>
-        {!isProjected && (
-          <Button onClick={() => setShowAdHoc(true)} size="sm" variant="outline" className="gap-1.5">
-            <Plus className="w-3.5 h-3.5" /> Add Transaction
-          </Button>
-        )}
+
+        <p className="text-sm text-muted-foreground">
+          {isProjected
+            ? `${projEntries.length} expected payments`
+            : pendingCount > 0 ? `${pendingCount} payments pending` : "All paid ✓"}
+        </p>
       </div>
 
       {/* FY Summary Strip */}
