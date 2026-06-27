@@ -107,7 +107,7 @@ export function YearOverviewClient({
       <div>
         <h1 className="text-xl font-bold">{fyKey}</h1>
         <p className="text-sm text-muted-foreground">
-          {actualCount} actual · {projCount} projected
+          Your financial year at a glance · {actualCount} actual, {projCount} projected
         </p>
       </div>
 

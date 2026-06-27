@@ -222,11 +222,11 @@ export function TemplatesClient({
         <div>
           <h1 className="text-2xl font-bold">Configuration</h1>
           <p className="text-sm text-muted-foreground">
-            {templates.filter((t) => t.isActive).length} active · auto-populate each month
+            Recurring items that auto-fill every month · {templates.filter((t) => t.isActive).length} active
           </p>
         </div>
-        <Button onClick={() => { setShowAdd(true); }}>
-          <Plus className="w-4 h-4 mr-1" /> Add Item
+        <Button size="sm" onClick={() => setShowAdd(true)}>
+          <Plus className="w-3.5 h-3.5 mr-1" /> Add Item
         </Button>
       </div>
 

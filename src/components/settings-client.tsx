@@ -83,6 +83,7 @@ export function SettingsClient({ user }: SettingsClientProps) {
   return (
     <div className="space-y-6 max-w-lg">
       <h1 className="text-2xl font-bold">Settings</h1>
+      <p className="text-sm text-muted-foreground -mt-4">Notifications, profile, and account preferences</p>
 
       {/* Profile */}
       <Card>

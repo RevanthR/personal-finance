@@ -142,7 +142,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
         <div className="min-w-0">
           <h1 className="text-xl font-bold sm:text-2xl">Receivables</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {unliftedChits.length + pendingReceivables.length} pending · {formatCurrency(totalPending)} expected
+            Money owed to you — chit lifts and personal loans · {unliftedChits.length + pendingReceivables.length} pending, {formatCurrency(totalPending)} expected
           </p>
         </div>
         <div className="flex gap-2 shrink-0">
