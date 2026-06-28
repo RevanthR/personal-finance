@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import { formatCurrency, getCategoryDisplay, getCategoryColor } from "@/lib/utils";
 import { usePrivacy } from "@/contexts/privacy-context";
-import { Clock, Check, IndianRupee } from "lucide-react";
+import { Clock, Check } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import {
@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const CARRY_FORWARD_EXCLUDE = new Set(["LOAN", "CHIT_FUND"]);
+// Partial payment doesn't carry forward for these categories
+const NO_PARTIAL = new Set(["LOAN", "CHIT_FUND"]);
 
 interface EntryRowProps {
   entry: {
@@ -43,25 +44,61 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
   const [optimisticPaidAmount, setOptimisticPaidAmount] = useState(entry.paidAmount);
   const [editingAmount, setEditingAmount] = useState(false);
   const [amountVal, setAmountVal] = useState(String(entry.amount));
-  const [showPartial, setShowPartial] = useState(false);
+
+  // Payment dialog state
+  const [showDialog, setShowDialog] = useState(false);
+  const [payMode, setPayMode] = useState<"full" | "partial">("full");
   const [partialVal, setPartialVal] = useState("");
-  const amountRef = useRef<HTMLInputElement>(null);
   const partialRef = useRef<HTMLInputElement>(null);
+  const amountRef = useRef<HTMLInputElement>(null);
 
   const isPaid = optimisticPaid;
   const paidAmount = optimisticPaidAmount;
   const isPartial = !isPaid && paidAmount != null && paidAmount > 0;
   const outstanding = entry.amount - (paidAmount ?? 0);
-
   const color = getCategoryColor(entry.template.category, entry.template.customCategory);
   const isChitInvestment = entry.template.category === "CHIT_FUND" && !entry.template.chitFund?.isLifted;
-  const canPartialPay = !isPaid && !CARRY_FORWARD_EXCLUDE.has(entry.template.category);
+  const canPartial = !NO_PARTIAL.has(entry.template.category);
 
-  function handleTogglePaid() {
-    const next = !isPaid;
-    setOptimisticPaid(next);
-    if (next) setOptimisticPaidAmount(null);
-    onUpdate(entry.id, { isPaid: next });
+  function handleTickClick() {
+    if (isPaid) {
+      // Un-pay: reset directly, no dialog
+      setOptimisticPaid(false);
+      setOptimisticPaidAmount(null);
+      onUpdate(entry.id, { isPaid: false });
+      return;
+    }
+    if (!canPartial) {
+      // Loans/chits: just mark full directly, no partial choice
+      setOptimisticPaid(true);
+      setOptimisticPaidAmount(null);
+      onUpdate(entry.id, { isPaid: true });
+      return;
+    }
+    // Open payment dialog
+    setPayMode("full");
+    setPartialVal(paidAmount != null ? String(outstanding) : "");
+    setShowDialog(true);
+  }
+
+  async function handlePayFull() {
+    setOptimisticPaid(true);
+    setOptimisticPaidAmount(null);
+    setShowDialog(false);
+    await onUpdate(entry.id, { isPaid: true });
+  }
+
+  async function handleSavePartial() {
+    const num = parseFloat(partialVal);
+    if (isNaN(num) || num < 0) return;
+    if (num >= entry.amount) {
+      setOptimisticPaid(true);
+      setOptimisticPaidAmount(null);
+    } else {
+      setOptimisticPaidAmount(num > 0 ? num : null);
+    }
+    setShowDialog(false);
+    await onUpdate(entry.id, { paidAmount: num });
   }
 
   function handleAmountClick(e: React.MouseEvent) {
@@ -82,26 +119,6 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
     if (e.key === "Escape") { setAmountVal(String(entry.amount)); setEditingAmount(false); }
   }
 
-  function openPartial() {
-    setPartialVal(paidAmount != null ? String(paidAmount) : "");
-    setShowPartial(true);
-    setTimeout(() => partialRef.current?.select(), 100);
-  }
-
-  async function handleSavePartial() {
-    const num = parseFloat(partialVal);
-    if (isNaN(num) || num < 0) return;
-    if (num >= entry.amount) {
-      // Auto-complete
-      setOptimisticPaid(true);
-      setOptimisticPaidAmount(null);
-    } else {
-      setOptimisticPaidAmount(num > 0 ? num : null);
-    }
-    setShowPartial(false);
-    await onUpdate(entry.id, { paidAmount: num });
-  }
-
   return (
     <>
       <div className={cn(
@@ -109,7 +126,7 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
         isPaid ? "py-1.5 bg-muted/30 border-transparent opacity-50" : "py-2.5 bg-card border-border"
       )}>
         <button
-          onClick={handleTogglePaid}
+          onClick={handleTickClick}
           className={cn(
             "shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all",
             isPaid
@@ -154,17 +171,7 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
           </p>
         </div>
 
-        <div className="shrink-0 flex items-center gap-1.5">
-          {canPartialPay && !editingAmount && (
-            <button
-              onClick={openPartial}
-              className="p-1 rounded-md text-muted-foreground hover:text-amber-600 hover:bg-amber-50 transition-colors"
-              title="Record partial payment"
-            >
-              <IndianRupee className="w-3 h-3" />
-            </button>
-          )}
-
+        <div className="shrink-0">
           {isPartial && !editingAmount ? (
             <div className="text-right">
               <p className="text-xs text-amber-600 font-semibold">{fmt(paidAmount!)} paid</p>
@@ -194,47 +201,83 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
         </div>
       </div>
 
-      <Dialog open={showPartial} onOpenChange={setShowPartial}>
+      {/* Payment dialog */}
+      <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="max-w-xs">
           <DialogHeader>
             <DialogTitle className="text-base">{entry.template.name}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 py-1">
+
+          <div className="space-y-4 py-1">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Total due</span>
-              <span className="font-semibold">{fmt(entry.amount)}</span>
+              <span className="text-muted-foreground">Amount due</span>
+              <span className="font-bold">{fmt(entry.amount)}</span>
             </div>
-            {paidAmount != null && paidAmount > 0 && (
+            {isPartial && (
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Already paid</span>
-                <span className="text-amber-600 font-semibold">{fmt(paidAmount)}</span>
+                <span className="text-amber-600 font-semibold">{fmt(paidAmount!)}</span>
               </div>
             )}
-            <div>
-              <Label className="text-xs">Amount paying now (₹)</Label>
-              <Input
-                ref={partialRef}
-                type="number"
-                value={partialVal}
-                onChange={e => setPartialVal(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter") handleSavePartial(); }}
-                placeholder={`max ${fmt(outstanding)}`}
-                className="mt-1"
-                autoFocus
-              />
+
+            {/* Mode toggle */}
+            <div className="flex gap-2 bg-zinc-100 rounded-lg p-1">
+              <button
+                onClick={() => setPayMode("full")}
+                className={cn(
+                  "flex-1 py-1.5 rounded-md text-sm font-medium transition-colors",
+                  payMode === "full" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground"
+                )}
+              >
+                Pay in full
+              </button>
+              <button
+                onClick={() => {
+                  setPayMode("partial");
+                  setTimeout(() => partialRef.current?.focus(), 50);
+                }}
+                className={cn(
+                  "flex-1 py-1.5 rounded-md text-sm font-medium transition-colors",
+                  payMode === "partial" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground"
+                )}
+              >
+                Partial
+              </button>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full text-xs"
-              onClick={() => { setPartialVal(String(outstanding)); }}
-            >
-              Pay remaining {fmt(outstanding)}
-            </Button>
+
+            {payMode === "full" ? (
+              <Button className="w-full" onClick={handlePayFull}>
+                Mark paid · {fmt(entry.amount)}
+              </Button>
+            ) : (
+              <div className="space-y-2">
+                <div>
+                  <Label className="text-xs">Amount paying now (₹)</Label>
+                  <Input
+                    ref={partialRef}
+                    type="number"
+                    value={partialVal}
+                    onChange={e => setPartialVal(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") handleSavePartial(); }}
+                    placeholder={`up to ${fmt(outstanding)}`}
+                    className="mt-1"
+                  />
+                </div>
+                <button
+                  onClick={() => setPartialVal(String(outstanding))}
+                  className="w-full text-xs text-muted-foreground hover:text-foreground py-1.5 rounded-lg border border-dashed transition-colors"
+                >
+                  Pay remaining {fmt(outstanding)}
+                </button>
+                <Button className="w-full" onClick={handleSavePartial}>
+                  Save partial payment
+                </Button>
+              </div>
+            )}
           </div>
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPartial(false)}>Cancel</Button>
-            <Button onClick={handleSavePartial}>Save</Button>
+            <Button variant="outline" size="sm" onClick={() => setShowDialog(false)}>Cancel</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
