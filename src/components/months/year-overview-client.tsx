@@ -2,10 +2,17 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { useState } from "react";
 import { formatCurrency } from "@/lib/utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
+import type { AnalyticsData } from "./stats-breakdown";
+
+const StatsBreakdown = dynamic(
+  () => import("./stats-breakdown").then(m => m.StatsBreakdown),
+  { ssr: false, loading: () => <div className="h-64 rounded-xl bg-muted animate-pulse" /> }
+);
 
 const YearChart = dynamic(
   () => import("./year-chart").then(m => m.YearChart),
@@ -87,13 +94,16 @@ export function YearOverviewClient({
   pastFYSummaries = [],
   incomeTemplateCount = 0,
   currentMonthInsights = null,
+  analyticsData,
 }: {
   months: MonthData[];
   fyKey: string;
   pastFYSummaries?: PastFY[];
   incomeTemplateCount?: number;
   currentMonthInsights?: InsightData;
+  analyticsData?: AnalyticsData;
 }) {
+  const [tab, setTab] = useState<"overview" | "breakdown">("overview");
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const totalIncome   = months.reduce((s, m) => s + m.income, 0);
@@ -108,13 +118,34 @@ export function YearOverviewClient({
     <div className="flex flex-col lg:flex-row gap-6 max-w-5xl mx-auto lg:items-start">
     {/* ── Left: Year overview ── */}
     <div className="flex-1 min-w-0 space-y-5">
-      {/* Header */}
+      {/* Header + tabs */}
       <div>
         <h1 className="text-xl font-bold">{fyKey}</h1>
         <p className="text-sm text-muted-foreground">
           {actualCount} actual · {projCount} projected
         </p>
+        <div className="flex gap-1 mt-3 bg-zinc-100 rounded-xl p-1 w-fit">
+          {(["overview", "breakdown"] as const).map(t => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={cn(
+                "px-4 py-1.5 rounded-lg text-sm font-medium transition-colors capitalize",
+                tab === t ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {t === "overview" ? "Overview" : "Breakdown"}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {/* Breakdown tab */}
+      {tab === "breakdown" && analyticsData && (
+        <StatsBreakdown data={analyticsData} />
+      )}
+
+      {tab === "overview" && <>
 
       {/* Year-end projection */}
       <Card className={cn(
@@ -278,10 +309,11 @@ export function YearOverviewClient({
           ))}
         </div>
       )}
+      </>}
     </div>
 
     {/* ── Right: Current month insights ── */}
-    {currentMonthInsights && (
+    {tab === "overview" && currentMonthInsights && (
       <div className="w-full lg:w-72 shrink-0 space-y-3">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           This month

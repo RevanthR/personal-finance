@@ -10,7 +10,7 @@ const sections = [
     color: "text-indigo-500",
     bg: "bg-indigo-50",
     lines: [
-      "Your monthly view of income, expenses, and what is left over.",
+      "A full-year view of income, expenses, and balance across all months.",
       "Mark each recurring item as paid once you settle it.",
       "The progress bar shows how many items are settled this month.",
       'Tap "Add Transaction" to log a one-off spend or income that will not repeat next month.',
@@ -18,7 +18,7 @@ const sections = [
   },
   {
     icon: Calendar,
-    title: "Monthly View",
+    title: "Statistics",
     color: "text-blue-500",
     bg: "bg-blue-50",
     lines: [

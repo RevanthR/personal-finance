@@ -3,6 +3,8 @@ import { getActiveTemplates } from "@/lib/cached-queries";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { YearOverviewClient, type MonthData } from "@/components/months/year-overview-client";
+import { CATEGORY_LABELS, CATEGORY_COLORS } from "@/lib/utils";
+import type { AnalyticsData } from "@/components/months/stats-breakdown";
 
 function getFY(month: number, year: number) {
   const fyStart = month >= 4 ? year : year - 1;
@@ -30,7 +32,7 @@ export default async function MonthsPage() {
     ...Array.from({ length: 3 }, (_, i) => ({ month: i + 1, year: fyStart + 1 })),
   ];
 
-  const [allMonths, allTemplates, currentMonthFull, pendingReceivables] = await Promise.all([
+  const [allMonths, allTemplates, currentMonthFull, pendingReceivables, analyticsMonths] = await Promise.all([
     db.month.findMany({
       where: { userId },
       include: { entries: true, adHocItems: true },
@@ -46,6 +48,11 @@ export default async function MonthsPage() {
     }),
     db.receivable.findMany({
       where: { userId, status: "PENDING", expectedDate: { not: null } },
+    }),
+    db.month.findMany({
+      where: { userId, isPopulated: true },
+      include: { entries: { include: { template: true } }, adHocItems: true },
+      orderBy: [{ year: "asc" }, { month: "asc" }],
     }),
   ]);
 
@@ -278,6 +285,195 @@ export default async function MonthsPage() {
     };
   }
 
+  // ── Analytics computation ────────────────────────────────────────
+  const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const fyActual = analyticsMonths.filter(m => {
+    const { fyStart: mFYStart } = getFY(m.month, m.year);
+    return mFYStart === fyStart;
+  });
+
+  // Per-template totals across current FY actual months
+  type TEntry = { name: string; category: string; customCategory: string | null; total: number; months: number };
+  const templateMap = new Map<string, TEntry>();
+  let recurringTotal = 0;
+  let adHocExpenseTotal = 0;
+  for (const m of fyActual) {
+    for (const e of m.entries) {
+      const t = e.template;
+      const ex = templateMap.get(e.templateId);
+      if (ex) { ex.total += e.amount; ex.months++; }
+      else templateMap.set(e.templateId, { name: t.name, category: t.category, customCategory: t.customCategory ?? null, total: e.amount, months: 1 });
+      recurringTotal += e.amount;
+    }
+    for (const a of m.adHocItems) {
+      if (a.type === "EXPENSE") adHocExpenseTotal += a.amount;
+    }
+  }
+  const fyExpenses = recurringTotal + adHocExpenseTotal;
+  const fyIncomeTotal = fyActual.reduce((s, m) => {
+    return s + m.salaryIncome + m.freelanceIncome + m.otherIncome
+      + m.adHocItems.filter(i => i.type === "INCOME").reduce((si, i) => si + i.amount, 0);
+  }, 0);
+
+  // Group templates by category, add ad-hoc items per category
+  const catMap = new Map<string, { total: number; items: TEntry[] }>();
+  for (const [, t] of templateMap) {
+    const key = t.customCategory ?? t.category;
+    const ex = catMap.get(key);
+    if (ex) { ex.total += t.total; ex.items.push(t); }
+    else catMap.set(key, { total: t.total, items: [t] });
+  }
+  for (const m of fyActual) {
+    for (const a of m.adHocItems) {
+      if (a.type === "EXPENSE" && a.category !== "CREDIT_CARD") {
+        const key = a.category ?? "MISCELLANEOUS";
+        const ex = catMap.get(key);
+        if (ex) ex.total += a.amount;
+        else catMap.set(key, { total: a.amount, items: [] });
+      }
+    }
+  }
+  const spendByCategory = [...catMap.entries()]
+    .sort((a, b) => b[1].total - a[1].total)
+    .map(([key, d]) => ({
+      key,
+      name: CATEGORY_LABELS[key] ?? key,
+      color: CATEGORY_COLORS[key] ?? "#9ca3af",
+      total: d.total,
+      pct: fyExpenses > 0 ? Math.round((d.total / fyExpenses) * 100) : 0,
+      items: d.items.sort((a, b) => b.total - a.total).map(t => ({
+        name: t.name,
+        total: t.total,
+        months: t.months,
+      })),
+    }));
+
+  // Spending character
+  const ESSENTIAL_CATS = new Set(["LOAN", "HOUSE_MAINTENANCE", "SAVINGS"]);
+  let essentialTotal = 0, lifestyleTotal = 0;
+  for (const [, t] of templateMap) {
+    const cat = t.customCategory ? "MISCELLANEOUS" : t.category;
+    if (ESSENTIAL_CATS.has(cat)) essentialTotal += t.total;
+    else lifestyleTotal += t.total;
+  }
+  // Committed overhead = sum of active FIXED expense templates
+  const committedOverhead = expenseTemplates
+    .filter(t => t.isFixed)
+    .reduce((s, t) => s + t.amount, 0);
+
+  // Monthly trends
+  const monthlyTrends = fyActual.map(m => {
+    const income = m.salaryIncome + m.freelanceIncome + m.otherIncome
+      + m.adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0);
+    const expenses = m.entries.reduce((s, e) => s + e.amount, 0)
+      + m.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0);
+    return {
+      label: MONTHS_SHORT[m.month - 1],
+      income,
+      expenses,
+      balance: income - expenses,
+      savingsRate: income > 0 ? Math.round(((income - expenses) / income) * 100) : 0,
+      salary: m.salaryIncome,
+      freelance: m.freelanceIncome,
+      other: m.otherIncome,
+      adHocIncome: m.adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0),
+    };
+  });
+
+  // Loan freedom
+  const now2 = new Date();
+  const todayM2 = now2.getMonth() + 1, todayY2 = now2.getFullYear();
+  const loans = allTemplates
+    .filter(t => t.category === "LOAN" && t.templateType !== "INCOME" && t.isActive && !t.foreClosedOn)
+    .map(t => {
+      let remainingMonths: number | null = null, totalRemaining: number | null = null;
+      if (t.endsOnMonth && t.endsOnYear) {
+        remainingMonths = Math.max(0, (t.endsOnYear - todayY2) * 12 + (t.endsOnMonth - todayM2));
+        totalRemaining = remainingMonths * t.amount;
+      }
+      return { name: t.name, monthlyAmount: t.amount, endsMonth: t.endsOnMonth ?? null, endsYear: t.endsOnYear ?? null, remainingMonths, totalRemaining };
+    });
+
+  // Chit fund summary
+  const chits = allTemplates
+    .filter(t => t.category === "CHIT_FUND" && t.chitFund)
+    .map(t => ({
+      name: t.name,
+      monthlyAmount: t.chitFund!.isLifted ? (t.chitFund!.monthlyLiftedAmount ?? t.amount) : t.chitFund!.monthlyUnliftedAmount,
+      totalValue: t.chitFund!.totalValue,
+      accumulated: t.chitFund!.accumulatedSavings,
+      isLifted: t.chitFund!.isLifted,
+    }));
+
+  // CC annual subcats
+  const ccAnnualSubcatMap = new Map<string, number>();
+  for (const m of fyActual) {
+    for (const a of m.adHocItems) {
+      if (a.type === "EXPENSE" && a.category === "CREDIT_CARD" && a.notes) {
+        const parts = a.notes.split("·");
+        const subcat = parts.length > 1 ? parts[1].trim() : "Other";
+        ccAnnualSubcatMap.set(subcat, (ccAnnualSubcatMap.get(subcat) ?? 0) + a.amount);
+      }
+    }
+  }
+  const ccAnnualSubcats = [...ccAnnualSubcatMap.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, amount]) => ({ name, amount }));
+
+  // All-time best/worst months
+  const allTimeStats = analyticsMonths.map(m => {
+    const income = m.salaryIncome + m.freelanceIncome + m.otherIncome
+      + m.adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0);
+    const expenses = m.entries.reduce((s, e) => s + e.amount, 0)
+      + m.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0);
+    return { label: `${MONTHS_SHORT[m.month - 1]} ${m.year}`, income, expenses, balance: income - expenses, savingsRate: income > 0 ? Math.round(((income - expenses) / income) * 100) : 0 };
+  });
+  const bestMonth = allTimeStats.length ? [...allTimeStats].sort((a, b) => b.savingsRate - a.savingsRate)[0] : null;
+  const worstMonth = allTimeStats.length ? [...allTimeStats].sort((a, b) => a.savingsRate - b.savingsRate)[0] : null;
+
+  // Prev FY category totals (for YoY)
+  const prevFYKey = pastFYSummaries[0]?.fy ?? null;
+  const prevFYMonths = prevFYKey ? analyticsMonths.filter(m => {
+    const { fyKey: mFY } = getFY(m.month, m.year);
+    return mFY === prevFYKey;
+  }) : [];
+  const prevCatMap = new Map<string, number>();
+  for (const m of prevFYMonths) {
+    for (const e of m.entries) {
+      const key = e.template.customCategory ?? e.template.category;
+      prevCatMap.set(key, (prevCatMap.get(key) ?? 0) + e.amount);
+    }
+    for (const a of m.adHocItems) {
+      if (a.type === "EXPENSE" && a.category !== "CREDIT_CARD") {
+        const key = a.category ?? "MISCELLANEOUS";
+        prevCatMap.set(key, (prevCatMap.get(key) ?? 0) + a.amount);
+      }
+    }
+  }
+  const prevFYSpendByCategory = [...prevCatMap.entries()].map(([key, total]) => ({ key, name: CATEGORY_LABELS[key] ?? key, total }));
+
+  // Income stats
+  const avgMonthlyIncome = monthlyTrends.length > 0
+    ? Math.round(monthlyTrends.reduce((s, m) => s + m.income, 0) / monthlyTrends.length) : 0;
+  const totalFYFreelance = fyActual.reduce((s, m) => s + m.freelanceIncome, 0);
+  const freelancePct = fyIncomeTotal > 0 ? Math.round((totalFYFreelance / fyIncomeTotal) * 100) : 0;
+  const incomeSources = {
+    salary: fyActual.reduce((s, m) => s + m.salaryIncome, 0),
+    freelance: totalFYFreelance,
+    other: fyActual.reduce((s, m) => s + m.otherIncome, 0),
+    adHoc: fyActual.reduce((s, m) => s + m.adHocItems.filter(i => i.type === "INCOME").reduce((si, i) => si + i.amount, 0), 0),
+  };
+
+  const analyticsData: AnalyticsData = {
+    fyExpenses, fyIncome: fyIncomeTotal, actualMonthCount: fyActual.length,
+    spendByCategory, recurringTotal, adHocExpenseTotal,
+    essentialTotal, lifestyleTotal, committedOverhead,
+    monthlyTrends, loans, chits, ccAnnualSubcats,
+    bestMonth, worstMonth,
+    prevFYLabel: prevFYKey, prevFYSpendByCategory,
+    avgMonthlyIncome, freelancePct, incomeSources,
+  };
+
   return (
     <YearOverviewClient
       months={JSON.parse(JSON.stringify(currentFYMonths))}
@@ -285,6 +481,7 @@ export default async function MonthsPage() {
       pastFYSummaries={pastFYSummaries}
       incomeTemplateCount={incomeTemplates.length}
       currentMonthInsights={JSON.parse(JSON.stringify(currentMonthInsights))}
+      analyticsData={JSON.parse(JSON.stringify(analyticsData))}
     />
   );
 }
