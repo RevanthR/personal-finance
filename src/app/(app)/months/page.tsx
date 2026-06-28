@@ -430,8 +430,10 @@ export default async function MonthsPage() {
       eventMap.get(key)!.push({ name: l.name, type: "LOAN", monthlyRelief: l.monthlyAmount });
     }
   }
+  // Only lifted chits are true obligations (loan repayment after taking the payout).
+  // Unlifted chits are investments — the monthly payment goes into the pot, not a debt.
   for (const c of chits) {
-    if (c.remainingMonths > 0) {
+    if (c.isLifted && c.remainingMonths > 0) {
       const key = `${c.endsYear}-${String(c.endsMonth).padStart(2, "0")}`;
       if (!eventMap.has(key)) eventMap.set(key, []);
       eventMap.get(key)!.push({ name: c.name, type: "CHIT", monthlyRelief: c.monthlyAmount });
@@ -439,7 +441,7 @@ export default async function MonthsPage() {
   }
   const MONTHS_SHORT2 = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   let runningCommitted = loans.reduce((s, l) => s + l.monthlyAmount, 0)
-    + chits.reduce((s, c) => s + (c.remainingMonths > 0 ? c.monthlyAmount : 0), 0);
+    + chits.reduce((s, c) => s + (c.isLifted && c.remainingMonths > 0 ? c.monthlyAmount : 0), 0);
   const currentMonthlyCommitted = runningCommitted;
   const reliefMilestones = [...eventMap.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
