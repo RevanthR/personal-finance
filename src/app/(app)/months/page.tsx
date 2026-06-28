@@ -383,7 +383,7 @@ export default async function MonthsPage() {
 
   // Loan freedom
   const now2 = new Date();
-  const todayM2 = now2.getMonth() + 1, todayY2 = now2.getFullYear();
+  const todayM2 = now2.getUTCMonth() + 1, todayY2 = now2.getUTCFullYear();
   const loans = allTemplates
     .filter(t => t.category === "LOAN" && t.templateType !== "INCOME" && t.isActive && !t.foreClosedOn)
     .map(t => {
@@ -392,7 +392,50 @@ export default async function MonthsPage() {
         remainingMonths = Math.max(0, (t.endsOnYear - todayY2) * 12 + (t.endsOnMonth - todayM2));
         totalRemaining = remainingMonths * t.amount;
       }
-      return { name: t.name, monthlyAmount: t.amount, endsMonth: t.endsOnMonth ?? null, endsYear: t.endsOnYear ?? null, remainingMonths, totalRemaining };
+      // Compute amortization if loan details are present
+      let amortization: { outstandingPrincipal: number; interestThisMonth: number; principalThisMonth: number; totalInterestRemaining: number; monthsRemaining: number; isOverride: boolean } | null = null;
+      if (t.loanInterestRate != null) {
+        const r = t.loanInterestRate / 12 / 100;
+        let outstanding = t.loanOutstandingOverride ?? 0;
+        let isOverride = t.loanOutstandingOverride != null && t.loanOutstandingOverride > 0;
+        if (!isOverride && t.loanOriginalPrincipal && t.loanStartDate) {
+          const start = new Date(t.loanStartDate);
+          const k = Math.max(0, (now2.getFullYear() - start.getFullYear()) * 12 + (now2.getMonth() - start.getMonth()));
+          const factor = Math.pow(1 + r, k);
+          outstanding = Math.max(0, t.loanOriginalPrincipal * factor - (t.amount * (factor - 1)) / r);
+        }
+        if (outstanding > 0 && r > 0) {
+          const interestThisMonth = outstanding * r;
+          const principalThisMonth = Math.max(0, t.amount - interestThisMonth);
+          const monthsRem = interestThisMonth < t.amount ? Math.ceil(Math.log(t.amount / (t.amount - outstanding * r)) / Math.log(1 + r)) : 0;
+          amortization = {
+            outstandingPrincipal: Math.round(outstanding),
+            interestThisMonth: Math.round(interestThisMonth),
+            principalThisMonth: Math.round(principalThisMonth),
+            totalInterestRemaining: Math.max(0, Math.round(monthsRem * t.amount - outstanding)),
+            monthsRemaining: monthsRem,
+            isOverride,
+          };
+        }
+      }
+      // If amortization is available, derive end date from monthsRemaining (more accurate)
+      let finalEndsMonth = t.endsOnMonth ?? null;
+      let finalEndsYear = t.endsOnYear ?? null;
+      if (amortization && amortization.monthsRemaining > 0) {
+        const projEnd = new Date(now2.getFullYear(), now2.getMonth() + amortization.monthsRemaining, 1);
+        finalEndsMonth = projEnd.getMonth() + 1;
+        finalEndsYear = projEnd.getFullYear();
+        remainingMonths = amortization.monthsRemaining;
+        totalRemaining = amortization.monthsRemaining * t.amount;
+      }
+      return {
+        name: t.name, monthlyAmount: t.amount,
+        endsMonth: finalEndsMonth, endsYear: finalEndsYear,
+        remainingMonths, totalRemaining,
+        interestRate: t.loanInterestRate ?? null,
+        rateType: t.loanRateType ?? null,
+        amortization,
+      };
     });
 
   // Chit fund summary — compute end date from startDate + durationMonths
@@ -400,10 +443,19 @@ export default async function MonthsPage() {
     .filter(t => t.category === "CHIT_FUND" && t.chitFund)
     .map(t => {
       const cf = t.chitFund!;
-      const endDate = new Date(cf.startDate);
-      endDate.setMonth(endDate.getMonth() + cf.durationMonths);
-      const endsMonth = endDate.getMonth() + 1;
-      const endsYear = endDate.getFullYear();
+      // Use stored endDate if available (most accurate); fall back to computation.
+      // Always use UTC methods to avoid timezone shifts on the server.
+      let endsMonth: number, endsYear: number;
+      if (cf.endDate) {
+        const end = new Date(cf.endDate);
+        endsMonth = end.getUTCMonth() + 1;
+        endsYear = end.getUTCFullYear();
+      } else {
+        const end = new Date(cf.startDate);
+        end.setUTCMonth(end.getUTCMonth() + cf.durationMonths - 1);
+        endsMonth = end.getUTCMonth() + 1;
+        endsYear = end.getUTCFullYear();
+      }
       const monthlyAmount = cf.isLifted ? (cf.monthlyLiftedAmount ?? t.amount) : cf.monthlyUnliftedAmount;
       const remainingMonths = Math.max(0, (endsYear - todayY2) * 12 + (endsMonth - todayM2));
       return {
@@ -416,8 +468,8 @@ export default async function MonthsPage() {
         endsYear,
         remainingMonths,
         durationMonths: cf.durationMonths,
-        startYear: new Date(cf.startDate).getFullYear(),
-        startMonth: new Date(cf.startDate).getMonth() + 1,
+        startYear: new Date(cf.startDate).getUTCFullYear(),
+        startMonth: new Date(cf.startDate).getUTCMonth() + 1,
       };
     });
 

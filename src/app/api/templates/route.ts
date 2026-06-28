@@ -41,6 +41,11 @@ export async function POST(req: NextRequest) {
       endsOnMonth: body.endsOnMonth ?? null,
       endsOnYear: body.endsOnYear ?? null,
       sortOrder: body.sortOrder ?? 0,
+      loanOriginalPrincipal: body.loanOriginalPrincipal ?? null,
+      loanInterestRate: body.loanInterestRate ?? null,
+      loanRateType: body.loanRateType ?? null,
+      loanStartDate: body.loanStartDate ? new Date(body.loanStartDate) : null,
+      loanOutstandingOverride: body.loanOutstandingOverride ?? null,
     },
   });
 

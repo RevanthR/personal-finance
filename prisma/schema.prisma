@@ -130,6 +130,11 @@ model LineItemTemplate {
   endsOnMonth      Int?
   endsOnYear       Int?
   sortOrder        Int            @default(0)
+  loanOriginalPrincipal   Float?
+  loanInterestRate        Float?
+  loanRateType            String?   // "FIXED" | "FLOATING"
+  loanStartDate           DateTime?
+  loanOutstandingOverride Float?
   createdAt        DateTime       @default(now())
   entries          MonthlyEntry[]
   chitFund         ChitFund?

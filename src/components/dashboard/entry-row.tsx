@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { computeLoanAmortization } from "@/lib/loan-utils";
 
 // Partial payment doesn't carry forward for these categories
 const NO_PARTIAL = new Set(["LOAN", "CHIT_FUND"]);
@@ -33,6 +34,11 @@ interface EntryRowProps {
       dueDateDay: number | null;
       statementDay: number | null;
       chitFund: { isLifted: boolean; accumulatedSavings: number } | null;
+      loanInterestRate: number | null;
+      loanRateType: string | null;
+      loanOriginalPrincipal: number | null;
+      loanStartDate: string | null;
+      loanOutstandingOverride: number | null;
     };
   };
   onUpdate: (id: string, updates: { isPaid?: boolean; amount?: number; notes?: string; paidAmount?: number; cashbackAmount?: number }) => Promise<void>;
@@ -55,6 +61,17 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
   const partialRef = useRef<HTMLInputElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
 
+  // Loan payment success state — snapshot of amortization at time of payment
+  const [loanPaidSnapshot, setLoanPaidSnapshot] = useState<{
+    emi: number;
+    principalThisMonth: number;
+    interestThisMonth: number;
+    outstandingBefore: number;
+    outstandingAfter: number;
+    totalInterestRemaining: number;
+    monthsRemaining: number;
+  } | null>(null);
+
   const isPaid = optimisticPaid;
   const paidAmount = optimisticPaidAmount;
   const cashback = optimisticCashback ?? 0;
@@ -65,23 +82,40 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
   const color = getCategoryColor(entry.template.category, entry.template.customCategory);
   const isChitInvestment = entry.template.category === "CHIT_FUND" && !entry.template.chitFund?.isLifted;
   const canPartial = !NO_PARTIAL.has(entry.template.category);
+  const isLoan = entry.template.category === "LOAN";
+  const loanAmort = isLoan && entry.template.loanInterestRate != null ? computeLoanAmortization({
+    emi: entry.amount,
+    annualRate: entry.template.loanInterestRate,
+    originalPrincipal: entry.template.loanOriginalPrincipal,
+    startDate: entry.template.loanStartDate,
+    outstandingOverride: entry.template.loanOutstandingOverride,
+  }) : null;
 
   function handleTickClick() {
     if (isPaid) {
-      // Un-pay: reset directly, no dialog
       setOptimisticPaid(false);
       setOptimisticPaidAmount(null);
       onUpdate(entry.id, { isPaid: false });
       return;
     }
     if (!canPartial) {
-      // Loans/chits: just mark full directly, no partial choice
       setOptimisticPaid(true);
       setOptimisticPaidAmount(null);
       onUpdate(entry.id, { isPaid: true });
+      // Show loan payment breakdown if amortization data is available
+      if (isLoan && loanAmort) {
+        setLoanPaidSnapshot({
+          emi: entry.amount,
+          principalThisMonth: loanAmort.principalThisMonth,
+          interestThisMonth: loanAmort.interestThisMonth,
+          outstandingBefore: loanAmort.outstandingPrincipal,
+          outstandingAfter: Math.max(0, loanAmort.outstandingPrincipal - loanAmort.principalThisMonth),
+          totalInterestRemaining: Math.max(0, loanAmort.totalInterestRemaining - loanAmort.interestThisMonth),
+          monthsRemaining: Math.max(0, loanAmort.monthsRemaining - 1),
+        });
+      }
       return;
     }
-    // Open payment dialog
     setPayMode("full");
     setPartialVal(paidAmount != null ? String(outstanding) : "");
     setCashbackVal(cashback > 0 ? String(cashback) : "");
@@ -185,7 +219,17 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
             {isPaid && entry.paidOn && (
               <span className="text-green-600">{format(new Date(entry.paidOn), "dd MMM")}</span>
             )}
+            {isLoan && entry.template.loanInterestRate && (
+              <span className="text-[10px] text-muted-foreground/70">{entry.template.loanInterestRate}%</span>
+            )}
           </p>
+          {loanAmort && !isPaid && (
+            <p className="text-[10px] mt-0.5 flex items-center gap-1">
+              <span className="text-emerald-600">{fmt(loanAmort.principalThisMonth)} principal</span>
+              <span className="text-muted-foreground">·</span>
+              <span className="text-red-400">{fmt(loanAmort.interestThisMonth)} interest</span>
+            </p>
+          )}
         </div>
 
         <div className="shrink-0 text-right">
@@ -322,6 +366,62 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
 
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setShowDialog(false)}>Cancel</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Loan payment success popup */}
+      <Dialog open={!!loanPaidSnapshot} onOpenChange={open => { if (!open) setLoanPaidSnapshot(null); }}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
+                <Check className="w-3 h-3 text-white" />
+              </span>
+              EMI recorded
+            </DialogTitle>
+          </DialogHeader>
+          {loanPaidSnapshot && (
+            <div className="space-y-3 pt-1">
+              <p className="text-sm font-medium">{entry.template.name}</p>
+
+              {/* EMI split */}
+              <div className="rounded-xl bg-zinc-50 p-3 space-y-2">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">This month's payment</p>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">EMI paid</span>
+                  <span className="font-semibold tabular-nums">{fmt(loanPaidSnapshot.emi)}</span>
+                </div>
+                <div className="h-px bg-border" />
+                <div className="flex justify-between text-xs">
+                  <span className="text-emerald-600">↓ Principal</span>
+                  <span className="font-medium text-emerald-600 tabular-nums">{fmt(loanPaidSnapshot.principalThisMonth)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-red-500">Interest cost</span>
+                  <span className="font-medium text-red-500 tabular-nums">{fmt(loanPaidSnapshot.interestThisMonth)}</span>
+                </div>
+              </div>
+
+              {/* Remaining balance */}
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 space-y-1.5">
+                <p className="text-[10px] text-emerald-700 uppercase tracking-wide">After this payment</p>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-sm text-emerald-800">Outstanding balance</span>
+                  <span className="text-base font-bold text-emerald-700 tabular-nums">{fmt(loanPaidSnapshot.outstandingAfter)}</span>
+                </div>
+                <div className="flex justify-between text-xs text-emerald-600">
+                  <span>Interest remaining</span>
+                  <span className="tabular-nums">{fmt(loanPaidSnapshot.totalInterestRemaining)}</span>
+                </div>
+                {loanPaidSnapshot.monthsRemaining > 0 && (
+                  <p className="text-[10px] text-emerald-600">{loanPaidSnapshot.monthsRemaining} month{loanPaidSnapshot.monthsRemaining !== 1 ? "s" : ""} to go</p>
+                )}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button className="w-full" onClick={() => setLoanPaidSnapshot(null)}>Done</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

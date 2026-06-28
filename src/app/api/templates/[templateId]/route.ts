@@ -17,7 +17,9 @@ export async function PATCH(
 
   const isCustom = Boolean(body.customCategory);
 
-  const updated = await db.lineItemTemplate.updateMany({
+  let updated;
+  try {
+  updated = await db.lineItemTemplate.updateMany({
     where: { id: templateId, userId: session.user.id },
     data: {
       ...(body.name !== undefined && { name: body.name }),
@@ -45,8 +47,18 @@ export async function PATCH(
       ...(body.endsOnMonth !== undefined && { endsOnMonth: body.endsOnMonth }),
       ...(body.endsOnYear !== undefined && { endsOnYear: body.endsOnYear }),
       ...(body.clearEndDate && { endsOnMonth: null, endsOnYear: null }),
+      // Loan amortization fields
+      ...(body.loanOriginalPrincipal !== undefined && { loanOriginalPrincipal: body.loanOriginalPrincipal }),
+      ...(body.loanInterestRate !== undefined && { loanInterestRate: body.loanInterestRate }),
+      ...(body.loanRateType !== undefined && { loanRateType: body.loanRateType }),
+      ...(body.loanStartDate !== undefined && { loanStartDate: body.loanStartDate ? new Date(body.loanStartDate) : null }),
+      ...(body.loanOutstandingOverride !== undefined && { loanOutstandingOverride: body.loanOutstandingOverride }),
     },
   });
+  } catch (err) {
+    console.error("[PATCH /templates] Prisma error:", err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
 
   // Optionally apply the new amount to the current month's existing entry
   if (body.updateCurrentMonth && body.amount !== undefined) {

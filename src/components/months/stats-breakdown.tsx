@@ -52,6 +52,16 @@ export type AnalyticsData = {
     endsYear: number | null;
     remainingMonths: number | null;
     totalRemaining: number | null;
+    interestRate: number | null;
+    rateType: string | null;
+    amortization: {
+      outstandingPrincipal: number;
+      interestThisMonth: number;
+      principalThisMonth: number;
+      totalInterestRemaining: number;
+      monthsRemaining: number;
+      isOverride: boolean;
+    } | null;
   }[];
   chits: {
     name: string;
@@ -236,75 +246,109 @@ function ReliefTimeline({ data, fmt }: {
         )}
       </div>
 
-      {/* Milestone timeline */}
-      {reliefMilestones.length > 0 && (
-        <div className="space-y-1.5">
-          {reliefMilestones.map((ms, i) => (
-            <div key={ms.label} className="relative rounded-xl border bg-card px-4 py-3">
-              {/* Left accent line */}
-              <div className={cn(
-                "absolute left-0 top-0 bottom-0 w-1 rounded-l-xl",
-                ms.items.some(x => x.type === "LOAN") && ms.items.some(x => x.type === "CHIT")
-                  ? "bg-gradient-to-b from-red-400 to-indigo-400"
-                  : ms.items[0].type === "LOAN" ? "bg-red-400" : "bg-indigo-400"
-              )} />
-              <div className="flex items-start justify-between gap-3 pl-1">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <p className="text-sm font-bold">{ms.label}</p>
-                    <span className="text-[10px] text-muted-foreground"><RelativeTime months={ms.monthsFromNow} /></span>
+      {/* Loan cards — amortization embedded */}
+      {loans.length > 0 && (
+        <div className="space-y-2">
+          {loans.map(l => {
+            const a = l.amortization;
+            const iPct = a && l.monthlyAmount > 0 ? Math.round((a.interestThisMonth / l.monthlyAmount) * 100) : 0;
+            return (
+              <div key={l.name} className="rounded-xl border bg-card px-4 py-3 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-2 h-2 rounded-full bg-red-400 shrink-0" />
+                    <p className="text-sm font-semibold truncate">{l.name}</p>
+                    {l.rateType === "FLOATING" && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium shrink-0">floating</span>
+                    )}
                   </div>
-                  <div className="mt-1 space-y-0.5">
-                    {ms.items.map(item => (
-                      <div key={item.name} className="flex items-center gap-1.5">
-                        <span className={cn(
-                          "inline-block w-1.5 h-1.5 rounded-full shrink-0",
-                          item.type === "LOAN" ? "bg-red-400" : "bg-indigo-400"
-                        )} />
-                        <span className="text-xs text-muted-foreground">{item.name}</span>
-                        <span className="text-[10px] text-muted-foreground">({item.type === "LOAN" ? "loan" : "chit"})</span>
+                  <span className="text-xs text-muted-foreground shrink-0 ml-2">
+                    {l.interestRate ? `${l.interestRate}% p.a.` : fmt(l.monthlyAmount) + "/mo"}
+                  </span>
+                </div>
+
+                {a ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded-lg bg-zinc-50 px-3 py-2">
+                        <p className="text-[10px] text-muted-foreground mb-0.5">Principal left</p>
+                        <p className="text-sm font-bold tabular-nums">{fmt(a.outstandingPrincipal)}</p>
                       </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-sm font-bold text-green-600">saves {fmt(ms.totalRelief)}/mo</p>
-                  <p className="text-[10px] text-muted-foreground">down to {fmt(Math.max(0, ms.committedAfter))}/mo</p>
-                </div>
+                      <div className="rounded-lg bg-red-50 px-3 py-2">
+                        <p className="text-[10px] text-red-600 mb-0.5">Interest left</p>
+                        <p className="text-sm font-bold text-red-600 tabular-nums">{fmt(a.totalInterestRemaining)}</p>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="text-emerald-600 font-medium">{fmt(a.principalThisMonth)} principal this month</span>
+                        <span className="text-red-500 font-medium">{fmt(a.interestThisMonth)} interest</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-zinc-100 overflow-hidden flex">
+                        <div className="h-full bg-emerald-400" style={{ width: `${100 - iPct}%` }} />
+                        <div className="h-full bg-red-400 flex-1" />
+                      </div>
+                      {a.monthsRemaining > 0 && l.endsMonth && l.endsYear && (
+                        <p className="text-[10px] text-muted-foreground">
+                          {a.monthsRemaining} months left · clears {MONTHS_FULL[l.endsMonth - 1]} {l.endsYear}
+                          <span className="text-emerald-600 ml-1">· saves {fmt(l.monthlyAmount)}/mo</span>
+                        </p>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-[10px] text-muted-foreground/60 italic">
+                    {l.endsMonth && l.endsYear
+                      ? `Ends ${MONTHS_FULL[l.endsMonth - 1]} ${l.endsYear} · add interest rate in Templates for breakdown`
+                      : "Add interest rate + outstanding in Templates to see principal/interest breakdown."}
+                  </p>
+                )}
               </div>
-              {/* Mini progress: how close to this milestone */}
-              {ms.monthsFromNow > 0 && i === 0 && (
-                <div className="mt-2 pl-1">
-                  <div className="h-1 rounded-full bg-zinc-100 overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-emerald-400 transition-all"
-                      style={{ width: `${Math.min(100, Math.round((1 - ms.monthsFromNow / 24) * 100))}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-          {/* Debt-free footer */}
-          {lastMilestone && (
-            <div className="rounded-xl border border-dashed border-green-300 bg-green-50 px-4 py-2.5 flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-              <p className="text-xs text-green-700 font-medium">All commitments clear after {lastMilestone.label} · monthly relief of {fmt(currentMonthlyCommitted - Math.max(0, lastMilestone.committedAfter))}</p>
-            </div>
-          )}
+            );
+          })}
         </div>
       )}
 
-      {/* Individual items with no end date */}
-      {loans.filter(l => !l.endsYear).length > 0 && (
+      {/* Milestone timeline — chit events only (loans are shown above) */}
+      {reliefMilestones.some(ms => ms.items.some(x => x.type === "CHIT")) && (
         <div className="space-y-1.5">
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">No end date set</p>
-          {loans.filter(l => !l.endsYear).map(l => (
-            <div key={l.name} className="rounded-xl border bg-card px-4 py-2.5 flex justify-between items-center">
-              <p className="text-sm">{l.name}</p>
-              <p className="text-xs text-muted-foreground">{fmt(l.monthlyAmount)}/mo</p>
-            </div>
-          ))}
+          {reliefMilestones
+            .filter(ms => ms.items.some(x => x.type === "CHIT"))
+            .map((ms, i) => {
+              const chitItems = ms.items.filter(x => x.type === "CHIT");
+              return (
+                <div key={ms.label} className="relative rounded-xl border bg-card px-4 py-3">
+                  <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl bg-indigo-400" />
+                  <div className="flex items-start justify-between gap-3 pl-1">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className="text-sm font-bold">{ms.label}</p>
+                        <span className="text-[10px] text-muted-foreground"><RelativeTime months={ms.monthsFromNow} /></span>
+                      </div>
+                      <div className="mt-1 space-y-0.5">
+                        {chitItems.map(item => (
+                          <div key={item.name} className="flex items-center gap-1.5">
+                            <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-indigo-400" />
+                            <span className="text-xs text-muted-foreground">{item.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-bold text-green-600">saves {fmt(ms.totalRelief)}/mo</p>
+                      <p className="text-[10px] text-muted-foreground">down to {fmt(Math.max(0, ms.committedAfter))}/mo</p>
+                    </div>
+                  </div>
+                  {ms.monthsFromNow > 0 && i === 0 && (
+                    <div className="mt-2 pl-1">
+                      <div className="h-1 rounded-full bg-zinc-100 overflow-hidden">
+                        <div className="h-full rounded-full bg-emerald-400 transition-all" style={{ width: `${Math.min(100, Math.round((1 - ms.monthsFromNow / 24) * 100))}%` }} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
         </div>
       )}
     </div>

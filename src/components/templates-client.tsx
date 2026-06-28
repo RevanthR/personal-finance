@@ -43,6 +43,11 @@ type Template = {
   endsOnMonth: number | null;
   endsOnYear: number | null;
   sortOrder: number;
+  loanOriginalPrincipal: number | null;
+  loanInterestRate: number | null;
+  loanRateType: string | null;
+  loanStartDate: string | null;
+  loanOutstandingOverride: number | null;
   chitFund: { startDate: string; durationMonths: number } | null;
 };
 
@@ -66,6 +71,11 @@ type SaveData = {
   endsOnMonth?: number | null;
   endsOnYear?: number | null;
   clearEndDate?: boolean;
+  loanOriginalPrincipal?: number | null;
+  loanInterestRate?: number | null;
+  loanRateType?: string | null;
+  loanStartDate?: string | null;
+  loanOutstandingOverride?: number | null;
 };
 
 export function TemplatesClient({
@@ -434,6 +444,9 @@ export function TemplatesClient({
                                   {t.dueDateDay ? ` · due ${t.dueDateDay}th` : ""}
                                 </span>
                               )}
+                              {!isClosed && t.loanInterestRate && (
+                                <span className="ml-1.5 text-muted-foreground/70">{t.loanInterestRate}% {t.loanRateType === "FLOATING" ? "floating" : "fixed"}</span>
+                              )}
                             </p>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
@@ -568,6 +581,13 @@ function TemplateDialog({
   const [endsOnMonth, setEndsOnMonth] = useState<number>(initial?.endsOnMonth ?? defaultEndMonth);
   const [endsOnYear,  setEndsOnYear]  = useState<number>(initial?.endsOnYear  ?? defaultEndYear);
 
+  // Loan fields
+  const [loanPrincipal, setLoanPrincipal] = useState(initial?.loanOriginalPrincipal != null ? String(initial.loanOriginalPrincipal) : "");
+  const [loanRate, setLoanRate] = useState(initial?.loanInterestRate != null ? String(initial.loanInterestRate) : "");
+  const [loanRateType, setLoanRateType] = useState<"FIXED" | "FLOATING">((initial?.loanRateType as "FIXED" | "FLOATING") ?? "FIXED");
+  const [loanStartDate, setLoanStartDate] = useState(initial?.loanStartDate ? initial.loanStartDate.slice(0, 10) : "");
+  const [loanOutstanding, setLoanOutstanding] = useState(initial?.loanOutstandingOverride != null ? String(initial.loanOutstandingOverride) : "");
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!category) return;
@@ -597,6 +617,14 @@ function TemplateDialog({
       ...(!showSchedule && isEditing && initial?.pendingAmount != null && { clearPending: true }),
       ...(endDateValid && { endsOnMonth, endsOnYear }),
       ...(endsType === "indefinite" && hadEndDate && { clearEndDate: true }),
+      // Loan amortization fields (only for LOAN category)
+      ...(category === "LOAN" && {
+        loanOriginalPrincipal: loanPrincipal ? parseFloat(loanPrincipal) : null,
+        loanInterestRate: loanRate ? parseFloat(loanRate) : null,
+        loanRateType,
+        loanStartDate: loanStartDate || null,
+        loanOutstandingOverride: loanOutstanding ? parseFloat(loanOutstanding) : null,
+      }),
     });
     setLoading(false);
   }
@@ -883,6 +911,84 @@ function TemplateDialog({
                   </p>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Loan interest fields — only for LOAN category */}
+          {category === "LOAN" && (
+            <div className="space-y-3 rounded-xl border border-red-100 bg-red-50/50 p-3">
+              <p className="text-xs font-semibold text-red-700">Loan details (optional)</p>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Original principal (₹)</label>
+                  <Input
+                    type="number"
+                    value={loanPrincipal}
+                    onChange={e => setLoanPrincipal(e.target.value)}
+                    placeholder="e.g. 2000000"
+                    className="mt-1 h-8 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Interest rate (% p.a.)</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={loanRate}
+                    onChange={e => setLoanRate(e.target.value)}
+                    placeholder="e.g. 8.5"
+                    className="mt-1 h-8 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Rate type</label>
+                <div className="flex gap-2 mt-1">
+                  {(["FIXED", "FLOATING"] as const).map(t => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setLoanRateType(t)}
+                      className={cn(
+                        "flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors",
+                        loanRateType === t ? "bg-red-600 text-white border-red-600" : "bg-white border-border text-muted-foreground"
+                      )}
+                    >
+                      {t.charAt(0) + t.slice(1).toLowerCase()}
+                    </button>
+                  ))}
+                </div>
+                {loanRateType === "FLOATING" && (
+                  <p className="text-[10px] text-muted-foreground mt-1">Update rate + outstanding when your bank revises it.</p>
+                )}
+              </div>
+
+              <div>
+                <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Loan start date</label>
+                <Input
+                  type="date"
+                  value={loanStartDate}
+                  onChange={e => setLoanStartDate(e.target.value)}
+                  className="mt-1 h-8 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                  Current outstanding override (₹)
+                  {loanRateType === "FLOATING" && <span className="ml-1 text-red-600">required for floating</span>}
+                </label>
+                <Input
+                  type="number"
+                  value={loanOutstanding}
+                  onChange={e => setLoanOutstanding(e.target.value)}
+                  placeholder="From your bank statement"
+                  className="mt-1 h-8 text-sm"
+                />
+                <p className="text-[10px] text-muted-foreground mt-0.5">Leave blank to auto-compute from start date.</p>
+              </div>
             </div>
           )}
 
