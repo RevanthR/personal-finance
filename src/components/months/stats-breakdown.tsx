@@ -268,8 +268,8 @@ function ReliefTimeline({ data, fmt }: {
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-sm font-bold text-green-600">-{fmt(ms.totalRelief)}/mo</p>
-                  <p className="text-[10px] text-muted-foreground">→ {fmt(Math.max(0, ms.committedAfter))}/mo</p>
+                  <p className="text-sm font-bold text-green-600">saves {fmt(ms.totalRelief)}/mo</p>
+                  <p className="text-[10px] text-muted-foreground">down to {fmt(Math.max(0, ms.committedAfter))}/mo</p>
                 </div>
               </div>
               {/* Mini progress: how close to this milestone */}
