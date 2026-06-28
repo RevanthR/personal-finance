@@ -59,6 +59,22 @@ export type AnalyticsData = {
     totalValue: number;
     accumulated: number;
     isLifted: boolean;
+    endsMonth: number;
+    endsYear: number;
+    remainingMonths: number;
+    durationMonths: number;
+    startMonth: number;
+    startYear: number;
+  }[];
+  currentMonthlyCommitted: number;
+  reliefMilestones: {
+    month: number;
+    year: number;
+    label: string;
+    monthsFromNow: number;
+    items: { name: string; type: "LOAN" | "CHIT"; monthlyRelief: number }[];
+    totalRelief: number;
+    committedAfter: number;
   }[];
   ccAnnualSubcats: { name: string; amount: number }[];
   bestMonth: { label: string; savingsRate: number; balance: number } | null;
@@ -185,64 +201,112 @@ function SavingsRateBar({ trends, fmt }: {
   );
 }
 
-function LoanTimeline({ loans, fmt, hidden }: {
-  loans: AnalyticsData["loans"];
+function RelativeTime({ months }: { months: number }) {
+  if (months === 0) return <span className="text-amber-600 font-medium">this month</span>;
+  if (months < 12) return <span>{months}mo away</span>;
+  const y = Math.floor(months / 12), m = months % 12;
+  return <span>{y}yr{m > 0 ? ` ${m}mo` : ""} away</span>;
+}
+
+function ReliefTimeline({ data, fmt }: {
+  data: AnalyticsData;
   fmt: (v: number) => string;
-  hidden: boolean;
 }) {
-  if (!loans.length) return null;
-  const withEnd = loans.filter(l => l.endsYear !== null).sort((a, b) => {
-    if (!a.endsYear || !b.endsYear) return 0;
-    return a.endsYear !== b.endsYear ? a.endsYear - b.endsYear : (a.endsMonth ?? 0) - (b.endsMonth ?? 0);
-  });
-  const lastLoan = withEnd[withEnd.length - 1];
-  const totalEMI = loans.reduce((s, l) => s + l.monthlyAmount, 0);
+  const { loans, chits, reliefMilestones, currentMonthlyCommitted } = data;
+  const hasAny = loans.length > 0 || chits.some(c => c.remainingMonths > 0);
+  if (!hasAny) return null;
+
+  const lastMilestone = reliefMilestones[reliefMilestones.length - 1];
 
   return (
     <div className="space-y-3">
-      {loans.length > 1 && (
-        <div className="flex gap-3">
-          <div className="rounded-xl border bg-red-50 border-red-100 p-3 flex-1">
-            <p className="text-[10px] text-red-700 uppercase tracking-wider mb-0.5">Total EMI/month</p>
-            <p className="text-lg font-bold text-red-700 tabular-nums">{fmt(totalEMI)}</p>
+      {/* Current committed header */}
+      <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-xl border bg-red-50 border-red-100 p-3">
+          <p className="text-[10px] text-red-700 uppercase tracking-wider mb-0.5">Monthly committed</p>
+          <p className="text-lg font-bold text-red-700 tabular-nums">{fmt(currentMonthlyCommitted)}</p>
+          <p className="text-[10px] text-red-600">{loans.length} loan{loans.length !== 1 ? "s" : ""} · {chits.filter(c => c.remainingMonths > 0).length} chit{chits.filter(c => c.remainingMonths > 0).length !== 1 ? "s" : ""}</p>
+        </div>
+        {lastMilestone && (
+          <div className="rounded-xl border bg-green-50 border-green-100 p-3">
+            <p className="text-[10px] text-green-700 uppercase tracking-wider mb-0.5">After all clear</p>
+            <p className="text-lg font-bold text-green-700 tabular-nums">{fmt(Math.max(0, lastMilestone.committedAfter))}</p>
+            <p className="text-[10px] text-green-600">by {lastMilestone.label}</p>
           </div>
-          {lastLoan && lastLoan.endsYear && (
-            <div className="rounded-xl border bg-green-50 border-green-100 p-3 flex-1">
-              <p className="text-[10px] text-green-700 uppercase tracking-wider mb-0.5">Debt-free by</p>
-              <p className="text-base font-bold text-green-700">{MONTHS_FULL[(lastLoan.endsMonth ?? 1) - 1]} {lastLoan.endsYear}</p>
+        )}
+      </div>
+
+      {/* Milestone timeline */}
+      {reliefMilestones.length > 0 && (
+        <div className="space-y-1.5">
+          {reliefMilestones.map((ms, i) => (
+            <div key={ms.label} className="relative rounded-xl border bg-card px-4 py-3">
+              {/* Left accent line */}
+              <div className={cn(
+                "absolute left-0 top-0 bottom-0 w-1 rounded-l-xl",
+                ms.items.some(x => x.type === "LOAN") && ms.items.some(x => x.type === "CHIT")
+                  ? "bg-gradient-to-b from-red-400 to-indigo-400"
+                  : ms.items[0].type === "LOAN" ? "bg-red-400" : "bg-indigo-400"
+              )} />
+              <div className="flex items-start justify-between gap-3 pl-1">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <p className="text-sm font-bold">{ms.label}</p>
+                    <span className="text-[10px] text-muted-foreground"><RelativeTime months={ms.monthsFromNow} /></span>
+                  </div>
+                  <div className="mt-1 space-y-0.5">
+                    {ms.items.map(item => (
+                      <div key={item.name} className="flex items-center gap-1.5">
+                        <span className={cn(
+                          "inline-block w-1.5 h-1.5 rounded-full shrink-0",
+                          item.type === "LOAN" ? "bg-red-400" : "bg-indigo-400"
+                        )} />
+                        <span className="text-xs text-muted-foreground">{item.name}</span>
+                        <span className="text-[10px] text-muted-foreground">({item.type === "LOAN" ? "loan" : "chit"})</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-bold text-green-600">-{fmt(ms.totalRelief)}/mo</p>
+                  <p className="text-[10px] text-muted-foreground">→ {fmt(Math.max(0, ms.committedAfter))}/mo</p>
+                </div>
+              </div>
+              {/* Mini progress: how close to this milestone */}
+              {ms.monthsFromNow > 0 && i === 0 && (
+                <div className="mt-2 pl-1">
+                  <div className="h-1 rounded-full bg-zinc-100 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-emerald-400 transition-all"
+                      style={{ width: `${Math.min(100, Math.round((1 - ms.monthsFromNow / 24) * 100))}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+          {/* Debt-free footer */}
+          {lastMilestone && (
+            <div className="rounded-xl border border-dashed border-green-300 bg-green-50 px-4 py-2.5 flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+              <p className="text-xs text-green-700 font-medium">All commitments clear after {lastMilestone.label} · monthly relief of {fmt(currentMonthlyCommitted - Math.max(0, lastMilestone.committedAfter))}</p>
             </div>
           )}
         </div>
       )}
-      <div className="space-y-2">
-        {loans.map(l => (
-          <div key={l.name} className="rounded-xl border bg-card px-4 py-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">{l.name}</p>
-                <p className="text-xs text-muted-foreground">{fmt(l.monthlyAmount)}/month</p>
-              </div>
-              <div className="text-right shrink-0">
-                {l.endsYear ? (
-                  <>
-                    <p className="text-xs font-semibold">Ends {MONTHS_FULL[(l.endsMonth ?? 1) - 1]} {l.endsYear}</p>
-                    <p className="text-[10px] text-muted-foreground">
-                      {l.remainingMonths} months · {hidden ? "••••" : `${fmt(l.totalRemaining ?? 0)} left`}
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-[10px] text-muted-foreground">No end date set</p>
-                )}
-              </div>
+
+      {/* Individual items with no end date */}
+      {loans.filter(l => !l.endsYear).length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">No end date set</p>
+          {loans.filter(l => !l.endsYear).map(l => (
+            <div key={l.name} className="rounded-xl border bg-card px-4 py-2.5 flex justify-between items-center">
+              <p className="text-sm">{l.name}</p>
+              <p className="text-xs text-muted-foreground">{fmt(l.monthlyAmount)}/mo</p>
             </div>
-            {l.remainingMonths !== null && l.totalRemaining !== null && (
-              <div className="mt-2 h-1 rounded-full bg-zinc-100 overflow-hidden">
-                <div className="h-full rounded-full bg-red-400 transition-all" style={{ width: "100%" }} />
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -383,22 +447,39 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
           {/* Chit funds */}
           {data.chits.length > 0 && (
             <div>
-              <SectionTitle>Chit funds</SectionTitle>
+              <SectionTitle>Chit fund progress</SectionTitle>
               <div className="space-y-2">
-                {data.chits.map(c => (
-                  <div key={c.name} className="rounded-xl border bg-card px-4 py-3 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium">{c.name}</p>
-                      <p className="text-xs text-muted-foreground">{fmt(c.monthlyAmount)}/mo · pot {fmt(c.totalValue)}</p>
+                {data.chits.map(c => {
+                  const elapsed = c.durationMonths - c.remainingMonths;
+                  const progressPct = c.durationMonths > 0 ? Math.round((elapsed / c.durationMonths) * 100) : 100;
+                  return (
+                    <div key={c.name} className="rounded-xl border bg-card px-4 py-3">
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium">{c.name}</p>
+                          <p className="text-xs text-muted-foreground">{fmt(c.monthlyAmount)}/mo · pot {fmt(c.totalValue)}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          {c.remainingMonths === 0 ? (
+                            <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 font-medium">Done</span>
+                          ) : (
+                            <>
+                              <p className="text-xs font-semibold">ends {MONTHS_FULL[c.endsMonth - 1]} {c.endsYear}</p>
+                              <p className="text-[10px] text-muted-foreground">{c.remainingMonths} mo left</p>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-zinc-100 overflow-hidden">
+                        <div className="h-full rounded-full bg-indigo-400 transition-all" style={{ width: `${progressPct}%` }} />
+                      </div>
+                      <div className="flex justify-between mt-1">
+                        <span className="text-[10px] text-muted-foreground">{fmt(c.accumulated)} saved</span>
+                        <span className="text-[10px] text-muted-foreground">{progressPct}%</span>
+                      </div>
                     </div>
-                    <div className="text-right shrink-0">
-                      {c.isLifted
-                        ? <span className="text-xs px-2 py-1 rounded-full bg-zinc-100 text-zinc-500 font-medium">Lifted</span>
-                        : <><p className="text-sm font-bold text-emerald-600">{fmt(c.accumulated)}</p><p className="text-[10px] text-muted-foreground">saved</p></>
-                      }
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -451,11 +532,11 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
             </div>
           )}
 
-          {/* Loan freedom */}
-          {data.loans.length > 0 && (
+          {/* Relief timeline — when expenses will drop */}
+          {(data.loans.length > 0 || data.chits.some(c => c.remainingMonths > 0)) && (
             <div>
-              <SectionTitle>Loan freedom timeline</SectionTitle>
-              <LoanTimeline loans={data.loans} fmt={fmt} hidden={hidden} />
+              <SectionTitle>When does it get lighter?</SectionTitle>
+              <ReliefTimeline data={data} fmt={fmt} />
             </div>
           )}
 

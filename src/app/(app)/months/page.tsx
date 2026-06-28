@@ -394,16 +394,62 @@ export default async function MonthsPage() {
       return { name: t.name, monthlyAmount: t.amount, endsMonth: t.endsOnMonth ?? null, endsYear: t.endsOnYear ?? null, remainingMonths, totalRemaining };
     });
 
-  // Chit fund summary
+  // Chit fund summary — compute end date from startDate + durationMonths
   const chits = allTemplates
     .filter(t => t.category === "CHIT_FUND" && t.chitFund)
-    .map(t => ({
-      name: t.name,
-      monthlyAmount: t.chitFund!.isLifted ? (t.chitFund!.monthlyLiftedAmount ?? t.amount) : t.chitFund!.monthlyUnliftedAmount,
-      totalValue: t.chitFund!.totalValue,
-      accumulated: t.chitFund!.accumulatedSavings,
-      isLifted: t.chitFund!.isLifted,
-    }));
+    .map(t => {
+      const cf = t.chitFund!;
+      const endDate = new Date(cf.startDate);
+      endDate.setMonth(endDate.getMonth() + cf.durationMonths);
+      const endsMonth = endDate.getMonth() + 1;
+      const endsYear = endDate.getFullYear();
+      const monthlyAmount = cf.isLifted ? (cf.monthlyLiftedAmount ?? t.amount) : cf.monthlyUnliftedAmount;
+      const remainingMonths = Math.max(0, (endsYear - todayY2) * 12 + (endsMonth - todayM2));
+      return {
+        name: t.name,
+        monthlyAmount,
+        totalValue: cf.totalValue,
+        accumulated: cf.accumulatedSavings,
+        isLifted: cf.isLifted,
+        endsMonth,
+        endsYear,
+        remainingMonths,
+        durationMonths: cf.durationMonths,
+        startYear: new Date(cf.startDate).getFullYear(),
+        startMonth: new Date(cf.startDate).getMonth() + 1,
+      };
+    });
+
+  // Relief milestones — merge loan and chit end events, group by month+year
+  type ReliefItem = { name: string; type: "LOAN" | "CHIT"; monthlyRelief: number };
+  const eventMap = new Map<string, ReliefItem[]>();
+  for (const l of loans) {
+    if (l.endsYear && l.endsMonth) {
+      const key = `${l.endsYear}-${String(l.endsMonth).padStart(2, "0")}`;
+      if (!eventMap.has(key)) eventMap.set(key, []);
+      eventMap.get(key)!.push({ name: l.name, type: "LOAN", monthlyRelief: l.monthlyAmount });
+    }
+  }
+  for (const c of chits) {
+    if (c.remainingMonths > 0) {
+      const key = `${c.endsYear}-${String(c.endsMonth).padStart(2, "0")}`;
+      if (!eventMap.has(key)) eventMap.set(key, []);
+      eventMap.get(key)!.push({ name: c.name, type: "CHIT", monthlyRelief: c.monthlyAmount });
+    }
+  }
+  const MONTHS_SHORT2 = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  let runningCommitted = loans.reduce((s, l) => s + l.monthlyAmount, 0)
+    + chits.reduce((s, c) => s + (c.remainingMonths > 0 ? c.monthlyAmount : 0), 0);
+  const currentMonthlyCommitted = runningCommitted;
+  const reliefMilestones = [...eventMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, items]) => {
+      const [y, m] = key.split("-").map(Number);
+      const monthsFromNow = Math.max(0, (y - todayY2) * 12 + (m - todayM2));
+      const totalRelief = items.reduce((s, i) => s + i.monthlyRelief, 0);
+      runningCommitted -= totalRelief;
+      return { month: m, year: y, label: `${MONTHS_SHORT2[m - 1]} ${y}`, monthsFromNow, items, totalRelief, committedAfter: runningCommitted };
+    });
 
   // CC annual subcats
   const ccAnnualSubcatMap = new Map<string, number>();
@@ -472,6 +518,7 @@ export default async function MonthsPage() {
     bestMonth, worstMonth,
     prevFYLabel: prevFYKey, prevFYSpendByCategory,
     avgMonthlyIncome, freelancePct, incomeSources,
+    currentMonthlyCommitted, reliefMilestones,
   };
 
   return (
