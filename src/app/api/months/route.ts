@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
         entries: {
           select: {
             templateId: true, statementAmount: true,
-            isPaid: true, amount: true, paidAmount: true,
+            isPaid: true, amount: true, paidAmount: true, cashbackAmount: true,
             template: { select: { category: true, name: true } },
           },
         },
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
       if (e.isPaid) continue;
       const cat = e.template.category;
       if (CARRY_FORWARD_EXCLUDE.has(cat)) continue;
-      const outstanding = e.amount - (e.paidAmount ?? 0);
+      const outstanding = e.amount - (e.cashbackAmount ?? 0) - (e.paidAmount ?? 0);
       if (outstanding <= 0) continue;
       if (cat === "CREDIT_CARD") {
         prevCCOutstanding.set(e.templateId, outstanding);

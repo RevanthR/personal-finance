@@ -74,12 +74,12 @@ type MonthWithDetails = {
 type RecentMonthSummary = {
   id: string; month: number; year: number;
   salaryIncome: number; freelanceIncome: number; otherIncome: number;
-  entries: { amount: number }[];
+  entries: { amount: number; cashbackAmount: number | null }[];
   adHocItems: { type: string; amount: number; category: string | null }[];
 };
 
 type EntryWithTemplate = {
-  id: string; amount: number; isPaid: boolean; paidOn: string | null; paidAmount: number | null; notes: string | null; templateId: string;
+  id: string; amount: number; isPaid: boolean; paidOn: string | null; paidAmount: number | null; cashbackAmount: number | null; notes: string | null; templateId: string;
   statementAmount: number | null;
   template: { id: string; name: string; category: string; customCategory: string | null; isFixed: boolean; dueDateDay: number | null; statementDay: number | null; chitFund: { isLifted: boolean; accumulatedSavings: number } | null };
 };
@@ -160,7 +160,7 @@ function CCCardBlock({
   entry: EntryWithTemplate;
   txItems: AdHocItem[];
   nextMonthName: string;
-  onUpdate: (id: string, updates: { isPaid?: boolean; amount?: number; notes?: string; paidAmount?: number }) => Promise<void>;
+  onUpdate: (id: string, updates: { isPaid?: boolean; amount?: number; notes?: string; paidAmount?: number; cashbackAmount?: number }) => Promise<void>;
   onDelete: (id: string) => void;
   onClearStatement: (entryId: string) => Promise<void>;
 }) {
@@ -276,8 +276,9 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
   const adHocExpense     = useMemo(() => adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0), [adHocItems]);
   const totalIncome    = currentMonth ? currentMonth.salaryIncome + currentMonth.freelanceIncome + currentMonth.otherIncome : 0;
   const grandIncome    = totalIncome + adHocIncome;
-  const totalCommitted = useMemo(() => entries.reduce((s, e) => s + e.amount, 0), [entries]);
-  const totalPaid      = useMemo(() => entries.filter(e => e.isPaid).reduce((s, e) => s + e.amount, 0), [entries]);
+  const net = (e: EntryWithTemplate) => e.amount - (e.cashbackAmount ?? 0);
+  const totalCommitted = useMemo(() => entries.reduce((s, e) => s + net(e), 0), [entries]);
+  const totalPaid      = useMemo(() => entries.filter(e => e.isPaid).reduce((s, e) => s + net(e), 0), [entries]);
   const totalPending   = totalCommitted - totalPaid;
   // CC purchases this month pay next month — excluded from current balance
   const balance        = grandIncome - totalCommitted - adHocExpense;
@@ -360,7 +361,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
     for (const e of entries) {
       const key = e.template.customCategory ?? e.template.category;
       if (!totals[key]) totals[key] = { amount: 0, templateCat: e.template.category, customCat: e.template.customCategory };
-      totals[key].amount += e.amount;
+      totals[key].amount += net(e);
     }
     for (const item of adHocItems) {
       if (item.type === "EXPENSE" && item.category && item.category !== "CREDIT_CARD") {
@@ -380,11 +381,11 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
 
   const { fyIncome, fyExpenses, fyBalance, trendData } = useMemo(() => {
     const fyIncome   = recentMonths.reduce((s, m) => s + m.salaryIncome + m.freelanceIncome + m.otherIncome + m.adHocItems.filter(i => i.type === "INCOME").reduce((a, i) => a + i.amount, 0), 0);
-    const fyExpenses = recentMonths.reduce((s, m) => s + m.entries.reduce((a, e) => a + e.amount, 0) + m.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((a, i) => a + i.amount, 0), 0);
+    const fyExpenses = recentMonths.reduce((s, m) => s + m.entries.reduce((a, e) => a + e.amount - (e.cashbackAmount ?? 0), 0) + m.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((a, i) => a + i.amount, 0), 0);
     const trendData  = [...recentMonths].reverse().map(m => ({
       name: format(new Date(m.year, m.month - 1), "MMM"),
       Income: m.salaryIncome + m.freelanceIncome + m.otherIncome,
-      Expenses: m.entries.reduce((s, e) => s + e.amount, 0),
+      Expenses: m.entries.reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0),
     }));
     return { fyIncome, fyExpenses, fyBalance: fyIncome - fyExpenses, trendData };
   }, [recentMonths]);
@@ -407,7 +408,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
       .filter(m => !(m.month === currentMonth?.month && m.year === currentMonth?.year))
       .sort((a, b) => b.year - a.year || b.month - a.month)[0];
     if (!prev) return { prevMonthName: null, expensesDelta: null };
-    const prevExp = prev.entries.reduce((s, e) => s + e.amount, 0)
+    const prevExp = prev.entries.reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
       + prev.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0);
     return {
       prevMonthName: MONTHS[prev.month - 1],
@@ -416,7 +417,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
   }, [recentMonths, currentMonth, totalCommitted, adHocExpense]);
 
   const fixedAmount = useMemo(
-    () => entries.filter(e => e.template.isFixed).reduce((s, e) => s + e.amount, 0),
+    () => entries.filter(e => e.template.isFixed).reduce((s, e) => s + net(e), 0),
     [entries]
   );
   const variableAmount = totalCommitted - fixedAmount + adHocExpense;
@@ -485,7 +486,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
     toast.success("Income updated");
   }
 
-  async function handleEntryUpdate(entryId: string, updates: { isPaid?: boolean; amount?: number; notes?: string; paidAmount?: number }) {
+  async function handleEntryUpdate(entryId: string, updates: { isPaid?: boolean; amount?: number; notes?: string; paidAmount?: number; cashbackAmount?: number }) {
     if (!currentMonth) return;
     const res = await fetch(`/api/months/${currentMonth.id}/entries`, {
       method: "PATCH",
@@ -499,6 +500,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
     } : prev);
     if (updates.isPaid !== undefined) toast.success(updates.isPaid ? "Marked paid ✓" : "Marked pending");
     if (updates.paidAmount !== undefined && !updated.isPaid) toast.success("Partial payment recorded");
+    if (updates.cashbackAmount !== undefined) toast.success(`Cashback of ${formatCurrency(updates.cashbackAmount)} applied`);
   }
 
   async function handleAdHocAdd(item: { name: string; amount: number; type: string; category?: string; date: string; notes?: string; ccTemplateId?: string }) {

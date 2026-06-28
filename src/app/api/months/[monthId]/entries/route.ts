@@ -12,7 +12,7 @@ export async function PATCH(
 
   const { monthId } = await params;
   const body = await req.json();
-  const { entryId, isPaid, amount, notes, statementAmount, paidAmount } = body;
+  const { entryId, isPaid, amount, notes, statementAmount, paidAmount, cashbackAmount } = body;
 
   // Resolve payment state — paidAmount takes precedence over isPaid toggle
   const paymentData: Record<string, unknown> = {};
@@ -20,12 +20,13 @@ export async function PATCH(
   if (paidAmount !== undefined) {
     const entry = await db.monthlyEntry.findFirst({
       where: { id: entryId, monthId, month: { userId: session.user.id } },
-      select: { amount: true },
+      select: { amount: true, cashbackAmount: true },
     });
-    const dupeAmount = amount ?? entry?.amount ?? 0;
+    // Net bill = amount minus any cashback already applied
+    const appliedCashback = cashbackAmount !== undefined ? Number(cashbackAmount) : (entry?.cashbackAmount ?? 0);
+    const netAmount = (amount ?? entry?.amount ?? 0) - appliedCashback;
     const paid = Number(paidAmount);
-    if (paid >= dupeAmount) {
-      // Paid in full
+    if (paid >= netAmount) {
       paymentData.isPaid = true;
       paymentData.paidOn = new Date();
       paymentData.paidAmount = null;
@@ -45,6 +46,7 @@ export async function PATCH(
       ...(amount !== undefined && { amount }),
       ...(notes !== undefined && { notes }),
       ...(statementAmount !== undefined && { statementAmount: statementAmount === null ? null : Number(statementAmount) }),
+      ...(cashbackAmount !== undefined && { cashbackAmount: cashbackAmount > 0 ? Number(cashbackAmount) : null }),
     },
     include: { template: true },
   });

@@ -165,6 +165,7 @@ model MonthlyEntry {
   isPaid          Boolean          @default(false)
   paidOn          DateTime?
   paidAmount      Float?
+  cashbackAmount  Float?
   notes           String?
   statementAmount Float?
   createdAt       DateTime         @default(now())

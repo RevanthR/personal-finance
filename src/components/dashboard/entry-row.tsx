@@ -23,6 +23,7 @@ interface EntryRowProps {
     isPaid: boolean;
     paidOn: string | null;
     paidAmount: number | null;
+    cashbackAmount: number | null;
     notes: string | null;
     template: {
       name: string;
@@ -34,7 +35,7 @@ interface EntryRowProps {
       chitFund: { isLifted: boolean; accumulatedSavings: number } | null;
     };
   };
-  onUpdate: (id: string, updates: { isPaid?: boolean; amount?: number; notes?: string; paidAmount?: number }) => Promise<void>;
+  onUpdate: (id: string, updates: { isPaid?: boolean; amount?: number; notes?: string; paidAmount?: number; cashbackAmount?: number }) => Promise<void>;
 }
 
 export function EntryRow({ entry, onUpdate }: EntryRowProps) {
@@ -42,6 +43,7 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const [optimisticPaid, setOptimisticPaid] = useState(entry.isPaid);
   const [optimisticPaidAmount, setOptimisticPaidAmount] = useState(entry.paidAmount);
+  const [optimisticCashback, setOptimisticCashback] = useState(entry.cashbackAmount);
   const [editingAmount, setEditingAmount] = useState(false);
   const [amountVal, setAmountVal] = useState(String(entry.amount));
 
@@ -49,13 +51,17 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
   const [showDialog, setShowDialog] = useState(false);
   const [payMode, setPayMode] = useState<"full" | "partial">("full");
   const [partialVal, setPartialVal] = useState("");
+  const [cashbackVal, setCashbackVal] = useState("");
   const partialRef = useRef<HTMLInputElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
 
   const isPaid = optimisticPaid;
   const paidAmount = optimisticPaidAmount;
+  const cashback = optimisticCashback ?? 0;
+  const isCC = entry.template.category === "CREDIT_CARD";
+  const netBill = entry.amount - cashback;
   const isPartial = !isPaid && paidAmount != null && paidAmount > 0;
-  const outstanding = entry.amount - (paidAmount ?? 0);
+  const outstanding = netBill - (paidAmount ?? 0);
   const color = getCategoryColor(entry.template.category, entry.template.customCategory);
   const isChitInvestment = entry.template.category === "CHIT_FUND" && !entry.template.chitFund?.isLifted;
   const canPartial = !NO_PARTIAL.has(entry.template.category);
@@ -78,27 +84,38 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
     // Open payment dialog
     setPayMode("full");
     setPartialVal(paidAmount != null ? String(outstanding) : "");
+    setCashbackVal(cashback > 0 ? String(cashback) : "");
     setShowDialog(true);
   }
 
+  function parsedCashback() {
+    const n = parseFloat(cashbackVal);
+    return isNaN(n) || n <= 0 ? 0 : Math.min(n, entry.amount);
+  }
+
   async function handlePayFull() {
+    const cb = parsedCashback();
     setOptimisticPaid(true);
     setOptimisticPaidAmount(null);
+    setOptimisticCashback(cb > 0 ? cb : null);
     setShowDialog(false);
-    await onUpdate(entry.id, { isPaid: true });
+    await onUpdate(entry.id, { isPaid: true, ...(isCC && { cashbackAmount: cb }) });
   }
 
   async function handleSavePartial() {
     const num = parseFloat(partialVal);
     if (isNaN(num) || num < 0) return;
-    if (num >= entry.amount) {
+    const cb = parsedCashback();
+    const netAmt = entry.amount - cb;
+    if (num >= netAmt) {
       setOptimisticPaid(true);
       setOptimisticPaidAmount(null);
     } else {
       setOptimisticPaidAmount(num > 0 ? num : null);
     }
+    setOptimisticCashback(cb > 0 ? cb : null);
     setShowDialog(false);
-    await onUpdate(entry.id, { paidAmount: num });
+    await onUpdate(entry.id, { paidAmount: num, ...(isCC && { cashbackAmount: cb }) });
   }
 
   function handleAmountClick(e: React.MouseEvent) {
@@ -171,12 +188,12 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
           </p>
         </div>
 
-        <div className="shrink-0">
+        <div className="shrink-0 text-right">
           {isPartial && !editingAmount ? (
-            <div className="text-right">
+            <>
               <p className="text-xs text-amber-600 font-semibold">{fmt(paidAmount!)} paid</p>
               <p className="text-[10px] text-muted-foreground">{fmt(outstanding)} left</p>
-            </div>
+            </>
           ) : editingAmount ? (
             <input
               ref={amountRef}
@@ -187,6 +204,11 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
               onKeyDown={handleAmountKey}
               className="w-24 text-right text-sm font-semibold bg-transparent border-b border-zinc-400 outline-none"
             />
+          ) : cashback > 0 && !isPaid ? (
+            <>
+              <p className="text-sm font-semibold">{fmt(netBill)}</p>
+              <p className="text-[10px] text-green-600">-{fmt(cashback)} cashback</p>
+            </>
           ) : (
             <span
               onClick={handleAmountClick}
@@ -209,16 +231,38 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
           </DialogHeader>
 
           <div className="space-y-4 py-1">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Amount due</span>
-              <span className="font-bold">{fmt(entry.amount)}</span>
-            </div>
-            {isPartial && (
+            {/* Bill summary */}
+            <div className="space-y-1.5">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Already paid</span>
-                <span className="text-amber-600 font-semibold">{fmt(paidAmount!)}</span>
+                <span className="text-muted-foreground">Bill amount</span>
+                <span className="font-semibold">{fmt(entry.amount)}</span>
               </div>
-            )}
+              {/* Cashback field — only for CC entries */}
+              {isCC && (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm text-green-700">Cashback</span>
+                  <Input
+                    type="number"
+                    value={cashbackVal}
+                    onChange={e => setCashbackVal(e.target.value)}
+                    placeholder="0"
+                    className="h-7 w-28 text-right text-sm text-green-700 border-green-200 focus:border-green-400"
+                  />
+                </div>
+              )}
+              {isCC && parsedCashback() > 0 && (
+                <div className="flex items-center justify-between text-sm border-t border-dashed border-border pt-1.5">
+                  <span className="font-medium">Net payable</span>
+                  <span className="font-bold">{fmt(entry.amount - parsedCashback())}</span>
+                </div>
+              )}
+              {isPartial && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Already paid</span>
+                  <span className="text-amber-600 font-semibold">{fmt(paidAmount!)}</span>
+                </div>
+              )}
+            </div>
 
             {/* Mode toggle */}
             <div className="flex gap-2 bg-zinc-100 rounded-lg p-1">
@@ -247,7 +291,7 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
 
             {payMode === "full" ? (
               <Button className="w-full" onClick={handlePayFull}>
-                Mark paid · {fmt(entry.amount)}
+                Mark paid · {fmt(entry.amount - parsedCashback())}
               </Button>
             ) : (
               <div className="space-y-2">

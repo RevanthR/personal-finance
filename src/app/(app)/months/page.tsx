@@ -119,7 +119,7 @@ export default async function MonthsPage() {
     if (actual) {
       const income = actual.salaryIncome + actual.freelanceIncome + actual.otherIncome
         + actual.adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0);
-      const expenses = actual.entries.reduce((s, e) => s + e.amount, 0)
+      const expenses = actual.entries.reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
         + actual.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0);
       return {
         id: actual.id, month, year, income, expenses,
@@ -194,7 +194,7 @@ export default async function MonthsPage() {
     if (!pastFYMap[mFY]) pastFYMap[mFY] = { income: 0, expenses: 0, count: 0 };
     const income = m.salaryIncome + m.freelanceIncome + m.otherIncome
       + m.adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0);
-    const expenses = m.entries.reduce((s, e) => s + e.amount, 0)
+    const expenses = m.entries.reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
       + m.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0);
     pastFYMap[mFY].income += income;
     pastFYMap[mFY].expenses += expenses;
@@ -219,14 +219,14 @@ export default async function MonthsPage() {
     const cm = currentMonthFull;
     const cmIncome = cm.salaryIncome + cm.freelanceIncome + cm.otherIncome
       + cm.adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0);
-    const cmExpenses = cm.entries.reduce((s, e) => s + e.amount, 0)
+    const cmExpenses = cm.entries.reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
       + cm.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0);
 
     // Category breakdown — entries grouped by template.category
     const catMap = new Map<string, number>();
     for (const e of cm.entries) {
       const cat = e.template.customCategory ?? e.template.category;
-      catMap.set(cat, (catMap.get(cat) ?? 0) + e.amount);
+      catMap.set(cat, (catMap.get(cat) ?? 0) + e.amount - (e.cashbackAmount ?? 0));
     }
     for (const a of cm.adHocItems) {
       if (a.type === "EXPENSE" && a.category !== "CREDIT_CARD") {
@@ -301,9 +301,10 @@ export default async function MonthsPage() {
     for (const e of m.entries) {
       const t = e.template;
       const ex = templateMap.get(e.templateId);
-      if (ex) { ex.total += e.amount; ex.months++; }
-      else templateMap.set(e.templateId, { name: t.name, category: t.category, customCategory: t.customCategory ?? null, total: e.amount, months: 1 });
-      recurringTotal += e.amount;
+      const netAmt = e.amount - (e.cashbackAmount ?? 0);
+      if (ex) { ex.total += netAmt; ex.months++; }
+      else templateMap.set(e.templateId, { name: t.name, category: t.category, customCategory: t.customCategory ?? null, total: netAmt, months: 1 });
+      recurringTotal += netAmt;
     }
     for (const a of m.adHocItems) {
       if (a.type === "EXPENSE") adHocExpenseTotal += a.amount;
@@ -365,7 +366,7 @@ export default async function MonthsPage() {
   const monthlyTrends = fyActual.map(m => {
     const income = m.salaryIncome + m.freelanceIncome + m.otherIncome
       + m.adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0);
-    const expenses = m.entries.reduce((s, e) => s + e.amount, 0)
+    const expenses = m.entries.reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
       + m.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0);
     return {
       label: MONTHS_SHORT[m.month - 1],
@@ -472,7 +473,7 @@ export default async function MonthsPage() {
   const allTimeStats = analyticsMonths.map(m => {
     const income = m.salaryIncome + m.freelanceIncome + m.otherIncome
       + m.adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0);
-    const expenses = m.entries.reduce((s, e) => s + e.amount, 0)
+    const expenses = m.entries.reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
       + m.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0);
     return { label: `${MONTHS_SHORT[m.month - 1]} ${m.year}`, income, expenses, balance: income - expenses, savingsRate: income > 0 ? Math.round(((income - expenses) / income) * 100) : 0 };
   });
@@ -489,7 +490,7 @@ export default async function MonthsPage() {
   for (const m of prevFYMonths) {
     for (const e of m.entries) {
       const key = e.template.customCategory ?? e.template.category;
-      prevCatMap.set(key, (prevCatMap.get(key) ?? 0) + e.amount);
+      prevCatMap.set(key, (prevCatMap.get(key) ?? 0) + e.amount - (e.cashbackAmount ?? 0));
     }
     for (const a of m.adHocItems) {
       if (a.type === "EXPENSE" && a.category !== "CREDIT_CARD") {
