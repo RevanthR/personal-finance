@@ -36,7 +36,8 @@ export function Header({ user }: HeaderProps) {
 
   return (
     <>
-    <header className="h-14 border-b bg-white flex items-center justify-between px-4 md:px-6 shrink-0">
+    <header className="border-b bg-white flex flex-col justify-end px-4 md:px-6 shrink-0" style={{ paddingTop: "env(safe-area-inset-top)", minHeight: "calc(3.5rem + env(safe-area-inset-top))" }}>
+      <div className="h-14 flex items-center justify-between">
       <div className="md:hidden flex items-center gap-2">
         <div className="w-7 h-7 bg-zinc-900 rounded-lg flex items-center justify-center shrink-0">
           <IndianRupee className="w-3.5 h-3.5 text-white" />
@@ -97,6 +98,7 @@ export function Header({ user }: HeaderProps) {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+      </div>
       </div>
     </header>
     <GuidePanel open={guideOpen} onClose={() => setGuideOpen(false)} />
