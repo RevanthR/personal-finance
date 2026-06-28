@@ -643,11 +643,9 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
           )}
         </div>
 
-        <p className="text-sm text-muted-foreground">
-          {isProjected
-            ? `${projEntries.length} expected payments`
-            : pendingCount > 0 ? `${pendingCount} payments pending` : "All paid ✓"}
-        </p>
+        {!isProjected && pendingCount === 0 && (
+          <p className="text-sm text-muted-foreground">All paid</p>
+        )}
       </div>
 
       {/* FY Summary Strip */}
@@ -700,7 +698,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
             </Card>
           </button>
         )}
-        <MetricCard label="Expenditure" value={fmt(dispCommitted)} icon={<TrendingDown className="w-4 h-4" />} color="text-red-600" sub={isProjected ? `${projEntries.length} items` : `${pendingCount} pending`} gradient="linear-gradient(135deg, white 0%, #fef2f2 100%)" />
+        <MetricCard label="Expenditure" value={fmt(dispCommitted)} icon={<TrendingDown className="w-4 h-4" />} color="text-red-600" sub={isProjected ? `${projEntries.length} items` : pendingCount > 0 ? `${pendingCount} pending` : undefined} gradient="linear-gradient(135deg, white 0%, #fef2f2 100%)" />
         <MetricCard
           label="Unplanned"
           value={isProjected ? "—" : fmt(adHocExpense)}

@@ -97,13 +97,7 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground mb-1">Active Chits</p>
-            <p className="text-2xl font-bold">{activeChits.length}</p>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-2 gap-3">
         <Card>
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground mb-1">Monthly Commitment</p>
@@ -112,9 +106,9 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
             </p>
           </CardContent>
         </Card>
-        <Card className="col-span-2 md:col-span-1">
+        <Card>
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground mb-1">Total Savings Accumulated</p>
+            <p className="text-xs text-muted-foreground mb-1">Total Accumulated</p>
             <p className="text-2xl font-bold text-green-600">{fmt(totalSavings)}</p>
           </CardContent>
         </Card>
@@ -123,9 +117,6 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
       {/* Active chits */}
       {activeChits.length > 0 && (
         <div>
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-            Active Chits
-          </h2>
           <div className="grid gap-3 md:grid-cols-2">
             {activeChits.map((chit) => {
               const progressPercent = Math.min(
@@ -165,10 +156,8 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
 
                     <div>
                       <div className="flex justify-between text-xs mb-1">
-                        <span className="text-muted-foreground">Accumulated savings</span>
-                        <span className="font-medium text-green-600">
-                          {fmt(chit.accumulatedSavings)} ({progressPercent}%)
-                        </span>
+                        <span className="text-muted-foreground">Accumulated</span>
+                        <span className="font-medium text-green-600">{fmt(chit.accumulatedSavings)}</span>
                       </div>
                       <Progress value={progressPercent} className="h-1.5" />
                     </div>

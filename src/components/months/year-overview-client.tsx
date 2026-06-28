@@ -115,10 +115,9 @@ export function YearOverviewClient({
   const maxMonthIncome = Math.max(...months.map(m => m.income));
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 max-w-5xl mx-auto lg:items-start">
-    {/* ── Left: Year overview ── */}
-    <div className="flex-1 min-w-0 space-y-5">
-      {/* Header + tabs */}
+    <div className="max-w-7xl mx-auto space-y-5">
+
+      {/* Header + tabs — always visible */}
       <div>
         <h1 className="text-xl font-bold">{fyKey}</h1>
         <p className="text-sm text-muted-foreground">
@@ -130,7 +129,7 @@ export function YearOverviewClient({
               key={t}
               onClick={() => setTab(t)}
               className={cn(
-                "px-4 py-1.5 rounded-lg text-sm font-medium transition-colors capitalize",
+                "px-4 py-1.5 rounded-lg text-sm font-medium transition-colors",
                 tab === t ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
               )}
             >
@@ -140,11 +139,15 @@ export function YearOverviewClient({
         </div>
       </div>
 
-      {/* Breakdown tab */}
+      {/* Breakdown tab — full width */}
       {tab === "breakdown" && analyticsData && (
         <StatsBreakdown data={analyticsData} />
       )}
 
+      {/* Overview tab — sidebar layout capped at 5xl */}
+      {tab === "overview" && (
+      <div className="flex flex-col lg:flex-row gap-6 max-w-5xl lg:items-start">
+    <div className="flex-1 min-w-0 space-y-5">
       {tab === "overview" && <>
 
       {/* Year-end projection */}
@@ -172,13 +175,13 @@ export function YearOverviewClient({
               <span className="text-red-700 font-semibold">{fmt(totalExpenses)}</span>
             </div>
           </div>
-          {projCount > 0 && (
+          {projCount > 0 && incomeTemplateCount > 0 && (
             <p className="text-[10px] text-muted-foreground mt-2">
-              {actualCount} month{actualCount !== 1 ? "s" : ""} actual · {projCount} projected
-              {incomeTemplateCount > 0
-                ? ` from ${incomeTemplateCount} income template${incomeTemplateCount !== 1 ? "s" : ""}`
-                : " at current run rate"}
+              Projection from {incomeTemplateCount} income template{incomeTemplateCount !== 1 ? "s" : ""}
             </p>
+          )}
+          {projCount > 0 && incomeTemplateCount === 0 && (
+            <p className="text-[10px] text-muted-foreground mt-2">Projection at current run rate</p>
           )}
         </CardContent>
       </Card>
@@ -396,6 +399,8 @@ export function YearOverviewClient({
           </Card>
         )}
       </div>
+    )}
+    </div>
     )}
     </div>
   );

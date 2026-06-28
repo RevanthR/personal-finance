@@ -17,10 +17,24 @@ type TrendItem = {
   adHocIncome: number;
 };
 
+function dynBarSize(count: number) {
+  if (count <= 3) return 48;
+  if (count <= 6) return 32;
+  if (count <= 9) return 20;
+  return 14;
+}
+
+function dynHeight(count: number) {
+  if (count <= 3) return 110;
+  if (count <= 6) return 130;
+  return 150;
+}
+
 export function TrendChart({ data }: { data: TrendItem[] }) {
+  const bs = dynBarSize(data.length);
   return (
-    <ResponsiveContainer width="100%" height={140}>
-      <BarChart data={data} barSize={10} barGap={2}>
+    <ResponsiveContainer width="100%" height={dynHeight(data.length)}>
+      <BarChart data={data} barSize={bs} barGap={3} barCategoryGap="25%">
         <XAxis dataKey="label" tick={{ fontSize: 9, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
         <YAxis hide />
         <Tooltip
@@ -38,10 +52,11 @@ export function IncomeChart({ data }: { data: TrendItem[] }) {
   const hasFreelance = data.some(d => d.freelance > 0);
   const hasOther = data.some(d => d.other > 0);
   const hasAdHoc = data.some(d => d.adHocIncome > 0);
+  const bs = dynBarSize(data.length);
 
   return (
-    <ResponsiveContainer width="100%" height={140}>
-      <BarChart data={data} barSize={10} barGap={1}>
+    <ResponsiveContainer width="100%" height={dynHeight(data.length)}>
+      <BarChart data={data} barSize={bs} barCategoryGap="25%">
         <XAxis dataKey="label" tick={{ fontSize: 9, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
         <YAxis hide />
         <Tooltip

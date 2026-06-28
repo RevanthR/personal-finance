@@ -297,6 +297,8 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
   const avgSavingsRate = data.monthlyTrends.length > 0
     ? Math.round(data.monthlyTrends.reduce((s, m) => s + m.savingsRate, 0) / data.monthlyTrends.length) : 0;
   const recurringPct = data.fyExpenses > 0 ? pct(data.recurringTotal, data.fyExpenses) : 0;
+  const essentialPct = pct(data.essentialTotal, data.fyExpenses);
+  const lifestylePct = pct(data.lifestyleTotal, data.fyExpenses);
 
   if (data.actualMonthCount === 0) {
     return (
@@ -308,235 +310,187 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
   }
 
   return (
-    <div className="space-y-8 max-w-2xl">
+    <div className="space-y-5">
 
-      {/* Summary cards */}
+      {/* Summary cards — always full width */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <StatCard label="FY Spend" value={fmt(data.fyExpenses)} sub={`${data.actualMonthCount} months tracked`} color="text-red-600" />
+        <StatCard label="FY Spend" value={fmt(data.fyExpenses)} sub={`${data.actualMonthCount} months`} color="text-red-600" />
         <StatCard label="Avg / month" value={fmt(avgMonthlySpend)} />
-        <StatCard
-          label="Recurring"
-          value={`${recurringPct}%`}
-          sub="of total spend"
-          color={recurringPct > 80 ? "text-amber-600" : "text-foreground"}
-        />
-        <StatCard
-          label="Avg savings rate"
-          value={`${avgSavingsRate}%`}
-          color={avgSavingsRate >= 20 ? "text-green-600" : avgSavingsRate >= 10 ? "text-amber-600" : "text-red-600"}
-        />
+        <StatCard label="FY Income" value={fmt(data.fyIncome)} color="text-green-600" />
+        <StatCard label="Avg savings" value={`${avgSavingsRate}%`} color={avgSavingsRate >= 20 ? "text-green-600" : avgSavingsRate >= 10 ? "text-amber-600" : "text-red-600"} />
       </div>
 
-      {/* Spending by category */}
-      <div>
-        <SectionTitle>Where your money went</SectionTitle>
-        <Card>
-          <CardContent className="p-3 sm:p-4">
-            <CategorySection data={data.spendByCategory} totalExpenses={data.fyExpenses} fmt={fmt} />
-          </CardContent>
-        </Card>
-      </div>
+      {/* 2-column grid on desktop */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:items-start">
 
-      {/* Spending character */}
-      <div>
-        <SectionTitle>Spending character</SectionTitle>
-        <div className="grid grid-cols-2 gap-3">
-          {/* Recurring vs one-off */}
-          <Card>
-            <CardContent className="p-3">
-              <p className="text-xs font-semibold mb-3">Recurring vs One-off</p>
-              <div className="space-y-2">
-                <div>
-                  <div className="flex justify-between mb-1">
-                    <span className="text-xs text-muted-foreground">Recurring</span>
-                    <span className="text-xs font-semibold">{recurringPct}%</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-zinc-100 overflow-hidden">
-                    <div className="h-full rounded-full bg-indigo-400" style={{ width: `${recurringPct}%` }} />
-                  </div>
-                </div>
-                <div>
-                  <div className="flex justify-between mb-1">
-                    <span className="text-xs text-muted-foreground">One-off</span>
-                    <span className="text-xs font-semibold">{100 - recurringPct}%</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-zinc-100 overflow-hidden">
-                    <div className="h-full rounded-full bg-amber-400" style={{ width: `${100 - recurringPct}%` }} />
-                  </div>
-                </div>
-              </div>
-              <p className="text-[10px] text-muted-foreground mt-3">
-                Committed overhead: <span className="font-semibold text-foreground">{fmt(data.committedOverhead)}/mo</span>
-              </p>
-            </CardContent>
-          </Card>
+        {/* ── Left column ── */}
+        <div className="space-y-5">
 
-          {/* Essential vs Lifestyle */}
-          <Card>
-            <CardContent className="p-3">
-              <p className="text-xs font-semibold mb-3">Essential vs Lifestyle</p>
-              <div className="space-y-2">
-                <div>
-                  <div className="flex justify-between mb-1">
-                    <span className="text-xs text-muted-foreground">Essential</span>
-                    <span className="text-xs font-semibold">{pct(data.essentialTotal, data.fyExpenses)}%</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-zinc-100 overflow-hidden">
-                    <div className="h-full rounded-full bg-slate-500" style={{ width: `${pct(data.essentialTotal, data.fyExpenses)}%` }} />
-                  </div>
-                </div>
-                <div>
-                  <div className="flex justify-between mb-1">
-                    <span className="text-xs text-muted-foreground">Lifestyle</span>
-                    <span className="text-xs font-semibold">{pct(data.lifestyleTotal, data.fyExpenses)}%</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-zinc-100 overflow-hidden">
-                    <div className="h-full rounded-full bg-pink-400" style={{ width: `${pct(data.lifestyleTotal, data.fyExpenses)}%` }} />
-                  </div>
-                </div>
-              </div>
-              <p className="text-[10px] text-muted-foreground mt-3">Loan, Maintenance, Savings = Essential</p>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {/* Monthly savings rate trend */}
-      <div>
-        <SectionTitle>Monthly savings trend</SectionTitle>
-        <Card>
-          <CardContent className="p-3 sm:p-4">
-            <SavingsRateBar trends={data.monthlyTrends} fmt={fmt} />
-            {(data.bestMonth || data.worstMonth) && (
-              <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-border">
-                {data.bestMonth && (
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-green-500 shrink-0" />
-                    <div>
-                      <p className="text-[10px] text-muted-foreground">Best month (all time)</p>
-                      <p className="text-xs font-semibold">{data.bestMonth.label} · {data.bestMonth.savingsRate}%</p>
-                    </div>
-                  </div>
-                )}
-                {data.worstMonth && data.worstMonth.label !== data.bestMonth?.label && (
-                  <div className="flex items-center gap-2">
-                    <TrendingDown className="w-4 h-4 text-red-500 shrink-0" />
-                    <div>
-                      <p className="text-[10px] text-muted-foreground">Worst month (all time)</p>
-                      <p className="text-xs font-semibold">{data.worstMonth.label} · {data.worstMonth.savingsRate}%</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Income trend */}
-      {data.monthlyTrends.length > 0 && (
-        <div>
-          <SectionTitle>Income breakdown</SectionTitle>
-          <Card>
-            <CardContent className="p-3 sm:p-4">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
-                <div>
-                  <p className="text-[10px] text-muted-foreground">Salary</p>
-                  <p className="text-sm font-semibold text-emerald-600">{fmt(data.incomeSources.salary)}</p>
-                </div>
-                {data.incomeSources.freelance > 0 && (
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Freelance</p>
-                    <p className="text-sm font-semibold text-cyan-600">{fmt(data.incomeSources.freelance)}</p>
-                    <p className="text-[9px] text-muted-foreground">{data.freelancePct}% of income</p>
-                  </div>
-                )}
-                {data.incomeSources.other > 0 && (
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Other</p>
-                    <p className="text-sm font-semibold">{fmt(data.incomeSources.other)}</p>
-                  </div>
-                )}
-                {data.incomeSources.adHoc > 0 && (
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">One-off income</p>
-                    <p className="text-sm font-semibold text-violet-600">{fmt(data.incomeSources.adHoc)}</p>
-                  </div>
-                )}
-              </div>
-              <IncomeChart data={data.monthlyTrends} />
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Loan freedom */}
-      {data.loans.length > 0 && (
-        <div>
-          <SectionTitle>Loan freedom timeline</SectionTitle>
-          <LoanTimeline loans={data.loans} fmt={fmt} hidden={hidden} />
-        </div>
-      )}
-
-      {/* CC annual subcats */}
-      {data.ccAnnualSubcats.length > 0 && (
-        <div>
-          <SectionTitle>Card spend by type (full year)</SectionTitle>
-          <Card>
-            <CardContent className="p-3 sm:p-4">
-              <div className="space-y-2">
-                {(() => {
-                  const total = data.ccAnnualSubcats.reduce((s, i) => s + i.amount, 0);
-                  const max = data.ccAnnualSubcats[0]?.amount ?? 1;
-                  return data.ccAnnualSubcats.map(item => (
-                    <div key={item.name}>
-                      <div className="flex justify-between mb-0.5">
-                        <span className="text-xs">{item.name}</span>
-                        <div className="flex gap-2">
-                          <span className="text-[10px] text-muted-foreground">{pct(item.amount, total)}%</span>
-                          <span className="text-xs font-semibold tabular-nums">{fmt(item.amount)}</span>
-                        </div>
-                      </div>
-                      <Bar value={item.amount} max={max} color={CATEGORY_COLORS.CREDIT_CARD} />
-                    </div>
-                  ));
-                })()}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Chit fund summary */}
-      {data.chits.length > 0 && (
-        <div>
-          <SectionTitle>Chit funds</SectionTitle>
-          <div className="space-y-2">
-            {data.chits.map(c => (
-              <div key={c.name} className="rounded-xl border bg-card px-4 py-3 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium">{c.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {fmt(c.monthlyAmount)}/month · Total value {fmt(c.totalValue)}
-                  </p>
-                </div>
-                <div className="text-right shrink-0">
-                  {c.isLifted ? (
-                    <span className="text-xs px-2 py-1 rounded-full bg-zinc-100 text-zinc-500 font-medium">Lifted</span>
-                  ) : (
-                    <>
-                      <p className="text-sm font-bold text-emerald-600">{fmt(c.accumulated)}</p>
-                      <p className="text-[10px] text-muted-foreground">saved so far</p>
-                    </>
-                  )}
-                </div>
-              </div>
-            ))}
+          {/* Where your money went */}
+          <div>
+            <SectionTitle>Where your money went</SectionTitle>
+            <Card>
+              <CardContent className="p-3 sm:p-4">
+                <CategorySection data={data.spendByCategory} totalExpenses={data.fyExpenses} fmt={fmt} />
+              </CardContent>
+            </Card>
           </div>
-        </div>
-      )}
 
-      {/* YoY comparison */}
+          {/* Spending character */}
+          <div>
+            <SectionTitle>Spending character</SectionTitle>
+            <Card>
+              <CardContent className="p-4 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground">Recurring</p>
+                    <div className="h-2 rounded-full bg-zinc-100 overflow-hidden">
+                      <div className="h-full rounded-full bg-indigo-400" style={{ width: `${recurringPct}%` }} />
+                    </div>
+                    <p className="text-xs font-semibold">{recurringPct}%</p>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground">One-off</p>
+                    <div className="h-2 rounded-full bg-zinc-100 overflow-hidden">
+                      <div className="h-full rounded-full bg-amber-400" style={{ width: `${100 - recurringPct}%` }} />
+                    </div>
+                    <p className="text-xs font-semibold">{100 - recurringPct}%</p>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground">Essential</p>
+                    <div className="h-2 rounded-full bg-zinc-100 overflow-hidden">
+                      <div className="h-full rounded-full bg-slate-500" style={{ width: `${essentialPct}%` }} />
+                    </div>
+                    <p className="text-xs font-semibold">{essentialPct}%</p>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground">Lifestyle</p>
+                    <div className="h-2 rounded-full bg-zinc-100 overflow-hidden">
+                      <div className="h-full rounded-full bg-pink-400" style={{ width: `${lifestylePct}%` }} />
+                    </div>
+                    <p className="text-xs font-semibold">{lifestylePct}%</p>
+                  </div>
+                </div>
+                <p className="text-[10px] text-muted-foreground pt-1 border-t border-border">
+                  Committed overhead <span className="font-semibold text-foreground">{fmt(data.committedOverhead)}/mo</span>
+                  <span className="mx-1.5">·</span>
+                  Essential = Loan, Maintenance, Savings
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Chit funds */}
+          {data.chits.length > 0 && (
+            <div>
+              <SectionTitle>Chit funds</SectionTitle>
+              <div className="space-y-2">
+                {data.chits.map(c => (
+                  <div key={c.name} className="rounded-xl border bg-card px-4 py-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{c.name}</p>
+                      <p className="text-xs text-muted-foreground">{fmt(c.monthlyAmount)}/mo · pot {fmt(c.totalValue)}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      {c.isLifted
+                        ? <span className="text-xs px-2 py-1 rounded-full bg-zinc-100 text-zinc-500 font-medium">Lifted</span>
+                        : <><p className="text-sm font-bold text-emerald-600">{fmt(c.accumulated)}</p><p className="text-[10px] text-muted-foreground">saved</p></>
+                      }
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Right column ── */}
+        <div className="space-y-5">
+
+          {/* Monthly savings trend */}
+          <div>
+            <SectionTitle>Monthly savings trend</SectionTitle>
+            <Card>
+              <CardContent className="p-3 sm:p-4">
+                <SavingsRateBar trends={data.monthlyTrends} fmt={fmt} />
+                {(data.bestMonth || data.worstMonth) && data.bestMonth?.label !== data.worstMonth?.label && (
+                  <div className="flex gap-4 mt-3 pt-3 border-t border-border">
+                    {data.bestMonth && (
+                      <div className="flex items-center gap-1.5">
+                        <TrendingUp className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                        <p className="text-xs"><span className="text-muted-foreground">Best </span><span className="font-semibold">{data.bestMonth.label} {data.bestMonth.savingsRate}%</span></p>
+                      </div>
+                    )}
+                    {data.worstMonth && (
+                      <div className="flex items-center gap-1.5">
+                        <TrendingDown className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                        <p className="text-xs"><span className="text-muted-foreground">Worst </span><span className="font-semibold">{data.worstMonth.label} {data.worstMonth.savingsRate}%</span></p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Income breakdown */}
+          {data.monthlyTrends.length > 0 && (
+            <div>
+              <SectionTitle>Income by source</SectionTitle>
+              <Card>
+                <CardContent className="p-3 sm:p-4">
+                  <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-3">
+                    <div><span className="text-[10px] text-muted-foreground">Salary </span><span className="text-xs font-semibold text-emerald-600">{fmt(data.incomeSources.salary)}</span></div>
+                    {data.incomeSources.freelance > 0 && <div><span className="text-[10px] text-muted-foreground">Freelance </span><span className="text-xs font-semibold text-cyan-600">{fmt(data.incomeSources.freelance)}</span><span className="text-[9px] text-muted-foreground ml-1">({data.freelancePct}%)</span></div>}
+                    {data.incomeSources.other > 0 && <div><span className="text-[10px] text-muted-foreground">Other </span><span className="text-xs font-semibold">{fmt(data.incomeSources.other)}</span></div>}
+                    {data.incomeSources.adHoc > 0 && <div><span className="text-[10px] text-muted-foreground">One-off </span><span className="text-xs font-semibold text-violet-600">{fmt(data.incomeSources.adHoc)}</span></div>}
+                  </div>
+                  <IncomeChart data={data.monthlyTrends} />
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Loan freedom */}
+          {data.loans.length > 0 && (
+            <div>
+              <SectionTitle>Loan freedom timeline</SectionTitle>
+              <LoanTimeline loans={data.loans} fmt={fmt} hidden={hidden} />
+            </div>
+          )}
+
+          {/* CC annual subcats */}
+          {data.ccAnnualSubcats.length > 0 && (
+            <div>
+              <SectionTitle>Card spend by type</SectionTitle>
+              <Card>
+                <CardContent className="p-3 sm:p-4">
+                  <div className="space-y-2">
+                    {(() => {
+                      const total = data.ccAnnualSubcats.reduce((s, i) => s + i.amount, 0);
+                      const max = data.ccAnnualSubcats[0]?.amount ?? 1;
+                      return data.ccAnnualSubcats.map(item => (
+                        <div key={item.name}>
+                          <div className="flex justify-between mb-0.5">
+                            <span className="text-xs">{item.name}</span>
+                            <div className="flex gap-2">
+                              <span className="text-[10px] text-muted-foreground">{pct(item.amount, total)}%</span>
+                              <span className="text-xs font-semibold tabular-nums">{fmt(item.amount)}</span>
+                            </div>
+                          </div>
+                          <Bar value={item.amount} max={max} color={CATEGORY_COLORS.CREDIT_CARD} />
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* YoY — full width below the grid */}
       {data.prevFYLabel && data.prevFYSpendByCategory.length > 0 && (
         <div>
           <SectionTitle>vs {data.prevFYLabel}</SectionTitle>
