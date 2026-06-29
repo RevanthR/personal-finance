@@ -98,27 +98,35 @@ export function GuidePanel({ open, onClose }: GuidePanelProps) {
       {/* Panel */}
       <div
         className={cn(
-          "fixed top-0 right-0 h-full w-full max-w-sm z-50 bg-background shadow-2xl flex flex-col transition-transform duration-300 ease-in-out",
+          "fixed top-0 right-0 h-dvh w-full max-w-sm z-50 bg-background shadow-2xl flex flex-col transition-transform duration-300 ease-in-out",
           open ? "translate-x-0" : "translate-x-full"
         )}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
-          <div>
-            <p className="font-semibold text-base">App Guide</p>
-            <p className="text-xs text-muted-foreground">How each feature works</p>
+        {/* Header — clears Dynamic Island */}
+        <div
+          className="flex flex-col justify-end border-b shrink-0"
+          style={{ paddingTop: "env(safe-area-inset-top)" }}
+        >
+          <div className="flex items-center justify-between px-5 py-4">
+            <div>
+              <p className="font-semibold text-base">App Guide</p>
+              <p className="text-xs text-muted-foreground">How each feature works</p>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+              aria-label="Close guide"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-muted transition-colors"
-            aria-label="Close guide"
-          >
-            <X className="w-4 h-4" />
-          </button>
         </div>
 
-        {/* Scrollable content */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6 pb-10">
+        {/* Scrollable content — clears home indicator */}
+        <div
+          className="flex-1 overflow-y-auto px-5 py-4 space-y-6"
+          style={{ paddingBottom: "calc(1.5rem + env(safe-area-inset-bottom))" }}
+        >
           {sections.map(({ icon: Icon, title, color, bg, lines }) => (
             <div key={title}>
               <div className="flex items-center gap-2 mb-2">
