@@ -5,6 +5,7 @@ import { Header } from "@/components/shared/header";
 import { NavProgress } from "@/components/shared/nav-progress";
 import { PrivacyProvider } from "@/contexts/privacy-context";
 import { LegalFooter } from "@/components/shared/legal-footer";
+import { WelcomeModal } from "@/components/coach/welcome-modal";
 import { Suspense } from "react";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -15,6 +16,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <PrivacyProvider>
+      <WelcomeModal />
       <div className="flex h-screen overflow-hidden bg-zinc-50">
         <Suspense><NavProgress /></Suspense>
         <Sidebar isAdmin={isAdmin} />

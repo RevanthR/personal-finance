@@ -14,7 +14,8 @@ import {
 import {
   formatCurrency, CATEGORY_LABELS, INCOME_CATEGORIES, getCategoryDisplay, getCategoryColor, cn,
 } from "@/lib/utils";
-import { Plus, Pencil, Trash2, Lock, ChevronDown, TrendingUp } from "lucide-react";
+import { Plus, Pencil, Trash2, Lock, ChevronDown, TrendingUp, SlidersHorizontal } from "lucide-react";
+import { PageCoach } from "@/components/coach/page-coach";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { ForecloseDialog } from "@/components/templates/foreclose-dialog";
@@ -231,6 +232,14 @@ export function TemplatesClient({
 
   return (
     <div className="space-y-4">
+      <PageCoach
+        coachKey="templates"
+        icon={SlidersHorizontal}
+        iconClass="text-violet-600"
+        bgClass="bg-violet-50 border-violet-100"
+        title="Set up your recurring items here"
+        desc="Add salary, EMIs, rent, and subscriptions once — they auto-fill your dashboard every month. Income items go under the Income tab."
+      />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Configuration</h1>

@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { EntryRow } from "./entry-row";
+import { DashboardTour } from "@/components/coach/dashboard-tour";
 import type { CCCard } from "./adhoc-dialog";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -587,6 +588,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
 
   return (
     <div className="space-y-4">
+      <DashboardTour />
       {/* Header */}
       <div className="space-y-2">
         <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Monthly Snapshot</p>

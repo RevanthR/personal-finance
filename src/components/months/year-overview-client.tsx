@@ -8,6 +8,8 @@ import { usePrivacy } from "@/contexts/privacy-context";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import type { AnalyticsData } from "./stats-breakdown";
+import { PageCoach } from "@/components/coach/page-coach";
+import { Calendar } from "lucide-react";
 
 const StatsBreakdown = dynamic(
   () => import("./stats-breakdown").then(m => m.StatsBreakdown),
@@ -116,6 +118,14 @@ export function YearOverviewClient({
 
   return (
     <div className="max-w-7xl mx-auto space-y-5">
+      <PageCoach
+        coachKey="months"
+        icon={Calendar}
+        iconClass="text-blue-600"
+        bgClass="bg-blue-50 border-blue-100"
+        title="Your financial year at a glance"
+        desc="April to March. Solid months are real data; dashed months are projections. Tap any past month to see its full breakdown."
+      />
 
       {/* Header + tabs — always visible */}
       <div>

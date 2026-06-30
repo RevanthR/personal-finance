@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { Plus, TrendingUp, TrendingDown, Wallet, Clock, CheckCircle2, Trash2 } from "lucide-react";
+import { PageCoach } from "@/components/coach/page-coach";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
@@ -140,6 +141,14 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
 
   return (
     <div className="space-y-5">
+      <PageCoach
+        coachKey="receivables"
+        icon={TrendingUp}
+        iconClass="text-emerald-600"
+        bgClass="bg-emerald-50 border-emerald-100"
+        title="Track money coming back to you"
+        desc="Log what others owe you. Set an expected date and that month's forecast includes it as income. Mark it received when the money arrives."
+      />
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">

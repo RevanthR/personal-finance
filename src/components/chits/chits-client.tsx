@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { formatCurrency } from "@/lib/utils";
 import { usePrivacy } from "@/contexts/privacy-context";
-import { Plus, TrendingUp, TrendingDown } from "lucide-react";
+import { Plus, TrendingUp, TrendingDown, Coins } from "lucide-react";
+import { PageCoach } from "@/components/coach/page-coach";
 import { toast } from "sonner";
 import { AddChitDialog } from "./add-chit-dialog";
 import { LiftChitDialog } from "./lift-chit-dialog";
@@ -84,6 +85,14 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
 
   return (
     <div className="space-y-6">
+      <PageCoach
+        coachKey="chits"
+        icon={Coins}
+        iconClass="text-amber-600"
+        bgClass="bg-amber-50 border-amber-100"
+        title="How chit funds work here"
+        desc="Before you lift: your monthly payment counts as savings, not an expense. After lifting: it becomes a debt repayment. The app switches automatically."
+      />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Chit Funds</h1>
