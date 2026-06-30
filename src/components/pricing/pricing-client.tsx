@@ -63,6 +63,14 @@ export function PricingClient({ planType, planExpiry, razorpayKeyId }: Props) {
           name: "FinanceOS",
           description: `${plan.label} subscription`,
           theme: { color: "#18181b" },
+          method: {
+            upi: true,
+            card: true,
+            netbanking: true,
+            wallet: false,
+            emi: false,
+            paylater: false,
+          },
           handler: async (response: {
             razorpay_order_id: string;
             razorpay_payment_id: string;
