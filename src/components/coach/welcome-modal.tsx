@@ -19,10 +19,17 @@ export function WelcomeModal() {
   return (
     <>
       <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={dismiss} />
-      <div className="fixed inset-x-4 bottom-4 top-auto z-50 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-sm">
-        <div className="rounded-2xl bg-background shadow-2xl border overflow-hidden animate-in slide-in-from-bottom-4 duration-300 md:animate-in md:zoom-in-95">
+
+      {/* Bottom sheet on mobile, centered dialog on desktop */}
+      <div className="fixed inset-x-0 bottom-0 z-50 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-sm md:px-0 px-0">
+        <div className="rounded-t-3xl md:rounded-2xl bg-background shadow-2xl border-t md:border overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
+          {/* Handle pill — mobile only */}
+          <div className="flex justify-center pt-3 pb-1 md:hidden">
+            <div className="w-10 h-1 rounded-full bg-zinc-300" />
+          </div>
+
           {/* Header */}
-          <div className="bg-zinc-950 px-5 pt-6 pb-5 text-white text-center">
+          <div className="bg-zinc-950 mx-4 md:mx-0 rounded-2xl px-5 pt-5 pb-5 text-white text-center mt-2 md:mt-0 md:rounded-none">
             <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-3">
               <IndianRupee className="w-6 h-6 text-white" />
             </div>
@@ -48,10 +55,14 @@ export function WelcomeModal() {
             })}
           </div>
 
-          <div className="px-5 pb-5">
+          {/* Button — padded for home indicator */}
+          <div
+            className="px-5 pt-1 pb-5"
+            style={{ paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}
+          >
             <button
               onClick={dismiss}
-              className="w-full bg-zinc-950 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-zinc-800 transition-colors"
+              className="w-full bg-zinc-950 text-white rounded-xl py-3 text-sm font-medium hover:bg-zinc-800 transition-colors"
             >
               Get started
             </button>

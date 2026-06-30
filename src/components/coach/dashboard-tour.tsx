@@ -43,13 +43,15 @@ export function DashboardTour() {
 
   return (
     <>
-      {/* Soft backdrop */}
       <div className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[1px]" onClick={skip} />
 
-      {/* Tour card — bottom sheet on mobile, centered card on desktop */}
-      <div className="fixed inset-x-4 bottom-24 z-50 md:inset-auto md:bottom-8 md:left-1/2 md:-translate-x-1/2 md:w-96">
+      {/* Sits above mobile bottom nav (nav is ~64px + 1rem + safe-area from bottom) */}
+      <div
+        className="fixed inset-x-4 z-50 md:inset-auto md:left-1/2 md:-translate-x-1/2 md:w-96"
+        style={{ bottom: "calc(5.5rem + env(safe-area-inset-bottom))" }}
+      >
         <div className="rounded-2xl bg-background border shadow-2xl p-5 animate-in slide-in-from-bottom-2 duration-200">
-          {/* Step indicator + skip */}
+          {/* Step dots + skip */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex gap-1">
               {steps.map((_, i) => (
@@ -70,7 +72,7 @@ export function DashboardTour() {
           {/* Content */}
           <div className="flex gap-3 mb-5">
             <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center shrink-0", bgColor)}>
-              <Icon className={cn("w-4.5 h-4.5", iconColor)} />
+              <Icon className={cn("w-[18px] h-[18px]", iconColor)} />
             </div>
             <div>
               <p className="font-semibold text-sm">{current.title}</p>
@@ -82,13 +84,13 @@ export function DashboardTour() {
           <div className="flex gap-2">
             <button
               onClick={skip}
-              className="flex-1 text-sm text-muted-foreground py-2 rounded-xl hover:bg-muted transition-colors"
+              className="flex-1 text-sm text-muted-foreground py-2.5 rounded-xl hover:bg-muted transition-colors"
             >
               Skip
             </button>
             <button
               onClick={() => next(total)}
-              className="flex-1 bg-zinc-950 text-white text-sm font-medium py-2 rounded-xl hover:bg-zinc-800 transition-colors"
+              className="flex-1 bg-zinc-950 text-white text-sm font-medium py-2.5 rounded-xl hover:bg-zinc-800 transition-colors"
             >
               {step === total - 1 ? "Done" : "Next"}
             </button>
