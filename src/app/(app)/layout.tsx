@@ -4,6 +4,7 @@ import { Sidebar } from "@/components/shared/sidebar";
 import { Header } from "@/components/shared/header";
 import { NavProgress } from "@/components/shared/nav-progress";
 import { PrivacyProvider } from "@/contexts/privacy-context";
+import { LegalFooter } from "@/components/shared/legal-footer";
 import { Suspense } from "react";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -21,6 +22,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <Header user={session.user} />
           <main className="flex-1 overflow-y-auto p-4 md:p-6 pb-28 md:pb-6">
             {children}
+            <LegalFooter />
           </main>
         </div>
       </div>

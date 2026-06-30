@@ -64,6 +64,8 @@ model User {
   role              Role               @default(USER)
   isActive          Boolean            @default(true)
   createdAt         DateTime           @default(now())
+  planType          String             @default("FREE")  // FREE | WEEKLY | MONTHLY | QUARTERLY | YEARLY
+  planExpiry        DateTime?
   accounts          Account[]
   sessions          Session[]
   months            Month[]
@@ -71,6 +73,19 @@ model User {
   chitFunds         ChitFund[]
   receivables       Receivable[]
   pushSubscriptions PushSubscription[]
+  payments          Payment[]
+}
+
+model Payment {
+  id                String   @id @default(cuid())
+  userId            String
+  razorpayOrderId   String   @unique
+  razorpayPaymentId String?
+  planType          String   // WEEKLY | MONTHLY | QUARTERLY | YEARLY
+  amount            Int      // paise
+  status            String   @default("CREATED") // CREATED | CAPTURED | FAILED
+  createdAt         DateTime @default(now())
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // ─── Finance Core ─────────────────────────────────────────────────────────────

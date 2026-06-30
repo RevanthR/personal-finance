@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   Menu,
   IndianRupee,
+  Sparkles,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -20,6 +21,7 @@ const navItems = [
   { href: "/months", label: "Statistics", mobileLabel: "Stats", icon: Calendar },
   { href: "/receivables", label: "Receivables", icon: TrendingUp },
   { href: "/templates", label: "Configuration", mobileLabel: "Config", icon: SlidersHorizontal },
+  { href: "/pricing", label: "Subscription", mobileLabel: "Pro", icon: Sparkles },
 ];
 
 interface SidebarProps {
