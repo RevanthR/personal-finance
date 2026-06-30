@@ -17,8 +17,38 @@ type User = {
   role: string;
   isActive: boolean;
   createdAt: string;
+  planType: string;
+  planExpiry: string | null;
   _count: { months: number };
 };
+
+function PlanBadge({ planType, planExpiry }: { planType: string; planExpiry: string | null }) {
+  const now = new Date();
+  const expiry = planExpiry ? new Date(planExpiry) : null;
+  const isActive = expiry && expiry > now;
+
+  if (!isActive || planType === "FREE") {
+    return (
+      <span className="inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-zinc-100 text-zinc-500">
+        FREE
+      </span>
+    );
+  }
+
+  const daysLeft = Math.ceil((expiry!.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  const isExpiringSoon = daysLeft <= 3;
+
+  return (
+    <div className="flex flex-col items-end gap-0.5">
+      <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${isExpiringSoon ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
+        {planType}
+      </span>
+      <span className="text-[10px] text-muted-foreground">
+        {isExpiringSoon ? `${daysLeft}d left` : `till ${format(expiry!, "dd MMM")}`}
+      </span>
+    </div>
+  );
+}
 
 export function AdminUsersClient({ users: initial }: { users: User[] }) {
   const [users, setUsers] = useState(initial);
@@ -65,6 +95,7 @@ export function AdminUsersClient({ users: initial }: { users: User[] }) {
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-2 shrink-0">
+                  <PlanBadge planType={user.planType} planExpiry={user.planExpiry} />
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs text-muted-foreground">Active</span>
                     <Switch

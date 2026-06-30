@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AdminUsersClient } from "@/components/admin/admin-users-client";
-import { Users, Calendar, Activity } from "lucide-react";
+import { Users, Calendar, Activity, CreditCard } from "lucide-react";
 
 export default async function AdminPage() {
   const users = await db.user.findMany({
@@ -10,8 +10,10 @@ export default async function AdminPage() {
     include: { _count: { select: { months: true } } },
   });
 
+  const now = new Date();
   const totalMonths = users.reduce((s: number, u: typeof users[0]) => s + u._count.months, 0);
   const activeUsers = users.filter((u: typeof users[0]) => u.isActive).length;
+  const paidUsers = users.filter((u: typeof users[0]) => u.planExpiry && new Date(u.planExpiry) > now).length;
 
   return (
     <div className="space-y-6">
@@ -20,7 +22,7 @@ export default async function AdminPage() {
         <p className="text-sm text-muted-foreground">Manage users and view platform stats</p>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
             <Users className="w-8 h-8 text-zinc-500" />
@@ -41,10 +43,19 @@ export default async function AdminPage() {
         </Card>
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
+            <CreditCard className="w-8 h-8 text-indigo-500" />
+            <div>
+              <p className="text-2xl font-bold">{paidUsers}</p>
+              <p className="text-xs text-muted-foreground">Paid Subscribers</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
             <Calendar className="w-8 h-8 text-amber-500" />
             <div>
               <p className="text-2xl font-bold">{totalMonths}</p>
-              <p className="text-xs text-muted-foreground">Total Months Tracked</p>
+              <p className="text-xs text-muted-foreground">Months Tracked</p>
             </div>
           </CardContent>
         </Card>
