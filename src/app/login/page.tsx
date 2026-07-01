@@ -4,7 +4,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { LegalFooter } from "@/components/shared/legal-footer";
 import { Smartphone, Share2, PlusSquare, MoreVertical, Download } from "lucide-react";
 
-export default function LoginPage() {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const { error } = await searchParams;
+  const isDisabled = error === "AccessDenied";
   return (
     <div className="min-h-screen flex flex-col bg-zinc-50">
       <div className="flex-1 flex flex-col items-center justify-center p-4 gap-6">
@@ -21,6 +23,11 @@ export default function LoginPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-4">
+            {isDisabled && (
+              <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                This account has been disabled. Contact support if you think this is a mistake.
+              </div>
+            )}
             <form
               action={async () => {
                 "use server";

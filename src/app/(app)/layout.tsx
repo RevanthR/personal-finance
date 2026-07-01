@@ -18,6 +18,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const isAdmin = session.user.role === "ADMIN";
   const user = session.user;
 
+  if (!user.isActive) redirect("/login");
+
   // Admins always have access
   if (!isAdmin && !isAccessAllowed({ trialEndsAt: user.trialEndsAt, planExpiry: user.planExpiry })) {
     redirect("/pricing");

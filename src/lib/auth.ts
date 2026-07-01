@@ -25,6 +25,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
   callbacks: {
+    async signIn({ user }) {
+      // Block inactive users — new users won't have isActive set yet, so they pass through
+      if ((user as unknown as { isActive?: boolean }).isActive === false) return false;
+      return true;
+    },
     async session({ session, user }) {
       if (session.user) {
         session.user.id = user.id;
