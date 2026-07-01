@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PLANS, Plan, isPlanActive, isTrialActive, trialDaysLeft, PlanType } from "@/lib/plans";
+import { PLANS, Plan, isPlanActive, isTrialActive, trialDaysLeft, canSubscribeTo, PLAN_RANK, PlanType } from "@/lib/plans";
 import { cn } from "@/lib/utils";
 import { CheckCircle2, Zap, Star, Clock, AlertTriangle } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -42,6 +42,7 @@ export function PricingClient({ planType, planExpiry, trialEndsAt, razorpayKeyId
   const trialActive = isTrialActive(trialEndsAt);
   const daysLeft = trialDaysLeft(trialEndsAt);
   const trialExpired = !trialActive && !active;
+  const currentRank = active ? (PLAN_RANK[planType as PlanType] ?? 0) : 0;
 
   async function handleSubscribe(plan: Plan) {
     setError(null);
@@ -152,55 +153,91 @@ export function PricingClient({ planType, planExpiry, trialEndsAt, razorpayKeyId
 
       {/* Plans */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {PLANS.map((plan) => (
-          <div
-            key={plan.id}
-            className={cn(
-              "relative rounded-2xl border p-5 space-y-4",
-              plan.highlight ? "border-zinc-900 bg-zinc-950 text-white" : "border-zinc-200 bg-white"
-            )}
-          >
-            {plan.highlight && (
-              <div className="absolute -top-2.5 left-4 flex items-center gap-1 bg-amber-400 text-zinc-900 text-[10px] font-semibold px-2 py-0.5 rounded-full">
-                <Star className="w-2.5 h-2.5" /> Popular
-              </div>
-            )}
-            <div>
-              <p className={cn("text-xs font-medium uppercase tracking-widest", plan.highlight ? "text-zinc-400" : "text-muted-foreground")}>
-                {plan.label}
-              </p>
-              <p className="text-3xl font-bold mt-1">
-                ₹{plan.price}
-                <span className={cn("text-sm font-normal ml-1", plan.highlight ? "text-zinc-400" : "text-muted-foreground")}>
-                  /{plan.label.toLowerCase()}
-                </span>
-              </p>
-              <p className={cn("text-xs mt-0.5", plan.highlight ? "text-zinc-400" : "text-muted-foreground")}>
-                {plan.perMonth}
-              </p>
-            </div>
+        {PLANS.map((plan) => {
+          const isCurrent = active && planType === plan.id;
+          const isLower = active && PLAN_RANK[plan.id] < currentRank;
+          const isUpgrade = active && PLAN_RANK[plan.id] > currentRank;
+          const canBuy = canSubscribeTo(planType, plan.id, active);
 
-            <button
-              onClick={() => handleSubscribe(plan)}
-              disabled={loading !== null}
+          return (
+            <div
+              key={plan.id}
               className={cn(
-                "w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-medium transition-all",
-                plan.highlight
-                  ? "bg-white text-zinc-900 hover:bg-zinc-100 disabled:opacity-50"
-                  : "bg-zinc-900 text-white hover:bg-zinc-800 disabled:opacity-50"
+                "relative rounded-2xl border p-5 space-y-4 transition-opacity",
+                isCurrent ? "border-emerald-400 bg-emerald-50" :
+                isLower ? "border-zinc-100 bg-zinc-50 opacity-50" :
+                plan.highlight ? "border-zinc-900 bg-zinc-950 text-white" : "border-zinc-200 bg-white"
               )}
             >
-              {loading === plan.id ? (
-                <span className="animate-pulse">Opening payment...</span>
-              ) : (
-                <>
-                  <Zap className="w-3.5 h-3.5" />
-                  {active ? "Extend plan" : "Subscribe"}
-                </>
+              {plan.highlight && !isCurrent && !isLower && (
+                <div className="absolute -top-2.5 left-4 flex items-center gap-1 bg-amber-400 text-zinc-900 text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                  <Star className="w-2.5 h-2.5" /> Popular
+                </div>
               )}
-            </button>
-          </div>
-        ))}
+              {isCurrent && (
+                <div className="absolute -top-2.5 left-4 flex items-center gap-1 bg-emerald-500 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                  <CheckCircle2 className="w-2.5 h-2.5" /> Current plan
+                </div>
+              )}
+              <div>
+                <p className={cn(
+                  "text-xs font-medium uppercase tracking-widest",
+                  isCurrent ? "text-emerald-700" :
+                  plan.highlight ? "text-zinc-400" : "text-muted-foreground"
+                )}>
+                  {plan.label}
+                </p>
+                <p className="text-3xl font-bold mt-1">
+                  ₹{plan.price}
+                  <span className={cn(
+                    "text-sm font-normal ml-1",
+                    isCurrent ? "text-emerald-600" :
+                    plan.highlight ? "text-zinc-400" : "text-muted-foreground"
+                  )}>
+                    /{plan.label.toLowerCase()}
+                  </span>
+                </p>
+                <p className={cn(
+                  "text-xs mt-0.5",
+                  isCurrent ? "text-emerald-600" :
+                  plan.highlight ? "text-zinc-400" : "text-muted-foreground"
+                )}>
+                  {plan.perMonth}
+                </p>
+              </div>
+
+              {isCurrent ? (
+                <div className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-medium bg-emerald-100 text-emerald-700 cursor-default">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Active
+                </div>
+              ) : isLower ? (
+                <div className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-medium bg-zinc-100 text-zinc-400 cursor-not-allowed">
+                  Lower tier
+                </div>
+              ) : (
+                <button
+                  onClick={() => canBuy && handleSubscribe(plan)}
+                  disabled={loading !== null || !canBuy}
+                  className={cn(
+                    "w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-medium transition-all",
+                    plan.highlight
+                      ? "bg-white text-zinc-900 hover:bg-zinc-100 disabled:opacity-50"
+                      : "bg-zinc-900 text-white hover:bg-zinc-800 disabled:opacity-50"
+                  )}
+                >
+                  {loading === plan.id ? (
+                    <span className="animate-pulse">Opening payment...</span>
+                  ) : (
+                    <>
+                      <Zap className="w-3.5 h-3.5" />
+                      {isUpgrade ? "Upgrade" : "Subscribe"}
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {error && (

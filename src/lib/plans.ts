@@ -46,8 +46,21 @@ export const PLANS: Plan[] = [
   },
 ];
 
+export const PLAN_RANK: Record<PlanType, number> = {
+  FREE: 0,
+  WEEKLY: 1,
+  MONTHLY: 2,
+  QUARTERLY: 3,
+  YEARLY: 4,
+};
+
 export function getPlan(id: PlanType): Plan | undefined {
   return PLANS.find((p) => p.id === id);
+}
+
+export function canSubscribeTo(currentPlanType: string, targetPlanType: PlanType, planIsActive: boolean): boolean {
+  if (!planIsActive) return true;
+  return PLAN_RANK[targetPlanType] > (PLAN_RANK[currentPlanType as PlanType] ?? 0);
 }
 
 export function addDays(date: Date, days: number): Date {
