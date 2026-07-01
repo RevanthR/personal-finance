@@ -42,9 +42,10 @@ interface EntryRowProps {
     };
   };
   onUpdate: (id: string, updates: { isPaid?: boolean; amount?: number; notes?: string; paidAmount?: number; cashbackAmount?: number }) => Promise<void>;
+  isBillPending?: boolean;
 }
 
-export function EntryRow({ entry, onUpdate }: EntryRowProps) {
+export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowProps) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const [optimisticPaid, setOptimisticPaid] = useState(entry.isPaid);
@@ -174,17 +175,21 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
     <>
       <div className={cn(
         "flex items-center gap-3 px-3 rounded-xl border transition-all duration-200",
-        isPaid ? "py-1.5 bg-muted/30 border-transparent opacity-50" : "py-2.5 bg-card border-border"
+        isPaid ? "py-1.5 bg-muted/30 border-transparent opacity-50" : "py-2.5 bg-card border-border",
+        isBillPending && !isPaid && "opacity-60"
       )}>
         <button
-          onClick={handleTickClick}
+          onClick={isBillPending ? undefined : handleTickClick}
+          disabled={isBillPending}
           className={cn(
             "shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all",
             isPaid
               ? "bg-zinc-900 border-zinc-900"
-              : isPartial
-                ? "border-amber-500 bg-amber-50"
-                : "border-muted-foreground/50 hover:border-zinc-500"
+              : isBillPending
+                ? "border-zinc-300 bg-zinc-50 cursor-not-allowed"
+                : isPartial
+                  ? "border-amber-500 bg-amber-50"
+                  : "border-muted-foreground/50 hover:border-zinc-500"
           )}
         >
           {isPaid && <Check className="w-3 h-3 text-white" />}
@@ -205,7 +210,12 @@ export function EntryRow({ entry, onUpdate }: EntryRowProps) {
           </p>
           <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
             <span>{getCategoryDisplay(entry.template.category, entry.template.customCategory)}</span>
-            {entry.template.category === "CREDIT_CARD" && entry.template.statementDay && !isPaid && (
+            {isBillPending && entry.template.statementDay && (
+              <span className="text-[10px] text-zinc-400 italic">
+                Bill generates on {entry.template.statementDay}th
+              </span>
+            )}
+            {!isBillPending && entry.template.category === "CREDIT_CARD" && entry.template.statementDay && !isPaid && (
               <span className="text-[10px] text-blue-500">
                 closes {entry.template.statementDay}th
                 {entry.template.dueDateDay ? ` · due ${entry.template.dueDateDay}th` : ""}

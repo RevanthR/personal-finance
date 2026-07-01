@@ -59,10 +59,16 @@ export default async function MonthsPage() {
   // CC statement amounts from current month — used to make the next-month projection more accurate
   // (statementAmount reflects actual post-close charges, not the template default)
   const ccStatements = new Map<string, number>();
+  const todayDay = now.getDate();
+  // CC entries whose statement hasn't closed yet — exclude from current month's expense total
+  const pendingCCBillIds = new Set<string>();
   if (currentMonthFull?.isPopulated) {
     for (const e of currentMonthFull.entries) {
       if (e.template.category === "CREDIT_CARD" && e.statementAmount != null && e.statementAmount > 0) {
         ccStatements.set(e.templateId, e.statementAmount);
+      }
+      if (e.template.category === "CREDIT_CARD" && e.template.statementDay != null && todayDay < e.template.statementDay) {
+        pendingCCBillIds.add(e.id);
       }
     }
   }
@@ -119,7 +125,10 @@ export default async function MonthsPage() {
     if (actual) {
       const income = actual.salaryIncome + actual.freelanceIncome + actual.otherIncome
         + actual.adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0);
-      const expenses = actual.entries.reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
+      const isActualCurrentMonth = month === todayMonth && year === todayYear;
+      const expenses = actual.entries
+        .filter(e => !isActualCurrentMonth || !pendingCCBillIds.has(e.id))
+        .reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
         + actual.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0);
       return {
         id: actual.id, month, year, income, expenses,

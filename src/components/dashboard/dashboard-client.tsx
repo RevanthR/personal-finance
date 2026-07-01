@@ -156,11 +156,12 @@ function CCSubcatBreakdown({ txItems, onDelete }: { txItems: AdHocItem[]; onDele
 }
 
 function CCCardBlock({
-  entry, txItems, nextMonthName, onUpdate, onDelete, onClearStatement,
+  entry, txItems, nextMonthName, isBillPending, onUpdate, onDelete, onClearStatement,
 }: {
   entry: EntryWithTemplate;
   txItems: AdHocItem[];
   nextMonthName: string;
+  isBillPending: boolean;
   onUpdate: (id: string, updates: { isPaid?: boolean; amount?: number; notes?: string; paidAmount?: number; cashbackAmount?: number }) => Promise<void>;
   onDelete: (id: string) => void;
   onClearStatement: (entryId: string) => Promise<void>;
@@ -199,7 +200,7 @@ function CCCardBlock({
 
       {/* Current bill */}
       <div className="p-2">
-        <EntryRow entry={entry} onUpdate={onUpdate} />
+        <EntryRow entry={entry} onUpdate={onUpdate} isBillPending={isBillPending} />
         {preCloseTxs.length > 0 && (
           <div className="mt-1.5 ml-3 border-l-2 border-zinc-200 pl-3 space-y-1">
             <p className="text-[10px] text-muted-foreground font-medium">Added to this bill</p>
@@ -242,6 +243,8 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
   const viewYear  = targetYear  ?? todayYear;
   const isProjected = projectedEntries != null;
   const projEntries = projectedEntries ?? [];
+  const isCurrentMonth = viewMonth === todayMonth && viewYear === todayYear;
+  const todayDay = new Date().getDate();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -278,13 +281,19 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
   const totalIncome    = currentMonth ? currentMonth.salaryIncome + currentMonth.freelanceIncome + currentMonth.otherIncome : 0;
   const grandIncome    = totalIncome + adHocIncome;
   const net = (e: EntryWithTemplate) => e.amount - (e.cashbackAmount ?? 0);
-  const totalCommitted = useMemo(() => entries.reduce((s, e) => s + net(e), 0), [entries]);
-  const totalPaid      = useMemo(() => entries.filter(e => e.isPaid).reduce((s, e) => s + net(e), 0), [entries]);
+  // CC entries where the statement hasn't closed yet don't count as liabilities
+  const isBillPending = (e: EntryWithTemplate) =>
+    isCurrentMonth &&
+    e.template.category === "CREDIT_CARD" &&
+    e.template.statementDay != null &&
+    todayDay < e.template.statementDay;
+  const totalCommitted = useMemo(() => entries.filter(e => !isBillPending(e)).reduce((s, e) => s + net(e), 0), [entries, isCurrentMonth, todayDay]);
+  const totalPaid      = useMemo(() => entries.filter(e => !isBillPending(e) && e.isPaid).reduce((s, e) => s + net(e), 0), [entries, isCurrentMonth, todayDay]);
   const totalPending   = totalCommitted - totalPaid;
   // CC purchases this month pay next month — excluded from current balance
   const balance        = grandIncome - totalCommitted - adHocExpense;
   const paidPercent    = totalCommitted > 0 ? Math.round((totalPaid / totalCommitted) * 100) : 0;
-  const pendingCount   = useMemo(() => entries.filter(e => !e.isPaid).length, [entries]);
+  const pendingCount   = useMemo(() => entries.filter(e => !e.isPaid && !isBillPending(e)).length, [entries, isCurrentMonth, todayDay]);
   const nextMonthName  = MONTHS[todayMonth % 12]; // todayMonth is 1-12; % 12 maps Dec→Jan correctly
 
   type GroupedItem =
@@ -832,6 +841,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
                             entry={item.data}
                             txItems={cardTxs}
                             nextMonthName={nextMonthName}
+                            isBillPending={isBillPending(item.data)}
                             onUpdate={handleEntryUpdate}
                             onDelete={handleAdHocDelete}
                             onClearStatement={handleClearStatement}
