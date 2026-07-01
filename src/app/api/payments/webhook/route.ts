@@ -4,11 +4,17 @@ import crypto from "crypto";
 import { getPlan, addDays, PlanType } from "@/lib/plans";
 
 export async function POST(req: NextRequest) {
+  const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    console.error("[webhook] RAZORPAY_WEBHOOK_SECRET not configured");
+    return NextResponse.json({ error: "Webhook not configured" }, { status: 500 });
+  }
+
   const body = await req.text();
   const sig = req.headers.get("x-razorpay-signature") ?? "";
 
   const expected = crypto
-    .createHmac("sha256", process.env.RAZORPAY_WEBHOOK_SECRET!)
+    .createHmac("sha256", webhookSecret)
     .update(body)
     .digest("hex");
 

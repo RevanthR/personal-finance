@@ -3,17 +3,15 @@ import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { getPlan, addDays, PlanType } from "@/lib/plans";
+import { validate, PaymentVerifySchema } from "@/lib/validation";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { razorpay_order_id, razorpay_payment_id, razorpay_signature } =
-    await req.json() as {
-      razorpay_order_id: string;
-      razorpay_payment_id: string;
-      razorpay_signature: string;
-    };
+  const parsed = validate(PaymentVerifySchema, await req.json());
+  if (!parsed.ok) return parsed.response;
+  const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = parsed.data;
 
   // Verify HMAC signature
   const expected = crypto

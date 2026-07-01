@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
+import { validate, EntryPatchSchema } from "@/lib/validation";
 
 // PATCH /api/months/[monthId]/entries — update a single entry (mark paid, change amount)
 export async function PATCH(
@@ -11,27 +12,31 @@ export async function PATCH(
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { monthId } = await params;
-  const body = await req.json();
-  const { entryId, isPaid, amount, notes, statementAmount, paidAmount, cashbackAmount } = body;
+
+  const parsed = validate(EntryPatchSchema, await req.json());
+  if (!parsed.ok) return parsed.response;
+  const { entryId, isPaid, amount, notes, statementAmount, paidAmount, cashbackAmount } = parsed.data;
 
   // Resolve payment state — paidAmount takes precedence over isPaid toggle
   const paymentData: Record<string, unknown> = {};
 
-  if (paidAmount !== undefined) {
+  if (paidAmount !== undefined && paidAmount !== null) {
     const entry = await db.monthlyEntry.findFirst({
       where: { id: entryId, monthId, month: { userId: session.user.id } },
       select: { amount: true, cashbackAmount: true },
     });
-    // Net bill = amount minus any cashback already applied
-    const appliedCashback = cashbackAmount !== undefined ? Number(cashbackAmount) : (entry?.cashbackAmount ?? 0);
-    const netAmount = (amount ?? entry?.amount ?? 0) - appliedCashback;
-    const paid = Number(paidAmount);
-    if (paid >= netAmount) {
+    if (!entry) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    const appliedCashback = cashbackAmount !== undefined && cashbackAmount !== null
+      ? cashbackAmount
+      : (entry.cashbackAmount ?? 0);
+    const netAmount = (amount ?? entry.amount) - appliedCashback;
+    if (paidAmount >= netAmount) {
       paymentData.isPaid = true;
       paymentData.paidOn = new Date();
       paymentData.paidAmount = null;
     } else {
-      paymentData.paidAmount = paid > 0 ? paid : null;
+      paymentData.paidAmount = paidAmount > 0 ? paidAmount : null;
     }
   } else if (isPaid !== undefined) {
     paymentData.isPaid = isPaid;
@@ -43,10 +48,10 @@ export async function PATCH(
     where: { id: entryId, monthId, month: { userId: session.user.id } },
     data: {
       ...paymentData,
-      ...(amount !== undefined && { amount }),
-      ...(notes !== undefined && { notes }),
-      ...(statementAmount !== undefined && { statementAmount: statementAmount === null ? null : Number(statementAmount) }),
-      ...(cashbackAmount !== undefined && { cashbackAmount: cashbackAmount > 0 ? Number(cashbackAmount) : null }),
+      ...(amount          !== undefined && { amount }),
+      ...(notes           !== undefined && { notes }),
+      ...(statementAmount !== undefined && { statementAmount: statementAmount === null ? null : statementAmount }),
+      ...(cashbackAmount  !== undefined && { cashbackAmount: cashbackAmount !== null && cashbackAmount > 0 ? cashbackAmount : null }),
     },
     include: { template: true },
   });

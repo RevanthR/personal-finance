@@ -11,13 +11,10 @@ function initVapid() {
 
 // GET /api/cron/reminders — called daily by Vercel Cron
 export async function GET(req: NextRequest) {
-  // Vercel passes Authorization: Bearer <CRON_SECRET> automatically
+  // Fail closed: if CRON_SECRET is not configured, block all requests
   const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    const auth = req.headers.get("authorization");
-    if (auth !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  if (!cronSecret || req.headers.get("authorization") !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   initVapid();

@@ -3,6 +3,20 @@ import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { templateCacheTag } from "@/lib/cached-queries";
+import { z } from "zod";
+import { validate, zMoney, zDay, zMonth, zYear } from "@/lib/validation";
+
+const ChitPatchSchema = z.object({
+  isLifted:             z.boolean().optional(),
+  liftedAmount:         zMoney.optional().nullable(),
+  liftedUsedFor:        z.string().trim().max(200).optional().nullable(),
+  monthlyLiftedAmount:  zMoney.optional().nullable(),
+  accumulatedSavings:   zMoney.optional(),
+  endDate:              z.string().refine((s) => !isNaN(Date.parse(s)), { message: "Invalid date" }).optional().nullable(),
+  liftMonth:            zMonth.optional(),
+  liftYear:             zYear.optional(),
+  dueDateDay:           zDay.optional().nullable(),
+});
 
 // PATCH — update chit (including lift action)
 export async function PATCH(
@@ -13,7 +27,10 @@ export async function PATCH(
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { chitId } = await params;
-  const body = await req.json();
+
+  const parsed = validate(ChitPatchSchema, await req.json());
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.data;
 
   const chit = await db.chitFund.findFirst({
     where: { id: chitId, userId: session.user.id },
@@ -26,23 +43,22 @@ export async function PATCH(
   const updated = await db.chitFund.update({
     where: { id: chitId },
     data: {
-      isLifted: body.isLifted ?? chit.isLifted,
-      liftedOn: isLifting ? new Date() : chit.liftedOn,
-      liftedAmount: body.liftedAmount ?? chit.liftedAmount,
-      liftedUsedFor: body.liftedUsedFor ?? chit.liftedUsedFor,
-      monthlyLiftedAmount: body.monthlyLiftedAmount ?? chit.monthlyLiftedAmount,
-      accumulatedSavings: body.accumulatedSavings ?? chit.accumulatedSavings,
-      endDate: body.endDate ? new Date(body.endDate) : chit.endDate,
+      isLifted:             body.isLifted            ?? chit.isLifted,
+      liftedOn:             isLifting ? new Date()   : chit.liftedOn,
+      liftedAmount:         body.liftedAmount        ?? chit.liftedAmount,
+      liftedUsedFor:        body.liftedUsedFor       ?? chit.liftedUsedFor,
+      monthlyLiftedAmount:  body.monthlyLiftedAmount  ?? chit.monthlyLiftedAmount,
+      accumulatedSavings:   body.accumulatedSavings  ?? chit.accumulatedSavings,
+      endDate:              body.endDate !== undefined ? (body.endDate ? new Date(body.endDate) : null) : chit.endDate,
     },
     include: { template: true },
   });
 
   // On lift: create income in the selected month and schedule next-month payment increase
   if (isLifting) {
-    const liftMonth: number = body.liftMonth ?? new Date().getMonth() + 1;
-    const liftYear: number = body.liftYear ?? new Date().getFullYear();
+    const liftMonth = body.liftMonth ?? new Date().getMonth() + 1;
+    const liftYear  = body.liftYear  ?? new Date().getFullYear();
 
-    // Ensure month record exists
     let monthRecord = await db.month.findUnique({
       where: { userId_month_year: { userId: session.user.id, month: liftMonth, year: liftYear } },
     });
@@ -52,28 +68,26 @@ export async function PATCH(
       });
     }
 
-    // Create income AdHocItem for the lift amount
     await db.adHocItem.create({
       data: {
-        monthId: monthRecord.id,
-        name: `${chit.template.name} — Chit Lifted`,
-        amount: body.liftedAmount ?? chit.totalValue,
-        type: "INCOME",
+        monthId:  monthRecord.id,
+        name:     `${chit.template.name} Chit Lifted`,
+        amount:   body.liftedAmount ?? chit.totalValue,
+        type:     "INCOME",
         category: "OTHER_INCOME",
-        date: new Date(liftYear, liftMonth - 1, 1),
+        date:     new Date(liftYear, liftMonth - 1, 1),
       },
     });
 
-    // Schedule increased monthly payment from next month via pendingAmount
     if (body.monthlyLiftedAmount) {
       const nextMonth = liftMonth === 12 ? 1 : liftMonth + 1;
-      const nextYear = liftMonth === 12 ? liftYear + 1 : liftYear;
+      const nextYear  = liftMonth === 12 ? liftYear + 1 : liftYear;
       await db.lineItemTemplate.update({
         where: { id: chit.templateId },
         data: {
-          pendingAmount: body.monthlyLiftedAmount,
+          pendingAmount:    body.monthlyLiftedAmount,
           pendingFromMonth: nextMonth,
-          pendingFromYear: nextYear,
+          pendingFromYear:  nextYear,
         },
       });
     }

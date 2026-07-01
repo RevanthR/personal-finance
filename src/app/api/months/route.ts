@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
+import { validate, MonthPostSchema } from "@/lib/validation";
 
 // GET /api/months — list all months for current user
 export async function GET() {
@@ -23,8 +24,9 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json();
-  const { month, year, salaryIncome } = body;
+  const parsed = validate(MonthPostSchema, await req.json());
+  if (!parsed.ok) return parsed.response;
+  const { month, year, salaryIncome } = parsed.data;
 
   // Upsert month
   let monthRecord = await db.month.findUnique({
@@ -33,7 +35,7 @@ export async function POST(req: NextRequest) {
 
   if (!monthRecord) {
     monthRecord = await db.month.create({
-      data: { userId: session.user.id, month, year, salaryIncome: salaryIncome || 0 },
+      data: { userId: session.user.id, month, year, salaryIncome: salaryIncome ?? 0 },
     });
   } else if (salaryIncome !== undefined) {
     monthRecord = await db.month.update({

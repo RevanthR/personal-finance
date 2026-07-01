@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Category, TemplateType } from "@/generated/prisma/client";
 import { revalidateTag } from "next/cache";
 import { templateCacheTag } from "@/lib/cached-queries";
+import { validate, TemplatePostSchema } from "@/lib/validation";
 
 export async function GET() {
   const session = await auth();
@@ -22,7 +23,9 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json();
+  const parsed = validate(TemplatePostSchema, await req.json());
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.data;
 
   const isCustom = Boolean(body.customCategory);
   const template = await db.lineItemTemplate.create({
@@ -33,7 +36,7 @@ export async function POST(req: NextRequest) {
       customCategory: isCustom ? body.customCategory : null,
       amount: body.amount,
       isFixed: body.isFixed ?? true,
-      dueDateDay: body.dueDateDay,
+      dueDateDay: body.dueDateDay ?? null,
       statementDay: body.statementDay ?? null,
       frequency: body.frequency ?? "MONTHLY",
       dueMonth: body.dueMonth ?? null,

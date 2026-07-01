@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
+import { validate, ReceivablePatchSchema } from "@/lib/validation";
 
 export async function PATCH(
   req: NextRequest,
@@ -10,7 +11,10 @@ export async function PATCH(
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { receivableId } = await params;
-  const body = await req.json();
+
+  const parsed = validate(ReceivablePatchSchema, await req.json());
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.data;
 
   const receivable = await db.receivable.findFirst({
     where: { id: receivableId, userId: session.user.id },
@@ -22,25 +26,25 @@ export async function PATCH(
   const updated = await db.receivable.update({
     where: { id: receivableId },
     data: {
-      status: body.status ?? receivable.status,
-      receivedAmount: body.receivedAmount != null ? parseFloat(body.receivedAmount) : receivable.receivedAmount,
-      receivedDate: body.receivedDate ? new Date(body.receivedDate) : receivable.receivedDate,
+      status:          body.status          ?? receivable.status,
+      receivedAmount:  body.receivedAmount  ?? receivable.receivedAmount,
+      receivedDate:    body.receivedDate    ? new Date(body.receivedDate) : receivable.receivedDate,
       receivedMonthId: body.receivedMonthId ?? receivable.receivedMonthId,
-      description: body.description ?? receivable.description,
-      expectedAmount: body.expectedAmount != null ? parseFloat(body.expectedAmount) : receivable.expectedAmount,
-      expectedDate: body.expectedDate !== undefined
+      description:     body.description     ?? receivable.description,
+      expectedAmount:  body.expectedAmount  ?? receivable.expectedAmount,
+      expectedDate:    body.expectedDate !== undefined
         ? (body.expectedDate ? new Date(body.expectedDate) : null)
         : receivable.expectedDate,
-      category: body.category ?? receivable.category,
-      customCategory: body.customCategory !== undefined ? body.customCategory : receivable.customCategory,
+      category:        body.category        ?? receivable.category,
+      customCategory:  body.customCategory !== undefined ? body.customCategory : receivable.customCategory,
     },
   });
 
   // Create income AdHocItem when marking as received
   if (isMarkingReceived && body.receivedMonth != null && body.receivedYear != null) {
-    const recMonth: number = body.receivedMonth;
-    const recYear: number = body.receivedYear;
-    const amount = body.receivedAmount != null ? parseFloat(body.receivedAmount) : receivable.expectedAmount;
+    const recMonth = body.receivedMonth;
+    const recYear  = body.receivedYear;
+    const amount   = body.receivedAmount ?? receivable.expectedAmount;
 
     let monthRecord = await db.month.findUnique({
       where: { userId_month_year: { userId: session.user.id, month: recMonth, year: recYear } },

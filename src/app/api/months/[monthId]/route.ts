@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
+import { validate, MonthPatchSchema } from "@/lib/validation";
 
 // GET /api/months/[monthId] — full month detail with entries
 export async function GET(
@@ -36,14 +37,17 @@ export async function PATCH(
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { monthId } = await params;
-  const body = await req.json();
+
+  const parsed = validate(MonthPatchSchema, await req.json());
+  if (!parsed.ok) return parsed.response;
+  const { salaryIncome, freelanceIncome, otherIncome } = parsed.data;
 
   const updated = await db.month.updateMany({
     where: { id: monthId, userId: session.user.id },
     data: {
-      ...(body.salaryIncome  !== undefined && { salaryIncome:  Number(body.salaryIncome)  }),
-      ...(body.freelanceIncome !== undefined && { freelanceIncome: Number(body.freelanceIncome) }),
-      ...(body.otherIncome   !== undefined && { otherIncome:   Number(body.otherIncome)   }),
+      ...(salaryIncome    !== undefined && { salaryIncome }),
+      ...(freelanceIncome !== undefined && { freelanceIncome }),
+      ...(otherIncome     !== undefined && { otherIncome }),
     },
   });
 

@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { AdHocType, Category } from "@/generated/prisma/client";
+import { validate, AdHocPostSchema } from "@/lib/validation";
 
 // Recompute statementAmount for a CC card from ALL remaining post-close adHocItems.
 // This is idempotent and self-healing regardless of past accumulation bugs.
@@ -41,7 +42,10 @@ export async function POST(
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { monthId } = await params;
-  const body = await req.json();
+
+  const parsed = validate(AdHocPostSchema, await req.json());
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.data;
 
   const month = await db.month.findFirst({ where: { id: monthId, userId: session.user.id } });
   if (!month) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -54,7 +58,7 @@ export async function POST(
       type: body.type as AdHocType,
       category: body.category as Category | undefined,
       date: new Date(body.date),
-      notes: body.notes,
+      notes: body.notes ?? null,
     },
   });
 
@@ -92,7 +96,6 @@ export async function POST(
           select: { id: true, amount: true, statementAmount: true },
         });
       } else {
-        // Recompute from all post-close items (self-healing)
         updatedEntry = await recomputeStatementAmount(monthId, entry.id, cardName, statementDay);
       }
     }
@@ -153,7 +156,6 @@ export async function DELETE(
           select: { id: true, amount: true, statementAmount: true },
         });
       } else {
-        // Recompute from remaining post-close items (self-healing — delete already ran above)
         updatedEntry = await recomputeStatementAmount(monthId, entry.id, cardName, statementDay);
       }
     }
