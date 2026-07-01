@@ -7,6 +7,8 @@ declare module "next-auth" {
       id: string;
       role: Role;
       isActive: boolean;
+      planExpiry: string | null;
+      trialEndsAt: string | null;
     } & DefaultSession["user"];
   }
 }

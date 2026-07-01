@@ -16,7 +16,7 @@ export function PwaInstallBanner() {
       className={cn(
         "fixed inset-x-0 z-50 px-4 animate-in slide-in-from-bottom-3 duration-300",
       )}
-      style={{ bottom: "calc(env(safe-area-inset-bottom) + 1rem)" }}
+      style={{ bottom: "calc(env(safe-area-inset-bottom) + 5.5rem)" }}
     >
       <div className="max-w-sm mx-auto md:max-w-md rounded-2xl bg-zinc-950 text-white shadow-2xl border border-zinc-800 p-4">
         <div className="flex items-start gap-3">

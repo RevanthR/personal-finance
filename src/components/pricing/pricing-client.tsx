@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { PLANS, Plan, isPlanActive, PlanType } from "@/lib/plans";
+import { PLANS, Plan, isPlanActive, isTrialActive, trialDaysLeft, PlanType } from "@/lib/plans";
 import { cn } from "@/lib/utils";
-import { CheckCircle2, Zap, Star } from "lucide-react";
+import { CheckCircle2, Zap, Star, Clock, AlertTriangle } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 declare global {
@@ -16,6 +16,7 @@ declare global {
 interface Props {
   planType: string;
   planExpiry: string | null;
+  trialEndsAt: string | null;
   razorpayKeyId: string;
 }
 
@@ -31,13 +32,16 @@ function loadRazorpayScript(): Promise<boolean> {
   });
 }
 
-export function PricingClient({ planType, planExpiry, razorpayKeyId }: Props) {
+export function PricingClient({ planType, planExpiry, trialEndsAt, razorpayKeyId }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState<PlanType | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const active = isPlanActive(planExpiry ? new Date(planExpiry) : null);
   const expiryDate = planExpiry ? new Date(planExpiry) : null;
+  const trialActive = isTrialActive(trialEndsAt);
+  const daysLeft = trialDaysLeft(trialEndsAt);
+  const trialExpired = !trialActive && !active;
 
   async function handleSubscribe(plan: Plan) {
     setError(null);
@@ -113,7 +117,7 @@ export function PricingClient({ planType, planExpiry, razorpayKeyId }: Props) {
         </p>
       </div>
 
-      {/* Current plan banner */}
+      {/* Status banner */}
       {active && expiryDate && (
         <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
           <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -122,6 +126,26 @@ export function PricingClient({ planType, planExpiry, razorpayKeyId }: Props) {
             <span className="text-emerald-600 ml-1">
               · expires {expiryDate.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
             </span>
+          </div>
+        </div>
+      )}
+      {trialActive && !active && (
+        <div className="flex items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+          <Clock className="w-4 h-4 text-blue-600 shrink-0" />
+          <div className="text-sm">
+            <span className="font-medium text-blue-800">
+              {daysLeft === 0 ? "Trial expires today" : `${daysLeft} day${daysLeft !== 1 ? "s" : ""} left in your free trial`}
+            </span>
+            <p className="text-blue-600 text-xs mt-0.5">Subscribe below to keep uninterrupted access.</p>
+          </div>
+        </div>
+      )}
+      {trialExpired && (
+        <div className="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+          <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+          <div className="text-sm">
+            <span className="font-medium text-red-700">Your free trial has ended</span>
+            <p className="text-red-500 text-xs mt-0.5">Choose a plan below to continue using FinanceOS.</p>
           </div>
         </div>
       )}

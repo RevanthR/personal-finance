@@ -60,3 +60,17 @@ export function isPlanActive(planExpiry: Date | null | undefined): boolean {
   if (!planExpiry) return false;
   return new Date(planExpiry) > new Date();
 }
+
+export function isTrialActive(trialEndsAt: Date | string | null | undefined): boolean {
+  if (!trialEndsAt) return false;
+  return new Date(trialEndsAt) > new Date();
+}
+
+export function isAccessAllowed(user: { trialEndsAt: Date | string | null | undefined; planExpiry: Date | string | null | undefined }): boolean {
+  return isTrialActive(user.trialEndsAt) || isPlanActive(user.planExpiry instanceof Date ? user.planExpiry : user.planExpiry ? new Date(user.planExpiry) : null);
+}
+
+export function trialDaysLeft(trialEndsAt: Date | string | null | undefined): number {
+  if (!trialEndsAt) return 0;
+  return Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+}

@@ -66,6 +66,7 @@ model User {
   createdAt         DateTime           @default(now())
   planType          String             @default("FREE")  // FREE | WEEKLY | MONTHLY | QUARTERLY | YEARLY
   planExpiry        DateTime?
+  trialEndsAt       DateTime?
   accounts          Account[]
   sessions          Session[]
   months            Month[]

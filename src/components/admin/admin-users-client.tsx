@@ -19,34 +19,50 @@ type User = {
   createdAt: string;
   planType: string;
   planExpiry: string | null;
+  trialEndsAt: string | null;
   _count: { months: number };
 };
 
-function PlanBadge({ planType, planExpiry }: { planType: string; planExpiry: string | null }) {
+function PlanBadge({ planType, planExpiry, trialEndsAt }: { planType: string; planExpiry: string | null; trialEndsAt: string | null }) {
   const now = new Date();
   const expiry = planExpiry ? new Date(planExpiry) : null;
-  const isActive = expiry && expiry > now;
+  const trial = trialEndsAt ? new Date(trialEndsAt) : null;
+  const isPaid = expiry && expiry > now;
+  const isInTrial = !isPaid && trial && trial > now;
 
-  if (!isActive || planType === "FREE") {
+  if (isPaid) {
+    const daysLeft = Math.ceil((expiry!.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    const isExpiringSoon = daysLeft <= 3;
     return (
-      <span className="inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-zinc-100 text-zinc-500">
-        FREE
-      </span>
+      <div className="flex flex-col items-end gap-0.5">
+        <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${isExpiringSoon ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
+          {planType}
+        </span>
+        <span className="text-[10px] text-muted-foreground">
+          {isExpiringSoon ? `${daysLeft}d left` : `till ${format(expiry!, "dd MMM")}`}
+        </span>
+      </div>
     );
   }
 
-  const daysLeft = Math.ceil((expiry!.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  const isExpiringSoon = daysLeft <= 3;
+  if (isInTrial) {
+    const daysLeft = Math.ceil((trial!.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    return (
+      <div className="flex flex-col items-end gap-0.5">
+        <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
+          TRIAL
+        </span>
+        <span className="text-[10px] text-muted-foreground">
+          {daysLeft === 0 ? "expires today" : `${daysLeft}d left`}
+        </span>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col items-end gap-0.5">
-      <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${isExpiringSoon ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
-        {planType}
-      </span>
-      <span className="text-[10px] text-muted-foreground">
-        {isExpiringSoon ? `${daysLeft}d left` : `till ${format(expiry!, "dd MMM")}`}
-      </span>
-    </div>
+    <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600">
+      EXPIRED
+    </span>
   );
 }
 
@@ -95,7 +111,7 @@ export function AdminUsersClient({ users: initial }: { users: User[] }) {
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-2 shrink-0">
-                  <PlanBadge planType={user.planType} planExpiry={user.planExpiry} />
+                  <PlanBadge planType={user.planType} planExpiry={user.planExpiry} trialEndsAt={user.trialEndsAt} />
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs text-muted-foreground">Active</span>
                     <Switch
