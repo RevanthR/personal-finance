@@ -104,7 +104,7 @@ export default function LoginPage() {
           </div>
 
           <p className="text-center text-[11px] text-zinc-400 px-2">
-            Once installed, it works like a native app — no browser chrome, faster load, works offline.
+            Once installed, it works like a native app: no browser chrome, faster load, works offline.
           </p>
         </div>
 
