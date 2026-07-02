@@ -281,6 +281,11 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
   const totalIncome    = currentMonth ? currentMonth.salaryIncome + currentMonth.freelanceIncome + currentMonth.otherIncome : 0;
   const grandIncome    = totalIncome + adHocIncome;
   const net = (e: EntryWithTemplate) => e.amount - (e.cashbackAmount ?? 0);
+  // Actual money paid: paidAmount if set, else net(e) for fully paid, else 0
+  const effectivePaid = (e: EntryWithTemplate): number => {
+    if (e.isPaid) return e.paidAmount ?? net(e);
+    return e.paidAmount ?? 0;
+  };
   // CC entries where the statement hasn't closed yet don't count as liabilities
   const isBillPending = (e: EntryWithTemplate) =>
     isCurrentMonth &&
@@ -288,7 +293,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
     e.template.statementDay != null &&
     todayDay < e.template.statementDay;
   const totalCommitted = useMemo(() => entries.filter(e => !isBillPending(e)).reduce((s, e) => s + net(e), 0), [entries, isCurrentMonth, todayDay]);
-  const totalPaid      = useMemo(() => entries.filter(e => !isBillPending(e) && e.isPaid).reduce((s, e) => s + net(e), 0), [entries, isCurrentMonth, todayDay]);
+  const totalPaid      = useMemo(() => entries.filter(e => !isBillPending(e)).reduce((s, e) => s + effectivePaid(e), 0), [entries, isCurrentMonth, todayDay]);
   const totalPending   = totalCommitted - totalPaid;
   // CC purchases this month pay next month — excluded from current balance
   const balance        = grandIncome - totalCommitted - adHocExpense;
@@ -452,7 +457,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
       .filter(e => !e.isPaid && e.template.dueDateDay != null)
       .map(e => ({
         name: e.template.name,
-        amount: e.amount,
+        amount: net(e) - (e.paidAmount ?? 0),
         dueDay: e.template.dueDateDay!,
         overdue: e.template.dueDateDay! < today,
       }))
@@ -771,8 +776,8 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
             const txItems = items.filter(i => i.kind === "transaction").map(i => i.data as AdHocItem);
             const catTotal = isProjected
               ? projectedItems.reduce((s, i) => s + i.data.amount, 0)
-              : entryItems.filter(i => !isBillPending(i.data)).reduce((s, i) => s + i.data.amount, 0);
-            const catPaid  = entryItems.reduce((s, i) => s + (i.data.isPaid ? i.data.amount : 0), 0);
+              : entryItems.filter(i => !isBillPending(i.data)).reduce((s, i) => s + net(i.data), 0);
+            const catPaid  = entryItems.reduce((s, i) => s + effectivePaid(i.data), 0);
             const catCarry = entryItems.reduce((s, i) => s + (i.data.statementAmount ?? 0), 0);
             const allPaid  = !isProjected && entryItems.length > 0 && entryItems.every(i => i.data.isPaid);
             const collapsed = isGroupCollapsed(groupKey, entryItems);
@@ -1000,29 +1005,33 @@ function ProjectedEntryRow({ entry }: { entry: ProjectedEntry }) {
 
 function PaidSummaryPanel({ entries, fmt }: { entries: EntryWithTemplate[]; fmt: (v: number) => string }) {
   const [collapsed, setCollapsed] = useState(false);
-  const net = (e: EntryWithTemplate) => e.amount - (e.cashbackAmount ?? 0);
-  const paid = entries.filter(e => e.isPaid);
-  if (!paid.length) return null;
+  const netAmt = (e: EntryWithTemplate) => e.amount - (e.cashbackAmount ?? 0);
+  const paidAmt = (e: EntryWithTemplate): number => e.isPaid ? (e.paidAmount ?? netAmt(e)) : (e.paidAmount ?? 0);
+
+  // Include fully paid + partially paid entries
+  const shown = entries.filter(e => e.isPaid || (e.paidAmount != null && e.paidAmount > 0));
+  if (!shown.length) return null;
 
   // Group by category, preserving CATEGORY_ORDER then custom categories
   const groups: { key: string; label: string; color: string; items: EntryWithTemplate[] }[] = [];
   const seen = new Set<string>();
   for (const cat of CATEGORY_ORDER) {
-    const items = paid.filter(e => e.template.category === cat && !e.template.customCategory);
+    const items = shown.filter(e => e.template.category === cat && !e.template.customCategory);
     if (items.length) {
       groups.push({ key: cat, label: getCategoryDisplay(cat, null), color: getCategoryColor(cat, null), items });
       seen.add(cat);
     }
   }
-  for (const e of paid) {
+  for (const e of shown) {
     if (e.template.customCategory && !seen.has(e.template.customCategory)) {
-      const items = paid.filter(p => p.template.customCategory === e.template.customCategory);
+      const items = shown.filter(p => p.template.customCategory === e.template.customCategory);
       groups.push({ key: e.template.customCategory, label: e.template.customCategory, color: getCategoryColor(e.template.category, e.template.customCategory), items });
       seen.add(e.template.customCategory);
     }
   }
 
-  const total = paid.reduce((s, e) => s + net(e), 0);
+  const total = shown.reduce((s, e) => s + paidAmt(e), 0);
+  const fullyPaidCount = entries.filter(e => e.isPaid).length;
 
   return (
     <div className="rounded-xl border bg-card overflow-hidden">
@@ -1034,7 +1043,7 @@ function PaidSummaryPanel({ entries, fmt }: { entries: EntryWithTemplate[]; fmt:
         <div className="flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 text-green-500" />
           <span className="text-sm font-semibold">Settled</span>
-          <span className="text-xs text-muted-foreground">{paid.length} of {entries.length}</span>
+          <span className="text-xs text-muted-foreground">{fullyPaidCount} of {entries.length} done</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-sm font-bold text-green-600">{fmt(total)}</span>
@@ -1045,7 +1054,7 @@ function PaidSummaryPanel({ entries, fmt }: { entries: EntryWithTemplate[]; fmt:
       {!collapsed && (
         <div className="border-t border-border">
           {groups.map(g => {
-            const subtotal = g.items.reduce((s, e) => s + net(e), 0);
+            const subtotal = g.items.reduce((s, e) => s + paidAmt(e), 0);
             return (
               <div key={g.key} className="px-4 py-2.5 border-b border-border/50 last:border-b-0">
                 <div className="flex items-center gap-1.5 mb-2">
@@ -1054,26 +1063,40 @@ function PaidSummaryPanel({ entries, fmt }: { entries: EntryWithTemplate[]; fmt:
                   <span className="text-xs font-semibold tabular-nums">{fmt(subtotal)}</span>
                 </div>
                 <div className="space-y-1.5 pl-3">
-                  {g.items.map(e => (
-                    <div key={e.id} className="flex items-center justify-between gap-2">
-                      <span className="text-xs text-muted-foreground truncate min-w-0">{e.template.name}</span>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {e.cashbackAmount ? (
-                          <span className="text-[10px] text-green-600">-{fmt(e.cashbackAmount)} cb</span>
-                        ) : null}
-                        {e.paidOn && (
-                          <span className="text-[10px] text-muted-foreground/70">{format(new Date(e.paidOn), "do MMM")}</span>
-                        )}
-                        <span className="text-xs font-semibold tabular-nums">{fmt(net(e))}</span>
+                  {g.items.map(e => {
+                    const isPartial = !e.isPaid && e.paidAmount != null && e.paidAmount > 0;
+                    const remaining = netAmt(e) - (e.paidAmount ?? 0);
+                    return (
+                      <div key={e.id} className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-xs text-muted-foreground truncate">{e.template.name}</span>
+                          {isPartial && (
+                            <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-1 py-0.5 rounded shrink-0">partial</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {e.cashbackAmount ? (
+                            <span className="text-[10px] text-green-600">-{fmt(e.cashbackAmount)} cb</span>
+                          ) : null}
+                          {isPartial && (
+                            <span className="text-[10px] text-muted-foreground">{fmt(remaining)} left</span>
+                          )}
+                          {!isPartial && e.paidOn && (
+                            <span className="text-[10px] text-muted-foreground/70">{format(new Date(e.paidOn), "do MMM")}</span>
+                          )}
+                          <span className={cn("text-xs font-semibold tabular-nums", isPartial && "text-amber-600")}>
+                            {fmt(paidAmt(e))}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             );
           })}
           <div className="flex items-center justify-between px-4 py-2.5 bg-green-50/60">
-            <span className="text-xs font-semibold text-muted-foreground">Total settled</span>
+            <span className="text-xs font-semibold text-muted-foreground">Total paid out</span>
             <span className="text-sm font-bold text-green-600 tabular-nums">{fmt(total)}</span>
           </div>
         </div>

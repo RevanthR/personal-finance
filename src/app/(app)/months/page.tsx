@@ -279,7 +279,7 @@ export default async function MonthsPage() {
       .filter(e => !e.isPaid && e.template.dueDateDay != null && !pendingCCBillIds.has(e.id))
       .map(e => ({
         name: e.template.name,
-        amount: e.amount,
+        amount: e.amount - (e.cashbackAmount ?? 0) - (e.paidAmount ?? 0),
         dueDay: e.template.dueDateDay!,
         overdue: e.template.dueDateDay! < todayDay,
       }))
