@@ -54,6 +54,10 @@ export default async function MonthDetailPage({
     return sum + (usesPending ? t.pendingAmount! : t.amount);
   }, 0);
 
+  const now = new Date();
+  const todayMonth = now.getMonth() + 1;
+  const todayYear  = now.getFullYear();
+
   return (
     <DashboardClient
       currentMonth={JSON.parse(JSON.stringify(currentMonth))}
@@ -61,8 +65,10 @@ export default async function MonthDetailPage({
       chitFunds={JSON.parse(JSON.stringify(chitFunds))}
       ccTemplates={JSON.parse(JSON.stringify(ccTemplates))}
       suggestedIncome={suggestedIncome}
-      todayMonth={currentMonth.month}
-      todayYear={currentMonth.year}
+      todayMonth={todayMonth}
+      todayYear={todayYear}
+      targetMonth={currentMonth.month}
+      targetYear={currentMonth.year}
       userId={session.user.id}
     />
   );

@@ -369,6 +369,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
     }
     const totals: Record<string, { amount: number; templateCat: string; customCat: string | null }> = {};
     for (const e of entries) {
+      if (isBillPending(e)) continue;
       const key = e.template.customCategory ?? e.template.category;
       if (!totals[key]) totals[key] = { amount: 0, templateCat: e.template.category, customCat: e.template.customCategory };
       totals[key].amount += net(e);
@@ -427,8 +428,8 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
   }, [recentMonths, currentMonth, totalCommitted, adHocExpense]);
 
   const fixedAmount = useMemo(
-    () => entries.filter(e => e.template.isFixed).reduce((s, e) => s + net(e), 0),
-    [entries]
+    () => entries.filter(e => e.template.isFixed && !isBillPending(e)).reduce((s, e) => s + net(e), 0),
+    [entries, isCurrentMonth, todayDay]
   );
   const variableAmount = totalCommitted - fixedAmount + adHocExpense;
 
@@ -770,7 +771,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
             const txItems = items.filter(i => i.kind === "transaction").map(i => i.data as AdHocItem);
             const catTotal = isProjected
               ? projectedItems.reduce((s, i) => s + i.data.amount, 0)
-              : entryItems.reduce((s, i) => s + i.data.amount, 0);
+              : entryItems.filter(i => !isBillPending(i.data)).reduce((s, i) => s + i.data.amount, 0);
             const catPaid  = entryItems.reduce((s, i) => s + (i.data.isPaid ? i.data.amount : 0), 0);
             const catCarry = entryItems.reduce((s, i) => s + (i.data.statementAmount ?? 0), 0);
             const allPaid  = !isProjected && entryItems.length > 0 && entryItems.every(i => i.data.isPaid);

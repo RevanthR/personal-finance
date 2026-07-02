@@ -228,12 +228,15 @@ export default async function MonthsPage() {
     const cm = currentMonthFull;
     const cmIncome = cm.salaryIncome + cm.freelanceIncome + cm.otherIncome
       + cm.adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0);
-    const cmExpenses = cm.entries.reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
+    const cmExpenses = cm.entries
+      .filter(e => !pendingCCBillIds.has(e.id))
+      .reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
       + cm.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0);
 
-    // Category breakdown — entries grouped by template.category
+    // Category breakdown — entries grouped by template.category (exclude pending CC bills)
     const catMap = new Map<string, number>();
     for (const e of cm.entries) {
+      if (pendingCCBillIds.has(e.id)) continue;
       const cat = e.template.customCategory ?? e.template.category;
       catMap.set(cat, (catMap.get(cat) ?? 0) + e.amount - (e.cashbackAmount ?? 0));
     }
@@ -271,15 +274,14 @@ export default async function MonthsPage() {
       .sort((a, b) => b[1] - a[1])
       .map(([name, amount]) => ({ name, amount }));
 
-    // Upcoming unpaid entries with due dates
-    const today = todayMonth;
+    // Upcoming unpaid entries with due dates (exclude pending CC bills)
     const upcomingPayments = cm.entries
-      .filter(e => !e.isPaid && e.template.dueDateDay != null)
+      .filter(e => !e.isPaid && e.template.dueDateDay != null && !pendingCCBillIds.has(e.id))
       .map(e => ({
         name: e.template.name,
         amount: e.amount,
         dueDay: e.template.dueDateDay!,
-        overdue: e.template.dueDateDay! < today,
+        overdue: e.template.dueDateDay! < todayDay,
       }))
       .sort((a, b) => a.dueDay - b.dueDay)
       .slice(0, 6);
@@ -307,7 +309,9 @@ export default async function MonthsPage() {
   let recurringTotal = 0;
   let adHocExpenseTotal = 0;
   for (const m of fyActual) {
+    const isCurrentM = m.month === todayMonth && m.year === todayYear;
     for (const e of m.entries) {
+      if (isCurrentM && pendingCCBillIds.has(e.id)) continue;
       const t = e.template;
       const ex = templateMap.get(e.templateId);
       const netAmt = e.amount - (e.cashbackAmount ?? 0);
@@ -373,9 +377,12 @@ export default async function MonthsPage() {
 
   // Monthly trends
   const monthlyTrends = fyActual.map(m => {
+    const isCurrentM = m.month === todayMonth && m.year === todayYear;
     const income = m.salaryIncome + m.freelanceIncome + m.otherIncome
       + m.adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0);
-    const expenses = m.entries.reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
+    const expenses = m.entries
+      .filter(e => !isCurrentM || !pendingCCBillIds.has(e.id))
+      .reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
       + m.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0);
     return {
       label: MONTHS_SHORT[m.month - 1],
@@ -532,9 +539,12 @@ export default async function MonthsPage() {
 
   // All-time best/worst months
   const allTimeStats = analyticsMonths.map(m => {
+    const isCurrentM = m.month === todayMonth && m.year === todayYear;
     const income = m.salaryIncome + m.freelanceIncome + m.otherIncome
       + m.adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0);
-    const expenses = m.entries.reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
+    const expenses = m.entries
+      .filter(e => !isCurrentM || !pendingCCBillIds.has(e.id))
+      .reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
       + m.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0);
     return { label: `${MONTHS_SHORT[m.month - 1]} ${m.year}`, income, expenses, balance: income - expenses, savingsRate: income > 0 ? Math.round(((income - expenses) / income) * 100) : 0 };
   });
