@@ -124,13 +124,19 @@ export async function DELETE(
   });
   if (!chit) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Remove the lift income ad-hoc entry that was created when this chit was lifted
+  // Remove the lift income ad-hoc entry that was created when this chit was lifted.
+  // Use a two-step approach (fetch monthIds first) because deleteMany with nested
+  // relation filters doesn't work reliably with @prisma/adapter-pg.
   if (chit.isLifted) {
+    const monthIds = (await db.month.findMany({
+      where: { userId: session.user.id },
+      select: { id: true },
+    })).map(m => m.id);
     await db.adHocItem.deleteMany({
       where: {
         name: `${chit.template.name} Chit Lifted`,
         type: "INCOME",
-        month: { userId: session.user.id },
+        monthId: { in: monthIds },
       },
     });
   }
