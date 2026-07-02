@@ -90,9 +90,11 @@ type SaveData = {
 export function TemplatesClient({
   templates: initial,
   recentIncome,
+  paidTemplateIds = [],
 }: {
   templates: Template[];
   recentIncome: { salary: number; freelance: number; other: number } | null;
+  paidTemplateIds?: string[];
 }) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
@@ -472,7 +474,7 @@ export function TemplatesClient({
                                 <span className="ml-1.5 text-muted-foreground/70">· {t.loanInterestRate}% {t.loanRateType === "FLOATING" ? "floating" : "fixed"}</span>
                               )}
                               {!isClosed && t.category === "LOAN" && t.loanInterestRate && (() => {
-                                const amort = computeLoanAmortization({ emi: t.amount, annualRate: t.loanInterestRate!, originalPrincipal: t.loanOriginalPrincipal, startDate: t.loanStartDate, outstandingOverride: t.loanOutstandingOverride });
+                                const amort = computeLoanAmortization({ emi: t.amount, annualRate: t.loanInterestRate!, originalPrincipal: t.loanOriginalPrincipal, startDate: t.loanStartDate, outstandingOverride: t.loanOutstandingOverride, isPaidThisMonth: paidTemplateIds.includes(t.id) });
                                 return amort && amort.monthsRemaining > 0 ? (
                                   <span className="ml-1.5 text-muted-foreground/70">· {amort.monthsRemaining} mo left</span>
                                 ) : null;
