@@ -900,6 +900,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
             variableAmount={dispVariable}
             upcomingPayments={isProjected ? [] : upcomingPayments}
           />
+          {!isProjected && <PaidSummaryPanel entries={entries} fmt={fmt} />}
         </div>
       </div>
 
@@ -993,6 +994,90 @@ function ProjectedEntryRow({ entry }: { entry: ProjectedEntry }) {
       <span className="text-sm font-semibold text-muted-foreground shrink-0">
         {fmt(entry.amount)}
       </span>
+    </div>
+  );
+}
+
+function PaidSummaryPanel({ entries, fmt }: { entries: EntryWithTemplate[]; fmt: (v: number) => string }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const net = (e: EntryWithTemplate) => e.amount - (e.cashbackAmount ?? 0);
+  const paid = entries.filter(e => e.isPaid);
+  if (!paid.length) return null;
+
+  // Group by category, preserving CATEGORY_ORDER then custom categories
+  const groups: { key: string; label: string; color: string; items: EntryWithTemplate[] }[] = [];
+  const seen = new Set<string>();
+  for (const cat of CATEGORY_ORDER) {
+    const items = paid.filter(e => e.template.category === cat && !e.template.customCategory);
+    if (items.length) {
+      groups.push({ key: cat, label: getCategoryDisplay(cat, null), color: getCategoryColor(cat, null), items });
+      seen.add(cat);
+    }
+  }
+  for (const e of paid) {
+    if (e.template.customCategory && !seen.has(e.template.customCategory)) {
+      const items = paid.filter(p => p.template.customCategory === e.template.customCategory);
+      groups.push({ key: e.template.customCategory, label: e.template.customCategory, color: getCategoryColor(e.template.category, e.template.customCategory), items });
+      seen.add(e.template.customCategory);
+    }
+  }
+
+  const total = paid.reduce((s, e) => s + net(e), 0);
+
+  return (
+    <div className="rounded-xl border bg-card overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setCollapsed(c => !c)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/40 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-green-500" />
+          <span className="text-sm font-semibold">Settled</span>
+          <span className="text-xs text-muted-foreground">{paid.length} of {entries.length}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-bold text-green-600">{fmt(total)}</span>
+          <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform duration-200", !collapsed && "rotate-180")} />
+        </div>
+      </button>
+
+      {!collapsed && (
+        <div className="border-t border-border">
+          {groups.map(g => {
+            const subtotal = g.items.reduce((s, e) => s + net(e), 0);
+            return (
+              <div key={g.key} className="px-4 py-2.5 border-b border-border/50 last:border-b-0">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex-1">{g.label}</span>
+                  <span className="text-xs font-semibold tabular-nums">{fmt(subtotal)}</span>
+                </div>
+                <div className="space-y-1.5 pl-3">
+                  {g.items.map(e => (
+                    <div key={e.id} className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-muted-foreground truncate min-w-0">{e.template.name}</span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {e.cashbackAmount ? (
+                          <span className="text-[10px] text-green-600">-{fmt(e.cashbackAmount)} cb</span>
+                        ) : null}
+                        {e.paidOn && (
+                          <span className="text-[10px] text-muted-foreground/70">{format(new Date(e.paidOn), "do MMM")}</span>
+                        )}
+                        <span className="text-xs font-semibold tabular-nums">{fmt(net(e))}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+          <div className="flex items-center justify-between px-4 py-2.5 bg-green-50/60">
+            <span className="text-xs font-semibold text-muted-foreground">Total settled</span>
+            <span className="text-sm font-bold text-green-600 tabular-nums">{fmt(total)}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
