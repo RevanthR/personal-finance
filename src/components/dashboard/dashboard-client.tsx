@@ -90,6 +90,13 @@ type AdHocItem = {
 
 
 const CATEGORY_ORDER = ["HOUSE_MAINTENANCE", "LOAN", "CREDIT_CARD", "CHIT_FUND", "SAVINGS", "PERSONAL", "MISCELLANEOUS"];
+
+const INCOME_SOURCES = [
+  { value: "bonus",     label: "Bonus",     dbCategory: "OTHER_INCOME" },
+  { value: "freelance", label: "Freelance", dbCategory: "FREELANCE" },
+  { value: "refund",    label: "Refund",    dbCategory: "OTHER_INCOME" },
+  { value: "other",     label: "Other",     dbCategory: "OTHER_INCOME" },
+];
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 const CC_SUBCATEGORIES = ["Food", "Coffee", "Groceries", "Fuel", "Shopping", "Travel", "Health", "Bills", "Entertainment", "Other"];
@@ -255,6 +262,14 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   const [otherVal, setOtherVal] = useState("");
   const [incomeLoading, setIncomeLoading] = useState(false);
 
+  // Add one-time income (inline inside income dialog)
+  const [showAddIncome, setShowAddIncome] = useState(false);
+  const [addIncomeSource, setAddIncomeSource] = useState("bonus");
+  const [addIncomeAmount, setAddIncomeAmount] = useState("");
+  const [addIncomeDate, setAddIncomeDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [addIncomeNotes, setAddIncomeNotes] = useState("");
+  const [addIncomeLoading, setAddIncomeLoading] = useState(false);
+
   // Sync local state when the viewed month changes (client-side navigation reuses this component)
   const [lastMonthKey, setLastMonthKey] = useState(`${viewMonth}-${viewYear}`);
   const monthKey = `${viewMonth}-${viewYear}`;
@@ -334,8 +349,10 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     }
 
     // Merge categorised ad-hoc EXPENSE items into their group
+    // Income items are shown in the income panel, not here
     const oneTime: AdHocItem[] = [];
     for (const item of adHocItems) {
+      if (item.type === "INCOME") continue;
       if (item.type === "EXPENSE" && item.category) {
         const key = item.category;
         if (result[key]) {
@@ -477,6 +494,11 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     setSalaryVal(String(currentMonth.salaryIncome));
     setFreelanceVal(String(currentMonth.freelanceIncome || ""));
     setOtherVal(String(currentMonth.otherIncome || ""));
+    setShowAddIncome(false);
+    setAddIncomeAmount("");
+    setAddIncomeNotes("");
+    setAddIncomeSource("bonus");
+    setAddIncomeDate(new Date().toISOString().split("T")[0]);
     setShowIncomeEdit(true);
   }
 
@@ -495,8 +517,26 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     if (!res.ok) { toast.error("Failed to save income"); return; }
     setCurrentMonth(prev => prev ? { ...prev, salaryIncome: salary, freelanceIncome: freelance, otherIncome: other } : prev);
     setRecentMonths(prev => prev.map(m => m.id === currentMonth!.id ? { ...m, salaryIncome: salary, freelanceIncome: freelance, otherIncome: other } : m));
-    setShowIncomeEdit(false);
     toast.success("Income updated");
+  }
+
+  async function handleAddOneTimeIncome() {
+    const amt = parseFloat(addIncomeAmount);
+    if (!amt || amt <= 0 || !currentMonth) return;
+    setAddIncomeLoading(true);
+    const source = INCOME_SOURCES.find(s => s.value === addIncomeSource);
+    await handleAdHocAdd({
+      name: source?.label ?? "Income",
+      amount: amt,
+      type: "INCOME",
+      category: source?.dbCategory,
+      date: addIncomeDate,
+      notes: addIncomeNotes || undefined,
+    });
+    setAddIncomeAmount("");
+    setAddIncomeNotes("");
+    setShowAddIncome(false);
+    setAddIncomeLoading(false);
   }
 
   async function handleEntryUpdate(entryId: string, updates: { isPaid?: boolean; amount?: number; notes?: string; paidAmount?: number; cashbackAmount?: number }) {
@@ -934,50 +974,121 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
         </div>
       </div>
 
-      {/* Income Edit Dialog — hidden for projected months */}
-      <Dialog open={!isProjected && showIncomeEdit} onOpenChange={setShowIncomeEdit}>
-        <DialogContent className="max-w-xs">
+      {/* Unified Income Dialog */}
+      <Dialog open={!isProjected && showIncomeEdit} onOpenChange={v => { setShowIncomeEdit(v); if (!v) setShowAddIncome(false); }}>
+        <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Edit Income: {formatMonthYear(currentMonth?.month ?? viewMonth, currentMonth?.year ?? viewYear)}</DialogTitle>
+            <DialogTitle>Income: {formatMonthYear(currentMonth?.month ?? viewMonth, currentMonth?.year ?? viewYear)}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label className="text-xs">Salary (₹)</Label>
-              <Input
-                type="number"
-                value={salaryVal}
-                onChange={e => setSalaryVal(e.target.value)}
-                placeholder="0"
-                autoFocus
-              />
+          <div className="space-y-4 pt-1">
+            {/* Base (template) income */}
+            <div className="rounded-xl bg-muted/30 border px-3 py-3 space-y-2.5">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Monthly income</p>
+              <div className="space-y-2">
+                <div>
+                  <Label className="text-xs">Salary (₹)</Label>
+                  <Input type="number" value={salaryVal} onChange={e => setSalaryVal(e.target.value)} placeholder="0" autoFocus className="mt-1" />
+                </div>
+                <div>
+                  <Label className="text-xs">Freelance / Bonus (₹)</Label>
+                  <Input type="number" value={freelanceVal} onChange={e => setFreelanceVal(e.target.value)} placeholder="0 (optional)" className="mt-1" />
+                </div>
+                <div>
+                  <Label className="text-xs">Other Income (₹)</Label>
+                  <Input type="number" value={otherVal} onChange={e => setOtherVal(e.target.value)} placeholder="0 (optional)" className="mt-1" />
+                </div>
+              </div>
+              <Button onClick={handleSaveIncome} disabled={incomeLoading} size="sm" className="w-full">
+                {incomeLoading ? "Saving..." : "Update"}
+              </Button>
             </div>
-            <div>
-              <Label className="text-xs">Freelance / Bonus (₹)</Label>
-              <Input
-                type="number"
-                value={freelanceVal}
-                onChange={e => setFreelanceVal(e.target.value)}
-                placeholder="0 (optional)"
-              />
-            </div>
-            <div>
-              <Label className="text-xs">Other Income (₹)</Label>
-              <Input
-                type="number"
-                value={otherVal}
-                onChange={e => setOtherVal(e.target.value)}
-                placeholder="0 (optional)"
-              />
-            </div>
+
+            {/* One-time income items */}
+            {adHocItems.filter(i => i.type === "INCOME").length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">One-time income</p>
+                {adHocItems.filter(i => i.type === "INCOME").map(item => (
+                  <div key={item.id} className="flex items-center gap-2.5 px-3 py-2 rounded-xl border bg-card">
+                    <div className="w-0.5 h-7 rounded-full bg-green-500 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{item.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {format(new Date(item.date), "dd MMM")}
+                        {item.notes && item.notes !== "carry_forward" ? ` · ${item.notes}` : ""}
+                      </p>
+                    </div>
+                    <span className="text-sm font-semibold text-green-600 shrink-0">+{fmt(item.amount)}</span>
+                    <Button variant="ghost" size="sm" onClick={() => handleAdHocDelete(item.id)} className="h-7 w-7 p-0 text-muted-foreground hover:text-red-600 shrink-0">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add one-time income */}
+            {showAddIncome ? (
+              <div className="rounded-xl border p-3 space-y-3">
+                <p className="text-xs font-semibold">Add one-time income</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {INCOME_SOURCES.map(s => (
+                    <button
+                      key={s.value}
+                      type="button"
+                      onClick={() => setAddIncomeSource(s.value)}
+                      className={cn(
+                        "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
+                        addIncomeSource === s.value ? "bg-zinc-900 text-white border-zinc-900" : "border-border text-muted-foreground hover:border-zinc-500"
+                      )}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+                <div>
+                  <Label className="text-xs">Amount (₹)</Label>
+                  <Input
+                    type="number"
+                    value={addIncomeAmount}
+                    onChange={e => setAddIncomeAmount(e.target.value)}
+                    placeholder="0"
+                    autoFocus
+                    className="mt-1"
+                    onKeyDown={e => { if (e.key === "Enter") handleAddOneTimeIncome(); }}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Date</Label>
+                  <Input type="date" value={addIncomeDate} onChange={e => setAddIncomeDate(e.target.value)} className="mt-1" />
+                </div>
+                <div>
+                  <Label className="text-xs">Notes (optional)</Label>
+                  <Input value={addIncomeNotes} onChange={e => setAddIncomeNotes(e.target.value)} placeholder="e.g. Q2 bonus" className="mt-1" />
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="flex-1" onClick={() => { setShowAddIncome(false); setAddIncomeAmount(""); setAddIncomeNotes(""); }}>
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="flex-1 bg-green-600 hover:bg-green-700"
+                    disabled={!addIncomeAmount || addIncomeLoading}
+                    onClick={handleAddOneTimeIncome}
+                  >
+                    {addIncomeLoading ? "Adding..." : "Add"}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowAddIncome(true)}
+                className="w-full text-xs text-muted-foreground hover:text-foreground py-2.5 rounded-xl border border-dashed transition-colors flex items-center justify-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add one-time income
+              </button>
+            )}
           </div>
-          <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setShowIncomeEdit(false)} disabled={incomeLoading}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveIncome} disabled={incomeLoading}>
-              {incomeLoading ? "Saving..." : "Save"}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
