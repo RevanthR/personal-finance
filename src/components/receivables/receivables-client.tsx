@@ -78,6 +78,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
   const [liftingChit, setLiftingChit] = useState<Chit | null>(null);
   const [receivingItem, setReceivingItem] = useState<Receivable | null>(null);
   const [deletingChitId, setDeletingChitId] = useState<string | null>(null);
+  const [deleteChitInProgress, setDeleteChitInProgress] = useState<string | null>(null);
 
   const unliftedChits = chits.filter((c) => !c.isLifted && c.template.isActive);
   const liftedChits = chits.filter((c) => c.isLifted);
@@ -142,11 +143,17 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
   }
 
   async function handleDeleteChit(chitId: string) {
-    const res = await fetch(`/api/chits/${chitId}`, { method: "DELETE" });
-    if (!res.ok) { toast.error("Failed to delete chit"); return; }
-    setChits((prev) => prev.filter((c) => c.id !== chitId));
-    toast.success("Chit deleted");
-    setDeletingChitId(null);
+    if (deleteChitInProgress) return;
+    setDeleteChitInProgress(chitId);
+    try {
+      const res = await fetch(`/api/chits/${chitId}`, { method: "DELETE" });
+      if (!res.ok) { toast.error("Failed to delete chit"); return; }
+      setChits((prev) => prev.filter((c) => c.id !== chitId));
+      toast.success("Chit deleted");
+      setDeletingChitId(null);
+    } finally {
+      setDeleteChitInProgress(null);
+    }
   }
 
   return (
@@ -356,8 +363,8 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                           </Badge>
                           {deletingChitId === chit.id ? (
                             <div className="flex items-center gap-1">
-                              <Button variant="destructive" size="sm" className="h-6 text-xs px-2" onClick={() => handleDeleteChit(chit.id)}>Confirm</Button>
-                              <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setDeletingChitId(null)}>Cancel</Button>
+                              <Button variant="destructive" size="sm" className="h-6 text-xs px-2" disabled={deleteChitInProgress === chit.id} onClick={() => handleDeleteChit(chit.id)}>{deleteChitInProgress === chit.id ? "Deleting..." : "Confirm"}</Button>
+                              <Button variant="ghost" size="sm" className="h-6 text-xs px-2" disabled={deleteChitInProgress === chit.id} onClick={() => setDeletingChitId(null)}>Cancel</Button>
                             </div>
                           ) : (
                             <button onClick={() => setDeletingChitId(chit.id)} className="p-1 rounded text-muted-foreground hover:text-destructive active:text-destructive transition-colors">

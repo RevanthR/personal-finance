@@ -120,18 +120,28 @@ export async function DELETE(
 
   const chit = await db.chitFund.findFirst({
     where: { id: chitId, userId: session.user.id },
-    select: { id: true, templateId: true },
+    select: { id: true, templateId: true, isLifted: true, template: { select: { name: true } } },
   });
   if (!chit) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Delete all monthly entries for this template, then the chit + template
-  await db.monthlyEntry.deleteMany({ where: { templateId: chit.templateId } });
-  await db.chitFund.delete({ where: { id: chitId } });
+  // Remove the lift income ad-hoc entry that was created when this chit was lifted
+  if (chit.isLifted) {
+    await db.adHocItem.deleteMany({
+      where: {
+        name: `${chit.template.name} Chit Lifted`,
+        type: "INCOME",
+        month: { userId: session.user.id },
+      },
+    });
+  }
+
+  // Deleting the template cascades to ChitFund and MonthlyEntry (onDelete: Cascade in schema)
   await db.lineItemTemplate.delete({ where: { id: chit.templateId } });
 
   revalidateTag(templateCacheTag, {});
   revalidatePath("/dashboard");
   revalidatePath("/months");
+  revalidatePath("/receivables");
 
   return NextResponse.json({ ok: true });
 }

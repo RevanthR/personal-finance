@@ -41,6 +41,7 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
   const [showAdd, setShowAdd] = useState(false);
   const [liftingChit, setLiftingChit] = useState<Chit | null>(null);
   const [deletingChitId, setDeletingChitId] = useState<string | null>(null);
+  const [deleteInProgress, setDeleteInProgress] = useState<string | null>(null);
 
   const activeChits = chits.filter((c) => !c.isLifted && c.template.isActive);
   const liftedChits = chits.filter((c) => c.isLifted);
@@ -68,11 +69,17 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
   }
 
   async function handleDelete(chitId: string) {
-    const res = await fetch(`/api/chits/${chitId}`, { method: "DELETE" });
-    if (!res.ok) { toast.error("Failed to delete chit"); return; }
-    setChits((prev) => prev.filter((c) => c.id !== chitId));
-    toast.success("Chit deleted");
-    setDeletingChitId(null);
+    if (deleteInProgress) return;
+    setDeleteInProgress(chitId);
+    try {
+      const res = await fetch(`/api/chits/${chitId}`, { method: "DELETE" });
+      if (!res.ok) { toast.error("Failed to delete chit"); return; }
+      setChits((prev) => prev.filter((c) => c.id !== chitId));
+      toast.success("Chit deleted");
+      setDeletingChitId(null);
+    } finally {
+      setDeleteInProgress(null);
+    }
   }
 
   async function handleLift(chitId: string, data: {
@@ -219,14 +226,16 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
                             variant="destructive"
                             size="sm"
                             className="h-7 text-xs px-2"
+                            disabled={deleteInProgress === chit.id}
                             onClick={() => handleDelete(chit.id)}
                           >
-                            Confirm
+                            {deleteInProgress === chit.id ? "Deleting..." : "Confirm"}
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
                             className="h-7 text-xs px-2"
+                            disabled={deleteInProgress === chit.id}
                             onClick={() => setDeletingChitId(null)}
                           >
                             Cancel
