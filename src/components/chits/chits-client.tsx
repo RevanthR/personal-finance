@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { formatCurrency } from "@/lib/utils";
 import { usePrivacy } from "@/contexts/privacy-context";
-import { Plus, TrendingUp, TrendingDown, Coins } from "lucide-react";
+import { Plus, TrendingUp, TrendingDown, Coins, Trash2 } from "lucide-react";
 import { PageCoach } from "@/components/coach/page-coach";
 import { toast } from "sonner";
 import { AddChitDialog } from "./add-chit-dialog";
@@ -40,6 +40,7 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
   const [chits, setChits] = useState(initialChits);
   const [showAdd, setShowAdd] = useState(false);
   const [liftingChit, setLiftingChit] = useState<Chit | null>(null);
+  const [deletingChitId, setDeletingChitId] = useState<string | null>(null);
 
   const activeChits = chits.filter((c) => !c.isLifted && c.template.isActive);
   const liftedChits = chits.filter((c) => c.isLifted);
@@ -64,6 +65,14 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
     setChits((prev) => [...prev, newChit]);
     toast.success("Chit fund added");
     setShowAdd(false);
+  }
+
+  async function handleDelete(chitId: string) {
+    const res = await fetch(`/api/chits/${chitId}`, { method: "DELETE" });
+    if (!res.ok) { toast.error("Failed to delete chit"); return; }
+    setChits((prev) => prev.filter((c) => c.id !== chitId));
+    toast.success("Chit deleted");
+    setDeletingChitId(null);
   }
 
   async function handleLift(chitId: string, data: {
@@ -199,10 +208,39 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base">{chit.template.name}</CardTitle>
-                    <Badge variant="destructive" className="text-xs">
-                      <TrendingDown className="w-3 h-3 mr-1" />
-                      Lifted
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="destructive" className="text-xs">
+                        <TrendingDown className="w-3 h-3 mr-1" />
+                        Lifted
+                      </Badge>
+                      {deletingChitId === chit.id ? (
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            className="h-7 text-xs px-2"
+                            onClick={() => handleDelete(chit.id)}
+                          >
+                            Confirm
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs px-2"
+                            onClick={() => setDeletingChitId(null)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setDeletingChitId(chit.id)}
+                          className="p-1 rounded text-muted-foreground hover:text-destructive active:text-destructive transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-2">

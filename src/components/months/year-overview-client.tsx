@@ -114,7 +114,7 @@ export function YearOverviewClient({
   const actualCount   = months.filter(m => m.isPopulated).length;
   const projCount     = 12 - actualCount;
 
-  const maxMonthIncome = Math.max(...months.map(m => m.income));
+  const maxMonthValue = Math.max(...months.map(m => Math.max(m.income, m.expenses)));
 
   return (
     <div className="max-w-7xl mx-auto space-y-5">
@@ -206,8 +206,8 @@ export function YearOverviewClient({
         </p>
         <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
           {months.map(m => {
-            const expPct = m.income > 0 ? Math.min(100, Math.round((m.expenses / m.income) * 100)) : 0;
-            const incPct = maxMonthIncome > 0 ? Math.round((m.income / maxMonthIncome) * 100) : 100;
+            const incPct = maxMonthValue > 0 ? Math.round((m.income / maxMonthValue) * 100) : 0;
+            const expPct = maxMonthValue > 0 ? Math.round((m.expenses / maxMonthValue) * 100) : 0;
 
             const cell = (
               <div className={cn(

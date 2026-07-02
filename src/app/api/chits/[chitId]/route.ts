@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
-import { revalidateTag } from "next/cache";
+import { revalidateTag, revalidatePath } from "next/cache";
 import { templateCacheTag } from "@/lib/cached-queries";
 import { z } from "zod";
 import { validate, zMoney, zDay, zMonth, zYear } from "@/lib/validation";
@@ -101,7 +101,37 @@ export async function PATCH(
     }
 
     revalidateTag(templateCacheTag, {});
+  revalidatePath("/dashboard");
+  revalidatePath("/months");
   }
 
   return NextResponse.json(updated);
+}
+
+// DELETE — remove a chit fund and all its entries
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ chitId: string }> }
+) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { chitId } = await params;
+
+  const chit = await db.chitFund.findFirst({
+    where: { id: chitId, userId: session.user.id },
+    select: { id: true, templateId: true },
+  });
+  if (!chit) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  // Delete all monthly entries for this template, then the chit + template
+  await db.monthlyEntry.deleteMany({ where: { templateId: chit.templateId } });
+  await db.chitFund.delete({ where: { id: chitId } });
+  await db.lineItemTemplate.delete({ where: { id: chit.templateId } });
+
+  revalidateTag(templateCacheTag, {});
+  revalidatePath("/dashboard");
+  revalidatePath("/months");
+
+  return NextResponse.json({ ok: true });
 }

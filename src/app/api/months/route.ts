@@ -115,6 +115,14 @@ export async function POST(req: NextRequest) {
         if (year > t.endsOnYear || (year === t.endsOnYear && month > t.endsOnMonth)) continue;
       }
 
+      // Skip chit fund entries for months before the chit started
+      if (t.chitFund?.startDate) {
+        const chitStart = new Date(t.chitFund.startDate);
+        const chitStartY = chitStart.getUTCFullYear();
+        const chitStartM = chitStart.getUTCMonth() + 1;
+        if (year < chitStartY || (year === chitStartY && month < chitStartM)) continue;
+      }
+
       // Promote pending amount if its effective month has arrived
       let baseAmount = t.amount;
       if (t.pendingAmount != null && t.pendingFromMonth != null && t.pendingFromYear != null) {

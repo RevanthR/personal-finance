@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { validate, ChitPostSchema } from "@/lib/validation";
-import { revalidateTag } from "next/cache";
+import { revalidateTag, revalidatePath } from "next/cache";
 import { templateCacheTag } from "@/lib/cached-queries";
 
 export async function GET() {
@@ -86,5 +86,7 @@ export async function POST(req: NextRequest) {
   }
 
   revalidateTag(templateCacheTag, {});
+  revalidatePath("/dashboard");
+  revalidatePath("/months");
   return NextResponse.json(chit, { status: 201 });
 }
