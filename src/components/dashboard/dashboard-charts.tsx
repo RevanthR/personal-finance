@@ -10,14 +10,9 @@ import {
 } from "recharts";
 
 type TrendItem = { name: string; Income: number; Expenses: number };
-type ChitFund = {
-  id: string; isLifted: boolean; accumulatedSavings: number; liftedUsedFor: string | null;
-  template: { name: string };
-};
 
 interface DashboardChartsProps {
   trendData: TrendItem[];
-  chitFunds: ChitFund[];
   savingsRate: number;
   expensesDelta: number | null;
   prevMonthName: string | null;
@@ -27,7 +22,6 @@ interface DashboardChartsProps {
 
 export function DashboardCharts({
   trendData,
-  chitFunds,
   savingsRate,
   expensesDelta,
   prevMonthName,
@@ -129,35 +123,6 @@ export function DashboardCharts({
         </Card>
       )}
 
-      {/* Chit Funds */}
-      {chitFunds.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2 pt-3 px-4">
-            <CardTitle className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-              Chit Funds
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-3 space-y-2.5">
-            {chitFunds.map((chit) => (
-              <div key={chit.id} className="flex items-center justify-between">
-                <div className="min-w-0">
-                  <p className="text-xs font-medium truncate">{chit.template.name}</p>
-                  {chit.isLifted
-                    ? <p className="text-[10px] text-muted-foreground">Lifted</p>
-                    : <p className="text-[10px] text-emerald-600">Saved {fmt(chit.accumulatedSavings)}</p>
-                  }
-                </div>
-                <span className={cn(
-                  "text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0 ml-2",
-                  chit.isLifted ? "bg-zinc-100 text-zinc-500" : "bg-emerald-50 text-emerald-700"
-                )}>
-                  {chit.isLifted ? "Lifted" : "Active"}
-                </span>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

@@ -99,7 +99,12 @@ export async function PATCH(
   }
 
   revalidateTag(templateCacheTag, {});
-  return NextResponse.json({ ok: true });
+
+  const updatedTemplate = await db.lineItemTemplate.findFirst({
+    where: { id: templateId, userId: session.user.id },
+    include: { chitFund: true },
+  });
+  return NextResponse.json(updatedTemplate);
 }
 
 export async function DELETE(

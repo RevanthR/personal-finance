@@ -50,7 +50,6 @@ export type ProjectedEntry = {
 interface DashboardClientProps {
   currentMonth: MonthWithDetails | null;
   recentMonths: RecentMonthSummary[];
-  chitFunds: ChitFundWithTemplate[];
   ccTemplates: { id: string; name: string; statementDay: number | null; dueDateDay: number | null }[];
   suggestedIncome: number;
   todayMonth: number;
@@ -75,8 +74,8 @@ type MonthWithDetails = {
 type RecentMonthSummary = {
   id: string; month: number; year: number;
   salaryIncome: number; freelanceIncome: number; otherIncome: number;
-  entries: { amount: number; cashbackAmount: number | null }[];
-  adHocItems: { type: string; amount: number; category: string | null }[];
+  entries: { id: string; templateId: string; amount: number; cashbackAmount: number | null }[];
+  adHocItems: { id: string; type: string; amount: number; category: string | null }[];
 };
 
 type EntryWithTemplate = {
@@ -89,11 +88,6 @@ type AdHocItem = {
   id: string; name: string; amount: number; type: string; category: string | null; date: string; notes: string | null;
 };
 
-type ChitFundWithTemplate = {
-  id: string; totalValue: number; isLifted: boolean; accumulatedSavings: number;
-  monthlyUnliftedAmount: number; liftedUsedFor: string | null;
-  template: { name: string };
-};
 
 const CATEGORY_ORDER = ["HOUSE_MAINTENANCE", "LOAN", "CREDIT_CARD", "CHIT_FUND", "SAVINGS", "PERSONAL", "MISCELLANEOUS"];
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -236,7 +230,7 @@ function CCCardBlock({
   );
 }
 
-export function DashboardClient({ currentMonth: initialMonth, recentMonths, chitFunds, ccTemplates, suggestedIncome, todayMonth, todayYear, targetMonth, targetYear, prevUrl, nextUrl, projectedIncome, projectedEntries }: DashboardClientProps) {
+export function DashboardClient({ currentMonth: initialMonth, recentMonths: initialRecentMonths, ccTemplates, suggestedIncome, todayMonth, todayYear, targetMonth, targetYear, prevUrl, nextUrl, projectedIncome, projectedEntries }: DashboardClientProps) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const viewMonth = targetMonth ?? todayMonth;
@@ -252,6 +246,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
     startTransition(() => router.push(url));
   }
   const [currentMonth, setCurrentMonth] = useState(initialMonth);
+  const [recentMonths, setRecentMonths] = useState(initialRecentMonths);
   const [showAdHoc, setShowAdHoc] = useState(false);
   const [showSetup, setShowSetup] = useState(!initialMonth && !isProjected);
   const [showIncomeEdit, setShowIncomeEdit] = useState(false);
@@ -266,6 +261,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
   if (monthKey !== lastMonthKey) {
     setLastMonthKey(monthKey);
     setCurrentMonth(initialMonth);
+    setRecentMonths(initialRecentMonths);
     setShowSetup(!initialMonth && !isProjected);
     setShowAdHoc(false);
     setShowIncomeEdit(false);
@@ -498,6 +494,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
     setIncomeLoading(false);
     if (!res.ok) { toast.error("Failed to save income"); return; }
     setCurrentMonth(prev => prev ? { ...prev, salaryIncome: salary, freelanceIncome: freelance, otherIncome: other } : prev);
+    setRecentMonths(prev => prev.map(m => m.id === currentMonth!.id ? { ...m, salaryIncome: salary, freelanceIncome: freelance, otherIncome: other } : m));
     setShowIncomeEdit(false);
     toast.success("Income updated");
   }
@@ -514,6 +511,13 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
     setCurrentMonth(prev => prev ? {
       ...prev, entries: prev.entries.map(e => e.id === entryId ? { ...e, ...updated } : e),
     } : prev);
+    if (updates.amount !== undefined || updates.cashbackAmount !== undefined) {
+      setRecentMonths(prev => prev.map(m =>
+        m.id === currentMonth!.id
+          ? { ...m, entries: m.entries.map(e => e.id === entryId ? { ...e, ...(updates.amount !== undefined && { amount: updates.amount }), ...(updates.cashbackAmount !== undefined && { cashbackAmount: updates.cashbackAmount }) } : e) }
+          : m
+      ));
+    }
     if (updates.isPaid !== undefined) toast.success(updates.isPaid ? "Marked paid ✓" : "Marked pending");
     if (updates.paidAmount !== undefined && !updated.isPaid) toast.success("Partial payment recorded");
     if (updates.cashbackAmount !== undefined) toast.success(`Cashback of ${formatCurrency(updates.cashbackAmount)} applied`);
@@ -535,6 +539,11 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
         : prev.entries;
       return { ...prev, adHocItems: [...prev.adHocItems, newItem], entries: updatedEntries };
     });
+    setRecentMonths(prev => prev.map(m =>
+      m.id === currentMonth!.id
+        ? { ...m, adHocItems: [...m.adHocItems, { id: newItem.id, type: newItem.type, amount: newItem.amount, category: newItem.category }] }
+        : m
+    ));
     toast.success("Added");
     setShowAdHoc(false);
   }
@@ -551,6 +560,11 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
         : prev.entries;
       return { ...prev, adHocItems: prev.adHocItems.filter(i => i.id !== id), entries: updatedEntries };
     });
+    setRecentMonths(prev => prev.map(m =>
+      m.id === currentMonth!.id
+        ? { ...m, adHocItems: m.adHocItems.filter(i => i.id !== id) }
+        : m
+    ));
     toast.success("Removed");
   }
 
@@ -575,7 +589,22 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
       body: JSON.stringify({ month: viewMonth, year: viewYear, salaryIncome }),
     });
     if (!res.ok) { toast.error("Failed to set up month"); return; }
-    window.location.reload();
+    const { id: monthId } = await res.json();
+    const monthRes = await fetch(`/api/months/${monthId}`);
+    if (!monthRes.ok) { toast.error("Failed to load month data"); return; }
+    const fullMonth = await monthRes.json();
+    setCurrentMonth(fullMonth);
+    setShowSetup(false);
+    setRecentMonths(prev => {
+      if (prev.some(m => m.id === fullMonth.id)) return prev;
+      return [{
+        id: fullMonth.id, month: fullMonth.month, year: fullMonth.year,
+        salaryIncome: fullMonth.salaryIncome, freelanceIncome: fullMonth.freelanceIncome, otherIncome: fullMonth.otherIncome,
+        entries: (fullMonth.entries ?? []).map((e: EntryWithTemplate) => ({ id: e.id, templateId: e.templateId, amount: e.amount, cashbackAmount: e.cashbackAmount })),
+        adHocItems: (fullMonth.adHocItems ?? []).map((i: AdHocItem) => ({ id: i.id, type: i.type, amount: i.amount, category: i.category })),
+      }, ...prev].slice(0, 6);
+    });
+    toast.success("Month ready");
   }
 
   if (!currentMonth && !isProjected) {
@@ -606,7 +635,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
       <DashboardTour />
       {/* Header */}
       <div className="space-y-2">
-        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Monthly Snapshot</p>
+        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">This Month</p>
 
         <div className="flex items-center gap-2">
           {/* Month navigation pill */}
@@ -671,7 +700,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
       {recentMonths.length > 1 && (
         <Card className="bg-slate-900 text-white border-slate-800">
           <CardContent className="p-3">
-            <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-2">FY26-27 Year to Date ({recentMonths.length} months)</p>
+            <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-2">Last {recentMonths.length} months</p>
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <p className="text-[10px] text-slate-400">Income</p>
@@ -717,13 +746,13 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
             </Card>
           </button>
         )}
-        <MetricCard label="Expenditure" value={fmt(dispCommitted)} icon={<TrendingDown className="w-4 h-4" />} color="text-red-600" sub={isProjected ? `${projEntries.length} items` : pendingCount > 0 ? `${pendingCount} pending` : undefined} gradient="linear-gradient(135deg, white 0%, #fef2f2 100%)" />
+        <MetricCard label="Spending" value={fmt(dispCommitted)} icon={<TrendingDown className="w-4 h-4" />} color="text-red-600" sub={isProjected ? `${projEntries.length} items` : pendingCount > 0 ? `${pendingCount} pending` : undefined} gradient="linear-gradient(135deg, white 0%, #fef2f2 100%)" />
         <MetricCard
-          label="Unplanned"
+          label="Extra Spending"
           value={isProjected ? "—" : fmt(adHocExpense)}
           icon={<CheckCircle2 className="w-4 h-4" />}
           color="text-amber-600"
-          sub={isProjected ? "not yet tracked" : adHocExpense > 0 ? `${adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").length} transaction${adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").length !== 1 ? "s" : ""}` : "no extra spends"}
+          sub={isProjected ? "not yet tracked" : adHocExpense > 0 ? `${adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").length} transaction${adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").length !== 1 ? "s" : ""}` : "no extra expenses"}
           gradient="linear-gradient(135deg, white 0%, #fffbeb 100%)"
         />
         <MetricCard
@@ -731,7 +760,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
           value={fmt(Math.abs(dispBalance))}
           icon={dispBalance >= 0 ? <TrendingUp className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
           color={dispBalance >= 0 ? "text-green-600" : "text-red-600"}
-          sub={isProjected ? "if no unplanned spend" : dispBalance >= 0 ? "after all spends" : "over income"}
+          sub={isProjected ? "if no extra expenses" : dispBalance >= 0 ? "after all expenses" : "exceeds income"}
           gradient={dispBalance >= 0 ? "linear-gradient(135deg, white 0%, #f0fdf4 100%)" : "linear-gradient(135deg, white 0%, #fef2f2 100%)"}
         />
       </div>
@@ -741,7 +770,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
         <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-blue-50 border border-blue-200">
           <div className="flex items-center gap-2">
             <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
-            <span className="text-sm text-blue-800 font-medium">Total carrying to {nextMonthName}</span>
+            <span className="text-sm text-blue-800 font-medium">Rolls into {nextMonthName}&apos;s bill</span>
           </div>
           <span className="text-sm text-blue-900 font-bold">{fmt(ccStatementTotal)}</span>
         </div>
@@ -750,7 +779,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
       {/* Progress */}
       <div className="space-y-1.5">
         <div className="flex justify-between text-xs text-muted-foreground">
-          <span>{isProjected ? "Paid —" : `Settled ${fmt(totalPaid)}`}</span>
+          <span>{isProjected ? "Paid: none" : `Paid ${fmt(totalPaid)}`}</span>
           <span className="font-semibold text-foreground">{dispPaidPct}%</span>
           <span>{isProjected ? `Projected ${fmt(dispPending)}` : `Pending ${fmt(dispPending)}`}</span>
         </div>
@@ -896,7 +925,6 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
           {!isProjected && <PaidSummaryPanel entries={entries} totalCommitted={totalCommitted} grandIncome={grandIncome} adHocExpense={adHocExpense} fmt={fmt} />}
           <DashboardCharts
             trendData={trendData}
-            chitFunds={chitFunds}
             savingsRate={dispSavings}
             expensesDelta={isProjected ? null : expensesDelta}
             prevMonthName={isProjected ? null : prevMonthName}
@@ -910,7 +938,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
       <Dialog open={!isProjected && showIncomeEdit} onOpenChange={setShowIncomeEdit}>
         <DialogContent className="max-w-xs">
           <DialogHeader>
-            <DialogTitle>Edit Income — {formatMonthYear(currentMonth?.month ?? viewMonth, currentMonth?.year ?? viewYear)}</DialogTitle>
+            <DialogTitle>Edit Income: {formatMonthYear(currentMonth?.month ?? viewMonth, currentMonth?.year ?? viewYear)}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div>
@@ -1043,11 +1071,11 @@ function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, 
           <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="text-sm font-semibold">Settled</span>
+              <span className="text-sm font-semibold">Paid</span>
               <span className="text-xs text-muted-foreground">{fullyPaidCount} of {entries.length}</span>
               {partialEntries.length > 0 && (
                 <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">
-                  {partialEntries.length} partial
+                  {partialEntries.length} partial payment{partialEntries.length !== 1 ? "s" : ""}
                 </span>
               )}
             </div>
@@ -1080,7 +1108,7 @@ function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, 
                         <div className="flex items-center gap-1.5 min-w-0">
                           <span className="text-xs text-muted-foreground truncate">{e.template.name}</span>
                           {isPartial && (
-                            <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-1 py-0.5 rounded shrink-0">partial</span>
+                            <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-1 py-0.5 rounded shrink-0">partial payment</span>
                           )}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">

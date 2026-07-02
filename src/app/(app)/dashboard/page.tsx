@@ -124,7 +124,6 @@ export default async function DashboardPage({
       <DashboardClient
         currentMonth={null}
         recentMonths={[]}
-        chitFunds={[]}
         ccTemplates={[]}
         suggestedIncome={0}
         todayMonth={todayMonth}
@@ -141,7 +140,7 @@ export default async function DashboardPage({
   }
 
   // ── Actual (past or current) month ────────────────────────────────────────
-  const [currentMonth, recentMonths, chitFunds, ccTemplates, incomeTemplates] = await Promise.all([
+  const [currentMonth, recentMonths, ccTemplates, incomeTemplates] = await Promise.all([
     db.month.findUnique({
       where: { userId_month_year: { userId, month: targetMonth, year: targetYear } },
       include: {
@@ -159,14 +158,9 @@ export default async function DashboardPage({
       select: {
         id: true, month: true, year: true,
         salaryIncome: true, freelanceIncome: true, otherIncome: true,
-        entries: { select: { amount: true } },
-        adHocItems: { select: { type: true, amount: true, category: true } },
+        entries: { select: { id: true, templateId: true, amount: true, cashbackAmount: true } },
+        adHocItems: { select: { id: true, type: true, amount: true, category: true } },
       },
-    }),
-    db.chitFund.findMany({
-      where: { userId },
-      include: { template: true },
-      orderBy: { startDate: "asc" },
     }),
     db.lineItemTemplate.findMany({
       where: { userId, category: "CREDIT_CARD", isActive: true },
@@ -187,7 +181,6 @@ export default async function DashboardPage({
     <DashboardClient
       currentMonth={currentMonth ? JSON.parse(JSON.stringify(currentMonth)) : null}
       recentMonths={JSON.parse(JSON.stringify(recentMonths))}
-      chitFunds={JSON.parse(JSON.stringify(chitFunds))}
       ccTemplates={JSON.parse(JSON.stringify(ccTemplates))}
       suggestedIncome={suggestedIncome}
       todayMonth={todayMonth}

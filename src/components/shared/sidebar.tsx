@@ -18,9 +18,9 @@ import { useState } from "react";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/months", label: "Statistics", mobileLabel: "Stats", icon: Calendar },
+  { href: "/months", label: "Year View", mobileLabel: "Year", icon: Calendar },
   { href: "/receivables", label: "Receivables", icon: TrendingUp },
-  { href: "/templates", label: "Configuration", mobileLabel: "Config", icon: SlidersHorizontal },
+  { href: "/templates", label: "Budgets", icon: SlidersHorizontal },
   { href: "/pricing", label: "Subscription", mobileLabel: "Pro", icon: Sparkles },
 ];
 

@@ -113,29 +113,16 @@ export function TemplatesClient({
       body: JSON.stringify(data),
     });
     if (!res.ok) { toast.error("Failed to save"); return; }
-    const resolved: Template = {
-      ...editing,
-      ...data,
-      customCategory: data.customCategory ?? null,
-      category: data.customCategory ? "MISCELLANEOUS" : data.category,
-      pendingAmount: data.clearPending ? null : (data.pendingAmount ?? editing.pendingAmount),
-      pendingFromMonth: data.clearPending ? null : (data.pendingFromMonth ?? editing.pendingFromMonth),
-      pendingFromYear: data.clearPending ? null : (data.pendingFromYear ?? editing.pendingFromYear),
-      endsOnMonth: data.clearEndDate ? null : (data.endsOnMonth ?? editing.endsOnMonth),
-      endsOnYear: data.clearEndDate ? null : (data.endsOnYear ?? editing.endsOnYear),
-      statementDay: data.statementDay ?? editing.statementDay,
-      frequency: data.frequency ?? editing.frequency,
-      dueMonth: data.dueMonth !== undefined ? data.dueMonth : editing.dueMonth,
-      templateType: data.templateType ?? editing.templateType,
-    };
-    setTemplates((prev) => prev.map((x) => x.id === editing.id ? resolved : x));
+    const updated = await res.json();
+    setTemplates((prev) => prev.map((x) => x.id === editing.id ? { ...x, ...updated } : x));
     toast.success("Item updated");
     setEditing(null);
   }
 
   async function deleteTemplate(id: string) {
     if (!confirm("Delete this template? It won't affect past entries.")) return;
-    await fetch(`/api/templates/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/templates/${id}`, { method: "DELETE" });
+    if (!res.ok) { toast.error("Failed to delete"); return; }
     setTemplates((prev) => prev.filter((x) => x.id !== id));
     toast.success("Deleted");
   }
@@ -469,7 +456,7 @@ export function TemplatesClient({
                                 {t.category !== "CHIT_FUND" && t.isActive && (
                                   <button
                                     onClick={() => setForeclosing(t)}
-                                    title="Foreclose"
+                                    title="Mark as closed"
                                     className="text-muted-foreground hover:text-zinc-700"
                                   >
                                     <Lock className="w-4 h-4" />
@@ -746,7 +733,7 @@ function TemplateDialog({
 
           {!isIncome && (
             <div className="flex items-center justify-between">
-              <Label className="text-xs">Fixed Amount</Label>
+              <Label className="text-xs">Same amount every month</Label>
               <Switch checked={isFixed} onCheckedChange={setIsFixed} />
             </div>
           )}
@@ -805,7 +792,7 @@ function TemplateDialog({
 
           {!isIncome && category === "CREDIT_CARD" && (
             <div>
-              <Label className="text-xs">Statement closes on (day of month, optional)</Label>
+              <Label className="text-xs">Billing cut-off day (optional)</Label>
               <Input type="number" min="1" max="31" value={statementDay} onChange={(e) => setStatementDay(e.target.value)} placeholder="e.g. 15" />
               {statementDay && (
                 <p className="text-[11px] text-muted-foreground mt-1">
@@ -823,7 +810,7 @@ function TemplateDialog({
                 onClick={() => setShowSchedule(v => !v)}
                 className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-medium bg-muted/30 hover:bg-muted/50 transition-colors"
               >
-                <span>{showSchedule ? "Scheduled amount change" : "Schedule a future amount change"}</span>
+                <span>{showSchedule ? "Planned amount change" : "Plan an upcoming change"}</span>
                 <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform", showSchedule && "rotate-180")} />
               </button>
 
@@ -995,7 +982,7 @@ function TemplateDialog({
 
               <div>
                 <label className="text-[10px] text-muted-foreground uppercase tracking-wide">
-                  Current outstanding override (₹)
+                  Current loan balance (₹)
                   {loanRateType === "FLOATING" && <span className="ml-1 text-red-600">required for floating</span>}
                 </label>
                 <Input

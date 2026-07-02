@@ -210,9 +210,14 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
           </p>
           <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
             <span>{getCategoryDisplay(entry.template.category, entry.template.customCategory)}</span>
+            {entry.template.chitFund && !isPaid && (
+              <span className={cn("text-[10px]", entry.template.chitFund.isLifted ? "text-zinc-400" : "text-emerald-600")}>
+                {entry.template.chitFund.isLifted ? "lifted" : `${fmt(entry.template.chitFund.accumulatedSavings)} saved`}
+              </span>
+            )}
             {isBillPending && entry.template.statementDay && (
               <span className="text-[10px] text-zinc-400 italic">
-                Bill generates on {entry.template.statementDay}th
+                Statement closes {entry.template.statementDay}th
               </span>
             )}
             {!isBillPending && entry.template.category === "CREDIT_CARD" && entry.template.statementDay && !isPaid && (
@@ -388,7 +393,7 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
               <span className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
                 <Check className="w-3 h-3 text-white" />
               </span>
-              EMI recorded
+              Loan payment recorded
             </DialogTitle>
           </DialogHeader>
           {loanPaidSnapshot && (
@@ -408,7 +413,7 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
                   <span className="font-medium text-emerald-600 tabular-nums">{fmt(loanPaidSnapshot.principalThisMonth)}</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-red-500">Interest cost</span>
+                  <span className="text-red-500">Interest paid</span>
                   <span className="font-medium text-red-500 tabular-nums">{fmt(loanPaidSnapshot.interestThisMonth)}</span>
                 </div>
               </div>
