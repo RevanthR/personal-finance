@@ -77,6 +77,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
   const [showAddReceivable, setShowAddReceivable] = useState(false);
   const [liftingChit, setLiftingChit] = useState<Chit | null>(null);
   const [receivingItem, setReceivingItem] = useState<Receivable | null>(null);
+  const [deletingChitId, setDeletingChitId] = useState<string | null>(null);
 
   const unliftedChits = chits.filter((c) => !c.isLifted && c.template.isActive);
   const liftedChits = chits.filter((c) => c.isLifted);
@@ -138,6 +139,14 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
     if (!res.ok) { toast.error("Failed to delete"); return; }
     setReceivables((prev) => prev.filter((r) => r.id !== id));
     toast.success("Removed");
+  }
+
+  async function handleDeleteChit(chitId: string) {
+    const res = await fetch(`/api/chits/${chitId}`, { method: "DELETE" });
+    if (!res.ok) { toast.error("Failed to delete chit"); return; }
+    setChits((prev) => prev.filter((c) => c.id !== chitId));
+    toast.success("Chit deleted");
+    setDeletingChitId(null);
   }
 
   return (
@@ -341,9 +350,21 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                     <CardHeader className="pb-2 px-4 pt-4">
                       <div className="flex items-center justify-between gap-2">
                         <CardTitle className="text-sm font-semibold truncate">{chit.template.name}</CardTitle>
-                        <Badge variant="destructive" className="text-[11px] shrink-0">
-                          <TrendingDown className="w-3 h-3 mr-1" />Lifted
-                        </Badge>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Badge variant="destructive" className="text-[11px]">
+                            <TrendingDown className="w-3 h-3 mr-1" />Lifted
+                          </Badge>
+                          {deletingChitId === chit.id ? (
+                            <div className="flex items-center gap-1">
+                              <Button variant="destructive" size="sm" className="h-6 text-xs px-2" onClick={() => handleDeleteChit(chit.id)}>Confirm</Button>
+                              <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setDeletingChitId(null)}>Cancel</Button>
+                            </div>
+                          ) : (
+                            <button onClick={() => setDeletingChitId(chit.id)} className="p-1 rounded text-muted-foreground hover:text-destructive active:text-destructive transition-colors">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </CardHeader>
                     <CardContent className="px-4 pb-4 space-y-2">

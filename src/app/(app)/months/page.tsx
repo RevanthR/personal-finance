@@ -145,6 +145,13 @@ export default async function MonthsPage() {
       if (projYear > computed.year) return false;
       if (projYear === computed.year && projMonth > computed.month) return false;
     }
+    // Chit fund: don't include months before the chit's start date
+    if (t.category === "CHIT_FUND" && t.chitFund?.startDate) {
+      const chitStart = new Date(String(t.chitFund.startDate));
+      const chitStartY = chitStart.getUTCFullYear();
+      const chitStartM = chitStart.getUTCMonth() + 1;
+      if (projYear < chitStartY || (projYear === chitStartY && projMonth < chitStartM)) return false;
+    }
     return true;
   }
 

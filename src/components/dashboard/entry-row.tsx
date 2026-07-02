@@ -221,7 +221,7 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
                 month {computeChitCurrentMonth(entry.template.chitFund.startDate)} of {entry.template.chitFund.durationMonths}
               </span>
             )}
-            {isLoan && loanAmort && loanAmort.monthsRemaining > 0 && !isPaid && (
+            {isLoan && loanAmort && loanAmort.monthsRemaining > 0 && (
               <span className="text-[10px] text-muted-foreground/70">
                 {loanAmort.monthsRemaining} mo left
               </span>
