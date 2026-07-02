@@ -65,6 +65,7 @@ type SaveData = {
   dueMonth?: number | null;
   templateType?: string;
   updateCurrentMonth?: boolean;
+  addToCurrentMonth?: boolean;
   pendingAmount?: number | null;
   pendingFromMonth?: number | null;
   pendingFromYear?: number | null;
@@ -562,6 +563,7 @@ function TemplateDialog({
 
   // Part 1: apply to current month
   const [updateCurrentMonth, setUpdateCurrentMonth] = useState(false);
+  const [addToCurrentMonth, setAddToCurrentMonth] = useState(true);
 
   // Part 2: scheduled future change — auto-expand for income edits
   const isEditingIncome = isEditing && (initial?.templateType === "INCOME");
@@ -618,6 +620,7 @@ function TemplateDialog({
       dueMonth: frequency === "YEARLY" ? dueMonth : null,
       templateType,
       ...(isEditing && { updateCurrentMonth }),
+      ...(!isEditing && templateType !== "INCOME" && { addToCurrentMonth }),
       ...(pendingValid && {
         pendingAmount: parseFloat(pendingAmt),
         pendingFromMonth: pendingMonth,
@@ -727,11 +730,17 @@ function TemplateDialog({
             <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} required />
           </div>
 
-          {/* Part 1: apply change to current month */}
+          {/* Apply to current month */}
           {isEditing && (
             <div className="flex items-center justify-between rounded-lg border px-3 py-2 bg-muted/30">
-              <Label className="text-xs cursor-pointer">Also update this month's entry</Label>
+              <Label className="text-xs cursor-pointer">Also update this month&apos;s entry</Label>
               <Switch checked={updateCurrentMonth} onCheckedChange={setUpdateCurrentMonth} />
+            </div>
+          )}
+          {!isEditing && !isIncome && (
+            <div className="flex items-center justify-between rounded-lg border px-3 py-2 bg-muted/30">
+              <Label className="text-xs cursor-pointer">Show in current month</Label>
+              <Switch checked={addToCurrentMonth} onCheckedChange={setAddToCurrentMonth} />
             </div>
           )}
 

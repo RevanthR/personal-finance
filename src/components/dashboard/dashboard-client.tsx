@@ -893,7 +893,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
 
         {/* Right column: Recharts loaded lazily so it doesn't block navigation */}
         <div className="space-y-4">
-          {!isProjected && <PaidSummaryPanel entries={entries} totalCommitted={totalCommitted} fmt={fmt} />}
+          {!isProjected && <PaidSummaryPanel entries={entries} totalCommitted={totalCommitted} grandIncome={grandIncome} adHocExpense={adHocExpense} fmt={fmt} />}
           <DashboardCharts
             categoryBreakdown={categoryBreakdown}
             trendData={trendData}
@@ -1003,7 +1003,7 @@ function ProjectedEntryRow({ entry }: { entry: ProjectedEntry }) {
   );
 }
 
-function PaidSummaryPanel({ entries, totalCommitted, fmt }: { entries: EntryWithTemplate[]; totalCommitted: number; fmt: (v: number) => string }) {
+function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, fmt }: { entries: EntryWithTemplate[]; totalCommitted: number; grandIncome: number; adHocExpense: number; fmt: (v: number) => string }) {
   const [collapsed, setCollapsed] = useState(false);
   const netAmt = (e: EntryWithTemplate) => e.amount - (e.cashbackAmount ?? 0);
   const paidAmt = (e: EntryWithTemplate): number => e.isPaid ? (e.paidAmount ?? netAmt(e)) : (e.paidAmount ?? 0);
@@ -1107,10 +1107,18 @@ function PaidSummaryPanel({ entries, totalCommitted, fmt }: { entries: EntryWith
               </div>
             );
           })}
-          <div className="flex items-center justify-between px-4 py-2.5 bg-green-50/60">
+          <div className="flex items-center justify-between px-4 py-2.5 bg-green-50/60 border-t border-border/40">
             <span className="text-xs font-semibold text-muted-foreground">Total paid out</span>
             <span className="text-sm font-bold text-green-600 tabular-nums">{fmt(totalPaidOut)} of {fmt(totalCommitted)}</span>
           </div>
+          {grandIncome > 0 && (
+            <div className="flex items-center justify-between px-4 py-2.5 bg-emerald-50/80 border-t border-emerald-100">
+              <span className="text-xs font-semibold text-emerald-700">Balance remaining</span>
+              <span className={cn("text-sm font-bold tabular-nums", grandIncome - totalPaidOut - adHocExpense >= 0 ? "text-emerald-700" : "text-red-600")}>
+                {fmt(grandIncome - totalPaidOut - adHocExpense)}
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>

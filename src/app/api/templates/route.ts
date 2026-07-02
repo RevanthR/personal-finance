@@ -52,6 +52,21 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  // If requested, inject an entry into the current already-populated month
+  if (body.addToCurrentMonth && (body.templateType ?? "EXPENSE") !== "INCOME") {
+    const now = new Date();
+    const curMonth = await db.month.findUnique({
+      where: { userId_month_year: { userId: session.user.id, month: now.getMonth() + 1, year: now.getFullYear() } },
+    });
+    if (curMonth) {
+      await db.monthlyEntry.upsert({
+        where: { monthId_templateId: { monthId: curMonth.id, templateId: template.id } },
+        create: { monthId: curMonth.id, templateId: template.id, amount: template.amount },
+        update: {},
+      });
+    }
+  }
+
   revalidateTag(templateCacheTag, {});
   return NextResponse.json(template, { status: 201 });
 }

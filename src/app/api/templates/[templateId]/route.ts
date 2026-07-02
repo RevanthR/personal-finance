@@ -59,16 +59,17 @@ export async function PATCH(
     return NextResponse.json({ error: "Update failed" }, { status: 500 });
   }
 
-  // Optionally apply the new amount to the current month's existing entry
+  // Optionally apply the new amount to the current month's entry (creates it if missing)
   if (body.updateCurrentMonth && body.amount !== undefined) {
     const now = new Date();
-    const currentMonth = await db.month.findFirst({
-      where: { userId: session.user.id, month: now.getMonth() + 1, year: now.getFullYear() },
+    const currentMonth = await db.month.findUnique({
+      where: { userId_month_year: { userId: session.user.id, month: now.getMonth() + 1, year: now.getFullYear() } },
     });
     if (currentMonth) {
-      await db.monthlyEntry.updateMany({
-        where: { monthId: currentMonth.id, templateId },
-        data: { amount: body.amount },
+      await db.monthlyEntry.upsert({
+        where: { monthId_templateId: { monthId: currentMonth.id, templateId } },
+        create: { monthId: currentMonth.id, templateId, amount: body.amount },
+        update: { amount: body.amount },
       });
     }
   }

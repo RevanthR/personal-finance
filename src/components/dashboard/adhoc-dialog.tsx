@@ -24,10 +24,10 @@ const CC_SPEND_CATEGORIES = [
 ];
 
 const INCOME_SOURCES = [
-  { value: "salary",        label: "Bonus" },
-  { value: "freelance",     label: "Freelance" },
-  { value: "reimbursement", label: "Refund" },
-  { value: "other",         label: "Other" },
+  { value: "bonus",         label: "Bonus",     dbCategory: "OTHER_INCOME" },
+  { value: "FREELANCE",     label: "Freelance", dbCategory: "FREELANCE" },
+  { value: "reimbursement", label: "Refund",    dbCategory: "OTHER_INCOME" },
+  { value: "other",         label: "Other",     dbCategory: "OTHER_INCOME" },
 ];
 
 export type CCCard = { templateId: string; name: string };
@@ -70,11 +70,15 @@ export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogP
       ? [ccCard?.name, ccSpendCat, notes].filter(Boolean).join(" · ")
       : notes || undefined;
 
+    const resolvedCategory = type === "INCOME"
+      ? (INCOME_SOURCES.find(s => s.value === category)?.dbCategory ?? undefined)
+      : (category || undefined);
+
     await onAdd({
       name,
       amount: parseFloat(amount),
       type,
-      category: category || undefined,
+      category: resolvedCategory,
       date,
       notes: notesStr || undefined,
       ccTemplateId: isCC ? (ccCard?.templateId ?? undefined) : undefined,
