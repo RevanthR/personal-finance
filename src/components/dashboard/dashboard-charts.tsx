@@ -4,12 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { cn } from "@/lib/utils";
-import { TrendingUp, TrendingDown, Calendar } from "lucide-react";
+import { TrendingUp, TrendingDown } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 
-type CategoryBreakdownItem = { key: string; name: string; value: number; color: string };
 type TrendItem = { name: string; Income: number; Expenses: number };
 type ChitFund = {
   id: string; isLifted: boolean; accumulatedSavings: number; liftedUsedFor: string | null;
@@ -17,89 +16,26 @@ type ChitFund = {
 };
 
 interface DashboardChartsProps {
-  categoryBreakdown: CategoryBreakdownItem[];
   trendData: TrendItem[];
   chitFunds: ChitFund[];
-  ccSubcatBreakdown: { name: string; amount: number }[];
   savingsRate: number;
   expensesDelta: number | null;
   prevMonthName: string | null;
   fixedAmount: number;
   variableAmount: number;
-  upcomingPayments: { name: string; amount: number; dueDay: number; overdue: boolean }[];
-}
-
-function ordinal(n: number): string {
-  const s = ["th", "st", "nd", "rd"];
-  const v = n % 100;
-  return n + (s[(v - 20) % 10] || s[v] || s[0]);
-}
-
-function RankedList({
-  items,
-  total,
-}: {
-  items: { name: string; value: number; color?: string }[];
-  total: number;
-}) {
-  const { hidden } = usePrivacy();
-  const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
-  const max = items[0]?.value ?? 1;
-  return (
-    <div className="space-y-2.5">
-      {items.map((item) => {
-        const pct = total > 0 ? Math.round((item.value / total) * 100) : 0;
-        const barPct = max > 0 ? (item.value / max) * 100 : 0;
-        return (
-          <div key={item.name}>
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-1.5 min-w-0">
-                {item.color && (
-                  <span
-                    className="w-1.5 h-1.5 rounded-full shrink-0"
-                    style={{ background: item.color, opacity: 0.75 }}
-                  />
-                )}
-                <span className="text-xs text-foreground truncate">{item.name}</span>
-              </div>
-              <div className="flex items-center gap-2 shrink-0 ml-2">
-                <span className="text-[10px] text-muted-foreground">{pct}%</span>
-                <span className="text-xs font-medium tabular-nums">{fmt(item.value)}</span>
-              </div>
-            </div>
-            <div className="h-[3px] rounded-full bg-muted">
-              <div
-                className="h-full rounded-full transition-all duration-500"
-                style={{
-                  width: `${barPct}%`,
-                  backgroundColor: item.color ?? "#94a3b8",
-                  opacity: 0.45,
-                }}
-              />
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
 }
 
 export function DashboardCharts({
-  categoryBreakdown,
   trendData,
   chitFunds,
-  ccSubcatBreakdown,
   savingsRate,
   expensesDelta,
   prevMonthName,
   fixedAmount,
   variableAmount,
-  upcomingPayments,
 }: DashboardChartsProps) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
-  const totalSpend = categoryBreakdown.reduce((s, i) => s + i.value, 0);
-  const ccTotal = ccSubcatBreakdown.reduce((s, i) => s + i.amount, 0);
   const totalFixed = fixedAmount + variableAmount;
 
   return (
@@ -161,67 +97,6 @@ export function DashboardCharts({
           )}
         </CardContent>
       </Card>
-
-      {/* Top Spend */}
-      {categoryBreakdown.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2 pt-3 px-4">
-            <CardTitle className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-              Top Spend
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-3">
-            <RankedList
-              items={categoryBreakdown.map((i) => ({ name: i.name, value: i.value, color: i.color }))}
-              total={totalSpend}
-            />
-          </CardContent>
-        </Card>
-      )}
-
-      {/* CC Subcategory Breakdown */}
-      {ccSubcatBreakdown.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2 pt-3 px-4">
-            <CardTitle className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-              Card Spend by Type
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-3">
-            <RankedList
-              items={ccSubcatBreakdown.map((i) => ({ name: i.name, value: i.amount }))}
-              total={ccTotal}
-            />
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Upcoming Payments */}
-      {upcomingPayments.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2 pt-3 px-4">
-            <div className="flex items-center gap-1.5">
-              <Calendar className="w-3 h-3 text-muted-foreground" />
-              <CardTitle className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                Upcoming
-              </CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="px-4 pb-3 space-y-2">
-            {upcomingPayments.map((p) => (
-              <div key={p.name} className="flex items-center justify-between">
-                <div className="min-w-0">
-                  <p className="text-xs truncate">{p.name}</p>
-                  <p className={cn("text-[10px]", p.overdue ? "text-rose-500" : "text-muted-foreground")}>
-                    {p.overdue ? "Overdue" : `Due ${ordinal(p.dueDay)}`}
-                  </p>
-                </div>
-                <span className="text-xs font-medium shrink-0 ml-2 tabular-nums">{fmt(p.amount)}</span>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
 
       {/* Monthly Trend */}
       {trendData.length > 1 && (

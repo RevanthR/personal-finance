@@ -895,16 +895,13 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
         <div className="space-y-4">
           {!isProjected && <PaidSummaryPanel entries={entries} totalCommitted={totalCommitted} grandIncome={grandIncome} adHocExpense={adHocExpense} fmt={fmt} />}
           <DashboardCharts
-            categoryBreakdown={categoryBreakdown}
             trendData={trendData}
             chitFunds={chitFunds}
-            ccSubcatBreakdown={isProjected ? [] : ccSubcatBreakdown}
             savingsRate={dispSavings}
             expensesDelta={isProjected ? null : expensesDelta}
             prevMonthName={isProjected ? null : prevMonthName}
             fixedAmount={dispFixed}
             variableAmount={dispVariable}
-            upcomingPayments={isProjected ? [] : upcomingPayments}
           />
         </div>
       </div>
