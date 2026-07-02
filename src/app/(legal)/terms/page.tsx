@@ -1,4 +1,4 @@
-export const metadata = { title: "Terms & Conditions — FinanceOS" };
+export const metadata = { title: "Terms & Conditions | FinanceOS" };
 
 export default function TermsPage() {
   return (

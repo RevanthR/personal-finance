@@ -1,4 +1,4 @@
-export const metadata = { title: "Cancellation & Refunds — FinanceOS" };
+export const metadata = { title: "Cancellation & Refunds | FinanceOS" };
 
 export default function RefundsPage() {
   return (
@@ -11,10 +11,10 @@ export default function RefundsPage() {
           <h2 className="text-base font-semibold text-zinc-900 mb-2">1. Subscription Plans</h2>
           <p>FinanceOS offers the following subscription plans, all providing full access to the platform:</p>
           <ul className="list-disc pl-5 mt-2 space-y-1">
-            <li><strong>Weekly</strong> — ₹29 for 7 days</li>
-            <li><strong>Monthly</strong> — ₹99 for 30 days</li>
-            <li><strong>Quarterly</strong> — ₹249 for 90 days</li>
-            <li><strong>Yearly</strong> — ₹799 for 365 days</li>
+            <li><strong>Weekly:</strong> ₹29 for 7 days</li>
+            <li><strong>Monthly:</strong> ₹99 for 30 days</li>
+            <li><strong>Quarterly:</strong> ₹249 for 90 days</li>
+            <li><strong>Yearly:</strong> ₹799 for 365 days</li>
           </ul>
           <p className="mt-2">Subscriptions are one-time payments and are not auto-renewed unless you manually purchase again.</p>
         </div>

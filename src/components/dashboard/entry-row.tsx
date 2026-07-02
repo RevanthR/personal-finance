@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { computeLoanAmortization } from "@/lib/loan-utils";
+import { computeLoanAmortization, computeChitCurrentMonth } from "@/lib/loan-utils";
 
 // Partial payment doesn't carry forward for these categories
 const NO_PARTIAL = new Set(["LOAN", "CHIT_FUND"]);
@@ -33,7 +33,7 @@ interface EntryRowProps {
       isFixed: boolean;
       dueDateDay: number | null;
       statementDay: number | null;
-      chitFund: { isLifted: boolean; accumulatedSavings: number } | null;
+      chitFund: { isLifted: boolean; accumulatedSavings: number; startDate: string | null; durationMonths: number | null } | null;
       loanInterestRate: number | null;
       loanRateType: string | null;
       loanOriginalPrincipal: number | null;
@@ -90,6 +90,7 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
     originalPrincipal: entry.template.loanOriginalPrincipal,
     startDate: entry.template.loanStartDate,
     outstandingOverride: entry.template.loanOutstandingOverride,
+    isPaidThisMonth: isPaid,
   }) : null;
 
   function handleTickClick() {
@@ -213,6 +214,16 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
             {entry.template.chitFund && !isPaid && (
               <span className={cn("text-[10px]", entry.template.chitFund.isLifted ? "text-zinc-400" : "text-emerald-600")}>
                 {entry.template.chitFund.isLifted ? "lifted" : `${fmt(entry.template.chitFund.accumulatedSavings)} saved`}
+              </span>
+            )}
+            {entry.template.category === "CHIT_FUND" && entry.template.chitFund?.startDate && entry.template.chitFund?.durationMonths && (
+              <span className="text-[10px] text-muted-foreground/70">
+                month {computeChitCurrentMonth(entry.template.chitFund.startDate)} of {entry.template.chitFund.durationMonths}
+              </span>
+            )}
+            {isLoan && loanAmort && loanAmort.monthsRemaining > 0 && !isPaid && (
+              <span className="text-[10px] text-muted-foreground/70">
+                {loanAmort.monthsRemaining} mo left
               </span>
             )}
             {isBillPending && entry.template.statementDay && (

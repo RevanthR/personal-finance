@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { Plus, TrendingUp, TrendingDown, Wallet, Clock, CheckCircle2, Trash2 } from "lucide-react";
+import { computeChitCurrentMonth } from "@/lib/loan-utils";
 import { PageCoach } from "@/components/coach/page-coach";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -105,7 +106,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
     if (!res.ok) { toast.error("Failed to lift chit"); return; }
     const updated = await res.json();
     setChits((prev) => prev.map((c) => (c.id === chitId ? updated : c)));
-    toast.success("Chit lifted — income recorded");
+    toast.success("Chit lifted, income recorded");
     setLiftingChit(null);
   }
 
@@ -128,7 +129,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
     if (!res.ok) { toast.error("Failed to mark as received"); return; }
     const updated = await res.json();
     setReceivables((prev) => prev.map((r) => (r.id === id ? updated : r)));
-    toast.success("Marked as received — income recorded");
+    toast.success("Marked as received, income recorded");
     setReceivingItem(null);
   }
 
@@ -152,7 +153,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-xl font-bold sm:text-2xl">Receivables</h1>
+          <h1 className="text-xl font-bold sm:text-2xl">Savings & Receivables</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {unliftedChits.length + pendingReceivables.length} pending · {fmt(totalPending)} expected
           </p>
@@ -251,7 +252,15 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                           </div>
                           <div>
                             <p className="text-[11px] text-muted-foreground">Started</p>
-                            <p className="font-semibold">{format(new Date(chit.startDate), "MMM yyyy")}</p>
+                            <p className="font-semibold">
+                              {format(new Date(chit.startDate), "MMM yyyy")}
+                              {(() => {
+                                const cur = computeChitCurrentMonth(chit.startDate);
+                                return cur <= chit.durationMonths
+                                  ? <span className="ml-1 text-xs font-normal text-muted-foreground">(month {cur} of {chit.durationMonths})</span>
+                                  : null;
+                              })()}
+                            </p>
                           </div>
                         </div>
                         <div className="w-full bg-muted rounded-full h-1.5">
@@ -291,7 +300,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                         <div>
                           <p className="text-[11px] text-muted-foreground">Due By</p>
                           <p className="font-semibold">
-                            {r.expectedDate ? format(new Date(r.expectedDate), "dd MMM yy") : "—"}
+                            {r.expectedDate ? format(new Date(r.expectedDate), "dd MMM yy") : "-"}
                           </p>
                         </div>
                       </div>
@@ -346,7 +355,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                         <div>
                           <p className="text-[11px] text-muted-foreground">Lifted On</p>
                           <p className="font-semibold">
-                            {chit.liftedOn ? format(new Date(chit.liftedOn), "MMM yyyy") : "—"}
+                            {chit.liftedOn ? format(new Date(chit.liftedOn), "MMM yyyy") : "-"}
                           </p>
                         </div>
                         <div>
@@ -389,7 +398,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                         <div>
                           <p className="text-[11px] text-muted-foreground">On</p>
                           <p className="font-semibold">
-                            {r.receivedDate ? format(new Date(r.receivedDate), "dd MMM yy") : "—"}
+                            {r.receivedDate ? format(new Date(r.receivedDate), "dd MMM yy") : "-"}
                           </p>
                         </div>
                         <div>

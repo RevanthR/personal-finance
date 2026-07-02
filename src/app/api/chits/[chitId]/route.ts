@@ -7,15 +7,19 @@ import { z } from "zod";
 import { validate, zMoney, zDay, zMonth, zYear } from "@/lib/validation";
 
 const ChitPatchSchema = z.object({
-  isLifted:             z.boolean().optional(),
-  liftedAmount:         zMoney.optional().nullable(),
-  liftedUsedFor:        z.string().trim().max(200).optional().nullable(),
-  monthlyLiftedAmount:  zMoney.optional().nullable(),
-  accumulatedSavings:   zMoney.optional(),
-  endDate:              z.string().refine((s) => !isNaN(Date.parse(s)), { message: "Invalid date" }).optional().nullable(),
-  liftMonth:            zMonth.optional(),
-  liftYear:             zYear.optional(),
-  dueDateDay:           zDay.optional().nullable(),
+  isLifted:               z.boolean().optional(),
+  liftedAmount:           zMoney.optional().nullable(),
+  liftedUsedFor:          z.string().trim().max(200).optional().nullable(),
+  monthlyLiftedAmount:    zMoney.optional().nullable(),
+  monthlyUnliftedAmount:  zMoney.optional(),
+  accumulatedSavings:     zMoney.optional(),
+  totalValue:             zMoney.optional(),
+  durationMonths:         z.number().int().min(1).max(120).optional(),
+  startDate:              z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  endDate:                z.string().refine((s) => !isNaN(Date.parse(s)), { message: "Invalid date" }).optional().nullable(),
+  liftMonth:              zMonth.optional(),
+  liftYear:               zYear.optional(),
+  dueDateDay:             zDay.optional().nullable(),
 });
 
 // PATCH — update chit (including lift action)
@@ -43,13 +47,17 @@ export async function PATCH(
   const updated = await db.chitFund.update({
     where: { id: chitId },
     data: {
-      isLifted:             body.isLifted            ?? chit.isLifted,
-      liftedOn:             isLifting ? new Date()   : chit.liftedOn,
-      liftedAmount:         body.liftedAmount        ?? chit.liftedAmount,
-      liftedUsedFor:        body.liftedUsedFor       ?? chit.liftedUsedFor,
-      monthlyLiftedAmount:  body.monthlyLiftedAmount  ?? chit.monthlyLiftedAmount,
-      accumulatedSavings:   body.accumulatedSavings  ?? chit.accumulatedSavings,
-      endDate:              body.endDate !== undefined ? (body.endDate ? new Date(body.endDate) : null) : chit.endDate,
+      isLifted:               body.isLifted              ?? chit.isLifted,
+      liftedOn:               isLifting ? new Date()     : chit.liftedOn,
+      liftedAmount:           body.liftedAmount          ?? chit.liftedAmount,
+      liftedUsedFor:          body.liftedUsedFor         ?? chit.liftedUsedFor,
+      monthlyLiftedAmount:    body.monthlyLiftedAmount   ?? chit.monthlyLiftedAmount,
+      monthlyUnliftedAmount:  body.monthlyUnliftedAmount ?? chit.monthlyUnliftedAmount,
+      accumulatedSavings:     body.accumulatedSavings    ?? chit.accumulatedSavings,
+      totalValue:             body.totalValue            ?? chit.totalValue,
+      durationMonths:         body.durationMonths        ?? chit.durationMonths,
+      startDate:              body.startDate ? new Date(body.startDate) : chit.startDate,
+      endDate:                body.endDate !== undefined ? (body.endDate ? new Date(body.endDate) : null) : chit.endDate,
     },
     include: { template: true },
   });

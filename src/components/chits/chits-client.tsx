@@ -214,7 +214,7 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
                     <div>
                       <p className="text-xs text-muted-foreground">Lifted On</p>
                       <p className="font-semibold">
-                        {chit.liftedOn ? format(new Date(chit.liftedOn), "MMM yyyy") : "—"}
+                        {chit.liftedOn ? format(new Date(chit.liftedOn), "MMM yyyy") : "-"}
                       </p>
                     </div>
                     <div>

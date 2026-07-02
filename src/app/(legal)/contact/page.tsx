@@ -1,4 +1,4 @@
-export const metadata = { title: "Contact Us — FinanceOS" };
+export const metadata = { title: "Contact Us | FinanceOS" };
 
 export default function ContactPage() {
   return (
@@ -22,7 +22,7 @@ export default function ContactPage() {
           <div className="border-t pt-4">
             <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1">Product</p>
             <p className="font-medium text-zinc-900">FinanceOS</p>
-            <p className="text-xs text-muted-foreground mt-1">Personal finance tracking — dashboard, statistics, loans, chit funds, receivables.</p>
+            <p className="text-xs text-muted-foreground mt-1">Personal finance tracking: dashboard, statistics, loans, chit funds, receivables.</p>
           </div>
         </div>
 

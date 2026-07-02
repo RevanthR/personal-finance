@@ -2,6 +2,8 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { validate, ChitPostSchema } from "@/lib/validation";
+import { revalidateTag } from "next/cache";
+import { templateCacheTag } from "@/lib/cached-queries";
 
 export async function GET() {
   const session = await auth();
@@ -50,5 +52,39 @@ export async function POST(req: NextRequest) {
     include: { template: true },
   });
 
+  // Inject entry into any already-populated month that falls within the chit's active range
+  const startDate = new Date(body.startDate);
+  const startM = startDate.getUTCMonth() + 1;
+  const startY = startDate.getUTCFullYear();
+  const now = new Date();
+  const nowM = now.getMonth() + 1;
+  const nowY = now.getFullYear();
+
+  // Only inject for months from startDate up to and including current month
+  if (startY < nowY || (startY === nowY && startM <= nowM)) {
+    const months = await db.month.findMany({
+      where: {
+        userId: session.user.id,
+        isPopulated: true,
+        OR: [
+          { year: { gt: startY } },
+          { year: startY, month: { gte: startM } },
+        ],
+      },
+      select: { id: true, month: true, year: true },
+    });
+
+    for (const m of months) {
+      const isPast = m.year < nowY || (m.year === nowY && m.month <= nowM);
+      if (!isPast) continue;
+      await db.monthlyEntry.upsert({
+        where: { monthId_templateId: { monthId: m.id, templateId: template.id } },
+        create: { monthId: m.id, templateId: template.id, amount: body.monthlyUnliftedAmount },
+        update: {},
+      });
+    }
+  }
+
+  revalidateTag(templateCacheTag, {});
   return NextResponse.json(chit, { status: 201 });
 }

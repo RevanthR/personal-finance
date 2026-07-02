@@ -47,11 +47,22 @@ export type ProjectedEntry = {
   dueDateDay: number | null;
 };
 
+type IncomeTemplate = {
+  id: string;
+  name: string;
+  amount: number;
+  pendingAmount: number | null;
+  pendingFromMonth: number | null;
+  pendingFromYear: number | null;
+};
+
 interface DashboardClientProps {
   currentMonth: MonthWithDetails | null;
   recentMonths: RecentMonthSummary[];
   ccTemplates: { id: string; name: string; statementDay: number | null; dueDateDay: number | null }[];
-  suggestedIncome: number;
+  incomeTemplates: IncomeTemplate[];
+  preLiftChitTemplateIds?: string[];
+  liftedChitInfos?: { templateId: string; liftMonth: number; liftYear: number }[];
   todayMonth: number;
   todayYear: number;
   userId: string;
@@ -75,13 +86,13 @@ type RecentMonthSummary = {
   id: string; month: number; year: number;
   salaryIncome: number; freelanceIncome: number; otherIncome: number;
   entries: { id: string; templateId: string; amount: number; cashbackAmount: number | null }[];
-  adHocItems: { id: string; type: string; amount: number; category: string | null }[];
+  adHocItems: { id: string; type: string; amount: number; category: string | null; notes: string | null }[];
 };
 
 type EntryWithTemplate = {
   id: string; amount: number; isPaid: boolean; paidOn: string | null; paidAmount: number | null; cashbackAmount: number | null; notes: string | null; templateId: string;
   statementAmount: number | null;
-  template: { id: string; name: string; category: string; customCategory: string | null; isFixed: boolean; dueDateDay: number | null; statementDay: number | null; chitFund: { isLifted: boolean; accumulatedSavings: number } | null; loanInterestRate: number | null; loanRateType: string | null; loanOriginalPrincipal: number | null; loanStartDate: string | null; loanOutstandingOverride: number | null };
+  template: { id: string; name: string; category: string; customCategory: string | null; isFixed: boolean; dueDateDay: number | null; statementDay: number | null; chitFund: { isLifted: boolean; accumulatedSavings: number; startDate: string | null; durationMonths: number | null } | null; loanInterestRate: number | null; loanRateType: string | null; loanOriginalPrincipal: number | null; loanStartDate: string | null; loanOutstandingOverride: number | null };
 };
 
 type AdHocItem = {
@@ -237,7 +248,7 @@ function CCCardBlock({
   );
 }
 
-export function DashboardClient({ currentMonth: initialMonth, recentMonths: initialRecentMonths, ccTemplates, suggestedIncome, todayMonth, todayYear, targetMonth, targetYear, prevUrl, nextUrl, projectedIncome, projectedEntries }: DashboardClientProps) {
+export function DashboardClient({ currentMonth: initialMonth, recentMonths: initialRecentMonths, ccTemplates, incomeTemplates, preLiftChitTemplateIds = [], liftedChitInfos = [], todayMonth, todayYear, targetMonth, targetYear, prevUrl, nextUrl, projectedIncome, projectedEntries }: DashboardClientProps) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const viewMonth = targetMonth ?? todayMonth;
@@ -257,10 +268,6 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   const [showAdHoc, setShowAdHoc] = useState(false);
   const [showSetup, setShowSetup] = useState(!initialMonth && !isProjected);
   const [showIncomeEdit, setShowIncomeEdit] = useState(false);
-  const [salaryVal, setSalaryVal] = useState("");
-  const [freelanceVal, setFreelanceVal] = useState("");
-  const [otherVal, setOtherVal] = useState("");
-  const [incomeLoading, setIncomeLoading] = useState(false);
 
   // Add one-time income (inline inside income dialog)
   const [showAddIncome, setShowAddIncome] = useState(false);
@@ -269,6 +276,11 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   const [addIncomeDate, setAddIncomeDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [addIncomeNotes, setAddIncomeNotes] = useState("");
   const [addIncomeLoading, setAddIncomeLoading] = useState(false);
+
+  // Per-month income template override
+  const [editingIncomeTemplateId, setEditingIncomeTemplateId] = useState<string | null>(null);
+  const [editingIncomeAmount, setEditingIncomeAmount] = useState("");
+  const [incomeOverrideLoading, setIncomeOverrideLoading] = useState(false);
 
   // Sync local state when the viewed month changes (client-side navigation reuses this component)
   const [lastMonthKey, setLastMonthKey] = useState(`${viewMonth}-${viewYear}`);
@@ -285,12 +297,27 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   const entries = currentMonth?.entries ?? [];
   const adHocItems = currentMonth?.adHocItems ?? [];
 
+  const templateIncome = useMemo(() => {
+    const overrides = new Map<string, number>();
+    for (const item of adHocItems) {
+      if (item.notes?.startsWith("income_override:")) {
+        overrides.set(item.notes.slice("income_override:".length), item.amount);
+      }
+    }
+    return incomeTemplates.reduce((sum, t) => {
+      if (overrides.has(t.id)) return sum + overrides.get(t.id)!;
+      const kicks = t.pendingAmount != null && t.pendingFromYear != null && t.pendingFromMonth != null &&
+        (viewYear > t.pendingFromYear || (viewYear === t.pendingFromYear && viewMonth >= t.pendingFromMonth));
+      return sum + (kicks ? t.pendingAmount! : t.amount);
+    }, 0);
+  }, [incomeTemplates, adHocItems, viewMonth, viewYear]);
+
   const adHocIncome      = useMemo(() => adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0), [adHocItems]);
   // Post-close CC charges live in statementAmount (next month's bill); pre-close go into entry.amount (Recurring)
   const ccStatementTotal = useMemo(() => entries.filter(e => e.template.category === "CREDIT_CARD").reduce((s, e) => s + (e.statementAmount ?? 0), 0), [entries]);
   const adHocExpense     = useMemo(() => adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0), [adHocItems]);
-  const totalIncome    = currentMonth ? currentMonth.salaryIncome + currentMonth.freelanceIncome + currentMonth.otherIncome : 0;
-  const grandIncome    = totalIncome + adHocIncome;
+  const totalIncome = templateIncome;
+  const grandIncome = totalIncome + adHocIncome;
   const net = (e: EntryWithTemplate) => e.amount - (e.cashbackAmount ?? 0);
   // Actual money paid: paidAmount if set, else net(e) for fully paid, else 0
   const effectivePaid = (e: EntryWithTemplate): number => {
@@ -303,13 +330,15 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     e.template.category === "CREDIT_CARD" &&
     e.template.statementDay != null &&
     todayDay < e.template.statementDay;
-  const totalCommitted = useMemo(() => entries.filter(e => !isBillPending(e)).reduce((s, e) => s + net(e), 0), [entries, isCurrentMonth, todayDay]);
-  const totalPaid      = useMemo(() => entries.filter(e => !isBillPending(e)).reduce((s, e) => s + effectivePaid(e), 0), [entries, isCurrentMonth, todayDay]);
+  const isPreLiftChit  = (e: EntryWithTemplate) => e.template.category === "CHIT_FUND" && !e.template.chitFund?.isLifted;
+  const totalCommitted = useMemo(() => entries.filter(e => !isBillPending(e) && !isPreLiftChit(e)).reduce((s, e) => s + net(e), 0), [entries, isCurrentMonth, todayDay]);
+  const totalPaid      = useMemo(() => entries.filter(e => !isBillPending(e) && !isPreLiftChit(e)).reduce((s, e) => s + effectivePaid(e), 0), [entries, isCurrentMonth, todayDay]);
+  const chitInvestment = useMemo(() => entries.filter(e => isPreLiftChit(e)).reduce((s, e) => s + net(e), 0), [entries]);
   const totalPending   = totalCommitted - totalPaid;
   // CC purchases this month pay next month — excluded from current balance
-  const balance        = grandIncome - totalCommitted - adHocExpense;
+  const balance        = grandIncome - totalCommitted - chitInvestment - adHocExpense;
   const paidPercent    = totalCommitted > 0 ? Math.round((totalPaid / totalCommitted) * 100) : 0;
-  const pendingCount   = useMemo(() => entries.filter(e => !e.isPaid && !isBillPending(e)).length, [entries, isCurrentMonth, todayDay]);
+  const pendingCount   = useMemo(() => entries.filter(e => !e.isPaid && !isBillPending(e) && !isPreLiftChit(e)).length, [entries, isCurrentMonth, todayDay]);
   const nextMonthName  = MONTHS[todayMonth % 12]; // todayMonth is 1-12; % 12 maps Dec→Jan correctly
 
   type GroupedItem =
@@ -409,15 +438,25 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   }, [entries, adHocItems, isProjected, projEntries]);
 
   const { fyIncome, fyExpenses, fyBalance, trendData } = useMemo(() => {
-    const fyIncome   = recentMonths.reduce((s, m) => s + m.salaryIncome + m.freelanceIncome + m.otherIncome + m.adHocItems.filter(i => i.type === "INCOME").reduce((a, i) => a + i.amount, 0), 0);
-    const fyExpenses = recentMonths.reduce((s, m) => s + m.entries.reduce((a, e) => a + e.amount - (e.cashbackAmount ?? 0), 0) + m.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((a, i) => a + i.amount, 0), 0);
+    const preLiftSet = new Set(preLiftChitTemplateIds);
+    const liftMap = new Map(liftedChitInfos.map(c => [c.templateId, { liftMonth: c.liftMonth, liftYear: c.liftYear }]));
+
+    function isChitInvestmentEntry(templateId: string, entryMonth: number, entryYear: number): boolean {
+      if (preLiftSet.has(templateId)) return true;
+      const lift = liftMap.get(templateId);
+      if (!lift) return false;
+      return entryYear < lift.liftYear || (entryYear === lift.liftYear && entryMonth < lift.liftMonth);
+    }
+
+    const fyIncome   = recentMonths.reduce((s, m) => s + m.salaryIncome + m.freelanceIncome + m.otherIncome + m.adHocItems.filter(i => i.type === "INCOME" && !i.notes?.startsWith("income_override:")).reduce((a, i) => a + i.amount, 0), 0);
+    const fyExpenses = recentMonths.reduce((s, m) => s + m.entries.filter(e => !isChitInvestmentEntry(e.templateId, m.month, m.year)).reduce((a, e) => a + e.amount - (e.cashbackAmount ?? 0), 0) + m.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((a, i) => a + i.amount, 0), 0);
     const trendData  = [...recentMonths].reverse().map(m => ({
       name: format(new Date(m.year, m.month - 1), "MMM"),
-      Income: m.salaryIncome + m.freelanceIncome + m.otherIncome,
-      Expenses: m.entries.reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0),
+      Income: m.salaryIncome + m.freelanceIncome + m.otherIncome + m.adHocItems.filter(i => i.type === "INCOME" && !i.notes?.startsWith("income_override:")).reduce((a, i) => a + i.amount, 0),
+      Expenses: m.entries.filter(e => !isChitInvestmentEntry(e.templateId, m.month, m.year)).reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0),
     }));
     return { fyIncome, fyExpenses, fyBalance: fyIncome - fyExpenses, trendData };
-  }, [recentMonths]);
+  }, [recentMonths, preLiftChitTemplateIds, liftedChitInfos]);
 
   const ccSubcatBreakdown = useMemo(() => {
     const totals: Record<string, number> = {};
@@ -437,7 +476,16 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       .filter(m => !(m.month === currentMonth?.month && m.year === currentMonth?.year))
       .sort((a, b) => b.year - a.year || b.month - a.month)[0];
     if (!prev) return { prevMonthName: null, expensesDelta: null };
-    const prevExp = prev.entries.reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
+    const preLiftSet2 = new Set(preLiftChitTemplateIds);
+    const liftMap2 = new Map(liftedChitInfos.map(c => [c.templateId, { liftMonth: c.liftMonth, liftYear: c.liftYear }]));
+    const prevExp = prev.entries
+      .filter(e => {
+        if (preLiftSet2.has(e.templateId)) return false;
+        const lift = liftMap2.get(e.templateId);
+        if (lift && (prev.year < lift.liftYear || (prev.year === lift.liftYear && prev.month < lift.liftMonth))) return false;
+        return true;
+      })
+      .reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
       + prev.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0);
     return {
       prevMonthName: MONTHS[prev.month - 1],
@@ -446,7 +494,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   }, [recentMonths, currentMonth, totalCommitted, adHocExpense]);
 
   const fixedAmount = useMemo(
-    () => entries.filter(e => e.template.isFixed && !isBillPending(e)).reduce((s, e) => s + net(e), 0),
+    () => entries.filter(e => e.template.isFixed && !isBillPending(e) && !isPreLiftChit(e)).reduce((s, e) => s + net(e), 0),
     [entries, isCurrentMonth, todayDay]
   );
   const variableAmount = totalCommitted - fixedAmount + adHocExpense;
@@ -491,33 +539,12 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
 
   function openIncomeEdit() {
     if (!currentMonth) return;
-    setSalaryVal(String(currentMonth.salaryIncome));
-    setFreelanceVal(String(currentMonth.freelanceIncome || ""));
-    setOtherVal(String(currentMonth.otherIncome || ""));
     setShowAddIncome(false);
     setAddIncomeAmount("");
     setAddIncomeNotes("");
     setAddIncomeSource("bonus");
     setAddIncomeDate(new Date().toISOString().split("T")[0]);
     setShowIncomeEdit(true);
-  }
-
-  async function handleSaveIncome() {
-    if (!currentMonth) return;
-    const salary = parseFloat(salaryVal) || 0;
-    const freelance = parseFloat(freelanceVal) || 0;
-    const other = parseFloat(otherVal) || 0;
-    setIncomeLoading(true);
-    const res = await fetch(`/api/months/${currentMonth.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ salaryIncome: salary, freelanceIncome: freelance, otherIncome: other }),
-    });
-    setIncomeLoading(false);
-    if (!res.ok) { toast.error("Failed to save income"); return; }
-    setCurrentMonth(prev => prev ? { ...prev, salaryIncome: salary, freelanceIncome: freelance, otherIncome: other } : prev);
-    setRecentMonths(prev => prev.map(m => m.id === currentMonth!.id ? { ...m, salaryIncome: salary, freelanceIncome: freelance, otherIncome: other } : m));
-    toast.success("Income updated");
   }
 
   async function handleAddOneTimeIncome() {
@@ -537,6 +564,26 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     setAddIncomeNotes("");
     setShowAddIncome(false);
     setAddIncomeLoading(false);
+  }
+
+  async function handleIncomeOverride(template: IncomeTemplate, newAmount: number) {
+    if (!currentMonth) return;
+    setIncomeOverrideLoading(true);
+    const existing = adHocItems.find(i => i.notes === `income_override:${template.id}`);
+    if (existing) await handleAdHocDelete(existing.id);
+    const date = `${currentMonth.year}-${String(currentMonth.month).padStart(2, "0")}-01`;
+    await handleAdHocAdd({
+      name: template.name, amount: newAmount, type: "INCOME",
+      category: "OTHER_INCOME", date, notes: `income_override:${template.id}`,
+    });
+    setIncomeOverrideLoading(false);
+    setEditingIncomeTemplateId(null);
+    setEditingIncomeAmount("");
+  }
+
+  async function handleIncomeOverrideReset(templateId: string) {
+    const existing = adHocItems.find(i => i.notes === `income_override:${templateId}`);
+    if (existing) await handleAdHocDelete(existing.id);
   }
 
   async function handleEntryUpdate(entryId: string, updates: { isPaid?: boolean; amount?: number; notes?: string; paidAmount?: number; cashbackAmount?: number }) {
@@ -581,7 +628,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     });
     setRecentMonths(prev => prev.map(m =>
       m.id === currentMonth!.id
-        ? { ...m, adHocItems: [...m.adHocItems, { id: newItem.id, type: newItem.type, amount: newItem.amount, category: newItem.category }] }
+        ? { ...m, adHocItems: [...m.adHocItems, { id: newItem.id, type: newItem.type, amount: newItem.amount, category: newItem.category, notes: newItem.notes ?? null }] }
         : m
     ));
     toast.success("Added");
@@ -665,7 +712,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
         <Button onClick={() => setShowSetup(true)}>
           <Plus className="w-4 h-4 mr-2" /> Set Up {formatMonthYear(viewMonth, viewYear)}
         </Button>
-        <SetupMonthDialog open={showSetup} onOpenChange={setShowSetup} month={viewMonth} year={viewYear} suggestedIncome={suggestedIncome} onConfirm={handleSetupMonth} />
+        <SetupMonthDialog open={showSetup} onOpenChange={setShowSetup} month={viewMonth} year={viewYear} suggestedIncome={templateIncome} onConfirm={handleSetupMonth} />
       </div>
     );
   }
@@ -777,9 +824,9 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                   </div>
                 </div>
                 <p className="text-base font-bold">{fmt(grandIncome)}</p>
-                {(currentMonth!.freelanceIncome > 0 || adHocIncome > 0) && (
+                {adHocIncome > 0 && (
                   <p className="text-[10px] text-green-600 mt-0.5">
-                    +{fmt(currentMonth!.freelanceIncome + adHocIncome)} extra
+                    +{fmt(adHocIncome)} one-time
                   </p>
                 )}
               </CardContent>
@@ -787,9 +834,12 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
           </button>
         )}
         <MetricCard label="Spending" value={fmt(dispCommitted)} icon={<TrendingDown className="w-4 h-4" />} color="text-red-600" sub={isProjected ? `${projEntries.length} items` : pendingCount > 0 ? `${pendingCount} pending` : undefined} gradient="linear-gradient(135deg, white 0%, #fef2f2 100%)" />
+        {!isProjected && chitInvestment > 0 && (
+          <MetricCard label="Invested" value={fmt(chitInvestment)} icon={<TrendingUp className="w-4 h-4" />} color="text-amber-600" sub="chit fund" gradient="linear-gradient(135deg, white 0%, #fffbeb 100%)" />
+        )}
         <MetricCard
           label="Extra Spending"
-          value={isProjected ? "—" : fmt(adHocExpense)}
+          value={isProjected ? "-" : fmt(adHocExpense)}
           icon={<CheckCircle2 className="w-4 h-4" />}
           color="text-amber-600"
           sub={isProjected ? "not yet tracked" : adHocExpense > 0 ? `${adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").length} transaction${adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").length !== 1 ? "s" : ""}` : "no extra expenses"}
@@ -981,33 +1031,103 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             <DialogTitle>Income: {formatMonthYear(currentMonth?.month ?? viewMonth, currentMonth?.year ?? viewYear)}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-1">
-            {/* Base (template) income */}
-            <div className="rounded-xl bg-muted/30 border px-3 py-3 space-y-2.5">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Monthly income</p>
-              <div className="space-y-2">
-                <div>
-                  <Label className="text-xs">Salary (₹)</Label>
-                  <Input type="number" value={salaryVal} onChange={e => setSalaryVal(e.target.value)} placeholder="0" autoFocus className="mt-1" />
-                </div>
-                <div>
-                  <Label className="text-xs">Freelance / Bonus (₹)</Label>
-                  <Input type="number" value={freelanceVal} onChange={e => setFreelanceVal(e.target.value)} placeholder="0 (optional)" className="mt-1" />
-                </div>
-                <div>
-                  <Label className="text-xs">Other Income (₹)</Label>
-                  <Input type="number" value={otherVal} onChange={e => setOtherVal(e.target.value)} placeholder="0 (optional)" className="mt-1" />
-                </div>
+            {/* Recurring income from templates */}
+            <div className="rounded-xl bg-muted/30 border px-3 py-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Recurring</p>
+                <span className="text-xs font-semibold text-green-600">{fmt(templateIncome)}</span>
               </div>
-              <Button onClick={handleSaveIncome} disabled={incomeLoading} size="sm" className="w-full">
-                {incomeLoading ? "Saving..." : "Update"}
-              </Button>
+              {incomeTemplates.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No recurring income configured.</p>
+              ) : (
+                <div className="space-y-1">
+                  {incomeTemplates.map(t => {
+                    const override = adHocItems.find(i => i.notes === `income_override:${t.id}`);
+                    const kicks = !override && t.pendingAmount != null && t.pendingFromYear != null && t.pendingFromMonth != null &&
+                      (viewYear > t.pendingFromYear || (viewYear === t.pendingFromYear && viewMonth >= t.pendingFromMonth));
+                    const baseAmt = kicks ? t.pendingAmount! : t.amount;
+                    const effectiveAmt = override ? override.amount : baseAmt;
+                    const isEditing = editingIncomeTemplateId === t.id;
+
+                    return (
+                      <div key={t.id}>
+                        {isEditing ? (
+                          <div className="flex items-center gap-2 py-1">
+                            <span className="text-sm flex-1 truncate">{t.name}</span>
+                            <input
+                              type="number"
+                              autoFocus
+                              value={editingIncomeAmount}
+                              onChange={e => setEditingIncomeAmount(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === "Enter") {
+                                  const v = parseFloat(editingIncomeAmount);
+                                  if (v > 0) handleIncomeOverride(t, v);
+                                }
+                                if (e.key === "Escape") { setEditingIncomeTemplateId(null); setEditingIncomeAmount(""); }
+                              }}
+                              className="w-28 text-right text-sm font-medium border rounded px-2 py-1 bg-background"
+                              placeholder={fmt(effectiveAmt)}
+                            />
+                            <button
+                              type="button"
+                              disabled={incomeOverrideLoading || !editingIncomeAmount || parseFloat(editingIncomeAmount) <= 0}
+                              onClick={() => { const v = parseFloat(editingIncomeAmount); if (v > 0) handleIncomeOverride(t, v); }}
+                              className="text-xs font-medium text-green-600 hover:text-green-700 disabled:opacity-40"
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setEditingIncomeTemplateId(null); setEditingIncomeAmount(""); }}
+                              className="text-xs text-muted-foreground hover:text-foreground"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between py-1">
+                            <span className="text-sm">{t.name}</span>
+                            <div className="flex items-center gap-1.5">
+                              {override && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleIncomeOverrideReset(t.id)}
+                                  className="text-[11px] text-muted-foreground active:text-red-500 p-1 -mr-1"
+                                  title="Reset to template amount"
+                                >
+                                  ↺
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => { setEditingIncomeTemplateId(t.id); setEditingIncomeAmount(String(effectiveAmt)); }}
+                                className={cn("text-sm font-medium tabular-nums px-1.5 py-0.5 rounded active:bg-muted transition-colors", override ? "text-amber-600" : "text-green-600")}
+                              >
+                                {fmt(effectiveAmt)}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => { setShowIncomeEdit(false); router.push("/templates"); }}
+                className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Manage in Budgets →
+              </button>
             </div>
 
             {/* One-time income items */}
-            {adHocItems.filter(i => i.type === "INCOME").length > 0 && (
+            {adHocItems.filter(i => i.type === "INCOME" && !i.notes?.startsWith("income_override:")).length > 0 && (
               <div className="space-y-1.5">
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">One-time income</p>
-                {adHocItems.filter(i => i.type === "INCOME").map(item => (
+                {adHocItems.filter(i => i.type === "INCOME" && !i.notes?.startsWith("income_override:")).map(item => (
                   <div key={item.id} className="flex items-center gap-2.5 px-3 py-2 rounded-xl border bg-card">
                     <div className="w-0.5 h-7 rounded-full bg-green-500 shrink-0" />
                     <div className="flex-1 min-w-0">
@@ -1143,9 +1263,11 @@ function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, 
   const [collapsed, setCollapsed] = useState(false);
   const netAmt = (e: EntryWithTemplate) => e.amount - (e.cashbackAmount ?? 0);
   const paidAmt = (e: EntryWithTemplate): number => e.isPaid ? (e.paidAmount ?? netAmt(e)) : (e.paidAmount ?? 0);
+  const isPreLift = (e: EntryWithTemplate) => e.template.category === "CHIT_FUND" && !e.template.chitFund?.isLifted;
 
-  // Include fully paid + partially paid entries
-  const shown = entries.filter(e => e.isPaid || (e.paidAmount != null && e.paidAmount > 0));
+  // Include fully paid + partially paid entries (expenses only, not investments)
+  const shown = entries.filter(e => !isPreLift(e) && (e.isPaid || (e.paidAmount != null && e.paidAmount > 0)));
+  const chitInvested = entries.filter(e => isPreLift(e) && e.isPaid).reduce((s, e) => s + paidAmt(e), 0);
   if (!shown.length) return null;
 
   // Group by category, preserving CATEGORY_ORDER then custom categories
@@ -1247,11 +1369,17 @@ function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, 
             <span className="text-xs font-semibold text-muted-foreground">Total paid out</span>
             <span className="text-sm font-bold text-green-600 tabular-nums">{fmt(totalPaidOut)} of {fmt(totalCommitted)}</span>
           </div>
+          {chitInvested > 0 && (
+            <div className="flex items-center justify-between px-4 py-2.5 bg-amber-50/60 border-t border-amber-100">
+              <span className="text-xs font-semibold text-amber-700">Invested (chit)</span>
+              <span className="text-sm font-bold text-amber-700 tabular-nums">{fmt(chitInvested)}</span>
+            </div>
+          )}
           {grandIncome > 0 && (
             <div className="flex items-center justify-between px-4 py-2.5 bg-emerald-50/80 border-t border-emerald-100">
               <span className="text-xs font-semibold text-emerald-700">Balance remaining</span>
-              <span className={cn("text-sm font-bold tabular-nums", grandIncome - totalPaidOut - adHocExpense >= 0 ? "text-emerald-700" : "text-red-600")}>
-                {fmt(grandIncome - totalPaidOut - adHocExpense)}
+              <span className={cn("text-sm font-bold tabular-nums", grandIncome - totalPaidOut - chitInvested - adHocExpense >= 0 ? "text-emerald-700" : "text-red-600")}>
+                {fmt(grandIncome - totalPaidOut - chitInvested - adHocExpense)}
               </span>
             </div>
           )}

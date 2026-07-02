@@ -1,3 +1,32 @@
+export function computeLoanEndDate(params: {
+  emi: number;
+  annualRate: number;
+  originalPrincipal?: number | null;
+  startDate?: Date | string | null;
+  outstandingOverride?: number | null;
+}): { month: number; year: number } | null {
+  const amort = computeLoanAmortization(params);
+  if (!amort || amort.monthsRemaining <= 0) return null;
+  const d = new Date();
+  d.setMonth(d.getMonth() + amort.monthsRemaining);
+  return { month: d.getMonth() + 1, year: d.getFullYear() };
+}
+
+export function computeChitEndDate(startDateStr: string, durationMonths: number): { month: number; year: number } {
+  const start = new Date(startDateStr);
+  const startM = start.getUTCMonth(); // 0-indexed
+  const startY = start.getUTCFullYear();
+  const totalMonths = startM + durationMonths - 1;
+  return { month: (totalMonths % 12) + 1, year: startY + Math.floor(totalMonths / 12) };
+}
+
+export function computeChitCurrentMonth(startDateStr: string): number {
+  const start = new Date(startDateStr);
+  const now = new Date();
+  const elapsed = (now.getUTCFullYear() - start.getUTCFullYear()) * 12 + (now.getUTCMonth() - start.getUTCMonth());
+  return Math.max(1, elapsed + 1);
+}
+
 export type LoanAmortization = {
   outstandingPrincipal: number;
   interestThisMonth: number;
@@ -18,8 +47,9 @@ export function computeLoanAmortization(params: {
   startDate?: Date | string | null;
   outstandingOverride?: number | null;
   today?: Date;
+  isPaidThisMonth?: boolean;
 }): LoanAmortization | null {
-  const { emi, annualRate, originalPrincipal, startDate, outstandingOverride } = params;
+  const { emi, annualRate, originalPrincipal, startDate, outstandingOverride, isPaidThisMonth } = params;
   const today = params.today ?? new Date();
 
   if (!emi || !annualRate) return null;
@@ -36,8 +66,9 @@ export function computeLoanAmortization(params: {
     isOverride = true;
   } else if (originalPrincipal && startDate) {
     // Compute remaining principal from formula after k payments
+    // isPaidThisMonth: if true, the current month's EMI is already paid → add 1 to k
     const start = typeof startDate === "string" ? new Date(startDate) : startDate;
-    const k = Math.max(0, monthsDiff(start, today));
+    const k = Math.max(0, monthsDiff(start, today) + (isPaidThisMonth ? 1 : 0));
     // P_k = P*(1+r)^k - EMI*((1+r)^k - 1)/r
     const factor = Math.pow(1 + r, k);
     outstanding = originalPrincipal * factor - (emi * (factor - 1)) / r;

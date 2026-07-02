@@ -68,7 +68,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
               {[
                 { icon: Share2, text: "Tap the Share button at the bottom of Safari" },
                 { icon: PlusSquare, text: "Scroll down and tap \"Add to Home Screen\"" },
-                { icon: Download, text: "Tap Add — the app icon appears on your home screen" },
+                { icon: Download, text: "Tap Add, the app icon appears on your home screen" },
               ].map(({ icon: Icon, text }, i) => (
                 <li key={i} className="flex items-start gap-2.5">
                   <span className="w-4 h-4 rounded-full bg-zinc-100 text-zinc-500 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
@@ -95,7 +95,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
               {[
                 { icon: MoreVertical, text: "Tap the ⋮ menu in the top-right corner of Chrome" },
                 { icon: Download, text: "Tap \"Add to Home screen\" or \"Install app\"" },
-                { icon: PlusSquare, text: "Tap Install — FinanceOS is added to your home screen" },
+                { icon: PlusSquare, text: "Tap Install, FinanceOS is added to your home screen" },
               ].map(({ icon: Icon, text }, i) => (
                 <li key={i} className="flex items-start gap-2.5">
                   <span className="w-4 h-4 rounded-full bg-zinc-100 text-zinc-500 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">

@@ -113,7 +113,6 @@ export const TemplatePatchSchema = z.object({
   loanRateType:     z.enum(["FIXED","FLOATING"]).optional().nullable(),
   loanStartDate:    zDateStr.optional().nullable(),
   loanOutstandingOverride: zMoney.optional().nullable(),
-  updateCurrentMonth: z.boolean().optional(),
   addToCurrentMonth: z.boolean().optional(),
   note:             zNotes,
 });

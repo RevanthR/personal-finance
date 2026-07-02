@@ -75,8 +75,8 @@ export async function GET(req: NextRequest) {
         ? `${names[0]} due in 3 days`
         : `${names.length} payments due in 3 days`,
       body: names.length === 1
-        ? `Due on the ${dueDay}th — mark it paid once done`
-        : `${names.slice(0, 2).join(", ")}${names.length > 2 ? ` +${names.length - 2} more` : ""} — due on the ${dueDay}th`,
+        ? `Due on the ${dueDay}th, mark it paid once done`
+        : `${names.slice(0, 2).join(", ")}${names.length > 2 ? ` +${names.length - 2} more` : ""}, due on the ${dueDay}th`,
       url: "/dashboard",
     });
 

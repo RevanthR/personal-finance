@@ -59,21 +59,6 @@ export async function PATCH(
     return NextResponse.json({ error: "Update failed" }, { status: 500 });
   }
 
-  // Optionally apply the new amount to the current month's entry (creates it if missing)
-  if (body.updateCurrentMonth && body.amount !== undefined) {
-    const now = new Date();
-    const currentMonth = await db.month.findUnique({
-      where: { userId_month_year: { userId: session.user.id, month: now.getMonth() + 1, year: now.getFullYear() } },
-    });
-    if (currentMonth) {
-      await db.monthlyEntry.upsert({
-        where: { monthId_templateId: { monthId: currentMonth.id, templateId } },
-        create: { monthId: currentMonth.id, templateId, amount: body.amount },
-        update: { amount: body.amount },
-      });
-    }
-  }
-
   // If foreclosing, optionally add a one-off expense to the current month
   if (body.foreClosedOn && body.addToCurrentMonth && body.foreCloseAmount) {
     const now = new Date();
@@ -104,6 +89,22 @@ export async function PATCH(
     where: { id: templateId, userId: session.user.id },
     include: { chitFund: true },
   });
+
+  // Auto-apply amount change to current month's existing unpaid entry (expense templates only)
+  if (body.amount !== undefined && updatedTemplate?.templateType !== "INCOME") {
+    const now = new Date();
+    const currentMonth = await db.month.findUnique({
+      where: { userId_month_year: { userId: session.user.id, month: now.getMonth() + 1, year: now.getFullYear() } },
+      select: { id: true },
+    });
+    if (currentMonth) {
+      await db.monthlyEntry.updateMany({
+        where: { monthId: currentMonth.id, templateId, isPaid: false },
+        data: { amount: body.amount },
+      });
+    }
+  }
+
   return NextResponse.json(updatedTemplate);
 }
 

@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 const features = [
   { icon: LayoutDashboard, color: "text-indigo-500 bg-indigo-50", label: "Dashboard", desc: "Mark bills paid, track monthly progress." },
   { icon: TrendingUp, color: "text-blue-500 bg-blue-50", label: "Statistics", desc: "Full-year income vs expense view." },
-  { icon: SlidersHorizontal, color: "text-violet-500 bg-violet-50", label: "Configuration", desc: "Set up recurring items once — they auto-fill every month." },
+  { icon: SlidersHorizontal, color: "text-violet-500 bg-violet-50", label: "Configuration", desc: "Set up recurring items once; they auto-fill every month." },
   { icon: Coins, color: "text-amber-500 bg-amber-50", label: "Chit Funds", desc: "Track contributions, savings, and lifts." },
 ];
 

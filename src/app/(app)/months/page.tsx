@@ -2,6 +2,7 @@ import { getSession } from "@/lib/get-session";
 import { getActiveTemplates } from "@/lib/cached-queries";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
+import { computeLoanAmortization, computeChitEndDate } from "@/lib/loan-utils";
 import { YearOverviewClient, type MonthData } from "@/components/months/year-overview-client";
 import { CATEGORY_LABELS, CATEGORY_COLORS } from "@/lib/utils";
 import type { AnalyticsData } from "@/components/months/stats-breakdown";
@@ -106,15 +107,43 @@ export default async function MonthsPage() {
     }
   }
 
+  // Pre-compute end dates for loans and chit funds from their start dates / amortization
+  const templateEndDates = new Map<string, { month: number; year: number }>();
+  for (const t of expenseTemplates) {
+    if (t.category === "LOAN" && t.loanInterestRate != null) {
+      const amort = computeLoanAmortization({
+        emi: t.amount,
+        annualRate: t.loanInterestRate,
+        originalPrincipal: t.loanOriginalPrincipal,
+        startDate: t.loanStartDate,
+        outstandingOverride: t.loanOutstandingOverride,
+      });
+      if (amort && amort.monthsRemaining > 0) {
+        const d = new Date();
+        d.setMonth(d.getMonth() + amort.monthsRemaining);
+        templateEndDates.set(t.id, { month: d.getMonth() + 1, year: d.getFullYear() });
+      }
+    } else if (t.category === "CHIT_FUND" && t.chitFund?.startDate && t.chitFund?.durationMonths) {
+      templateEndDates.set(t.id, computeChitEndDate(String(t.chitFund.startDate), t.chitFund.durationMonths));
+    }
+  }
+
   // Returns false if a template has ended before the given projected month
   function isTemplateActiveInMonth(
     t: (typeof allTemplates)[number],
     projMonth: number,
     projYear: number,
   ): boolean {
-    if (t.endsOnYear != null && t.endsOnMonth != null) {
+    // Manual end date (non-loan, non-chit)
+    if (t.endsOnYear != null && t.endsOnMonth != null && t.category !== "LOAN" && t.category !== "CHIT_FUND") {
       if (projYear > t.endsOnYear) return false;
       if (projYear === t.endsOnYear && projMonth > t.endsOnMonth) return false;
+    }
+    // Computed end date for loans and chit funds
+    const computed = templateEndDates.get(t.id);
+    if (computed) {
+      if (projYear > computed.year) return false;
+      if (projYear === computed.year && projMonth > computed.month) return false;
     }
     return true;
   }

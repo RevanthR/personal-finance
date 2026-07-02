@@ -54,7 +54,7 @@ export function LiftChitDialog({ open, onOpenChange, chit, onLift }: LiftChitDia
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Lift Chit — {chit.template.name}</DialogTitle>
+          <DialogTitle>Lift Chit: {chit.template.name}</DialogTitle>
           <DialogDescription>
             Once lifted, this chit switches from a receivable to an expense. Your monthly payment will increase from next month.
           </DialogDescription>
@@ -99,7 +99,7 @@ export function LiftChitDialog({ open, onOpenChange, chit, onLift }: LiftChitDia
           </div>
 
           <div>
-            <Label className="text-xs">New Monthly Amount — post-lift (₹)</Label>
+            <Label className="text-xs">New Monthly Amount, post-lift (₹)</Label>
             <Input
               type="number"
               value={monthlyAmount}

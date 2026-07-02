@@ -21,7 +21,7 @@ const steps = [
     icon: Plus,
     color: "text-rose-500 bg-rose-50",
     title: "One-off transactions",
-    desc: "Use Add Transaction for spends or income that won't repeat — a restaurant bill, a bonus, a refund.",
+    desc: "Use Add Transaction for spends or income that won't repeat: a restaurant bill, a bonus, a refund.",
   },
   {
     icon: SlidersHorizontal,

@@ -41,7 +41,7 @@ export function SetupMonthDialog({ open, onOpenChange, month, year, suggestedInc
           <DialogTitle>Set Up {formatMonthYear(month, year)}</DialogTitle>
           <DialogDescription>
             {suggestedIncome
-              ? "Income pre-filled from your templates — adjust if needed, then start the month."
+              ? "Income pre-filled from your templates. Adjust if needed, then start the month."
               : "Enter your income to kick off the month. All your recurring templates will auto-populate."}
           </DialogDescription>
         </DialogHeader>

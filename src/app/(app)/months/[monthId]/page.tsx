@@ -26,7 +26,7 @@ export default async function MonthDetailPage({
 
   if (!currentMonth) notFound();
 
-  const [recentMonths, ccTemplates, incomeTemplates] = await Promise.all([
+  const [recentMonths, ccTemplates, allTemplates] = await Promise.all([
     db.month.findMany({
       where: { userId: session.user.id },
       orderBy: [{ year: "desc" }, { month: "desc" }],
@@ -35,7 +35,7 @@ export default async function MonthDetailPage({
         id: true, month: true, year: true,
         salaryIncome: true, freelanceIncome: true, otherIncome: true,
         entries: { select: { id: true, templateId: true, amount: true, cashbackAmount: true } },
-        adHocItems: { select: { id: true, type: true, amount: true, category: true } },
+        adHocItems: { select: { id: true, type: true, amount: true, category: true, notes: true } },
       },
     }),
     db.lineItemTemplate.findMany({
@@ -44,16 +44,31 @@ export default async function MonthDetailPage({
     }),
     db.lineItemTemplate.findMany({
       where: { userId: session.user.id, isActive: true },
+      include: { chitFund: true },
     }),
   ]);
 
-  // Sum income templates for the current month, applying any pending changes that have kicked in
-  const suggestedIncome = incomeTemplates.filter(t => t.templateType === "INCOME").reduce((sum, t) => {
-    const { month, year } = currentMonth;
-    const usesPending = t.pendingAmount != null && t.pendingFromMonth != null && t.pendingFromYear != null &&
-      (year > t.pendingFromYear || (year === t.pendingFromYear && month >= t.pendingFromMonth));
-    return sum + (usesPending ? t.pendingAmount! : t.amount);
-  }, 0);
+  const incomeTemplates = allTemplates
+    .filter(t => t.templateType === "INCOME")
+    .map(t => ({
+      id: t.id,
+      name: t.name,
+      amount: t.amount,
+      pendingAmount: t.pendingAmount,
+      pendingFromMonth: t.pendingFromMonth,
+      pendingFromYear: t.pendingFromYear,
+    }));
+
+  const preLiftChitTemplateIds = allTemplates
+    .filter(t => t.templateType !== "INCOME" && t.category === "CHIT_FUND" && t.chitFund && !t.chitFund.isLifted)
+    .map(t => t.id);
+
+  const liftedChitInfos = allTemplates
+    .filter(t => t.category === "CHIT_FUND" && t.chitFund?.isLifted && t.chitFund?.liftedOn)
+    .map(t => {
+      const d = new Date(t.chitFund!.liftedOn!);
+      return { templateId: t.id, liftMonth: d.getUTCMonth() + 1, liftYear: d.getUTCFullYear() };
+    });
 
   const now = new Date();
   const todayMonth = now.getMonth() + 1;
@@ -64,7 +79,9 @@ export default async function MonthDetailPage({
       currentMonth={JSON.parse(JSON.stringify(currentMonth))}
       recentMonths={JSON.parse(JSON.stringify(recentMonths))}
       ccTemplates={JSON.parse(JSON.stringify(ccTemplates))}
-      suggestedIncome={suggestedIncome}
+      incomeTemplates={JSON.parse(JSON.stringify(incomeTemplates))}
+      preLiftChitTemplateIds={preLiftChitTemplateIds}
+      liftedChitInfos={liftedChitInfos}
       todayMonth={todayMonth}
       todayYear={todayYear}
       targetMonth={currentMonth.month}

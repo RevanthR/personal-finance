@@ -15,6 +15,7 @@ import {
   formatCurrency, CATEGORY_LABELS, INCOME_CATEGORIES, getCategoryDisplay, getCategoryColor, cn,
 } from "@/lib/utils";
 import { Plus, Pencil, Trash2, Lock, ChevronDown, TrendingUp, SlidersHorizontal } from "lucide-react";
+import { computeLoanAmortization, computeChitCurrentMonth, computeChitEndDate } from "@/lib/loan-utils";
 import { PageCoach } from "@/components/coach/page-coach";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -49,7 +50,7 @@ type Template = {
   loanRateType: string | null;
   loanStartDate: string | null;
   loanOutstandingOverride: number | null;
-  chitFund: { startDate: string; durationMonths: number } | null;
+  chitFund: { id: string; startDate: string; durationMonths: number; totalValue: number; monthlyUnliftedAmount: number; monthlyLiftedAmount: number | null } | null;
 };
 
 
@@ -64,7 +65,6 @@ type SaveData = {
   frequency?: string;
   dueMonth?: number | null;
   templateType?: string;
-  updateCurrentMonth?: boolean;
   addToCurrentMonth?: boolean;
   pendingAmount?: number | null;
   pendingFromMonth?: number | null;
@@ -78,6 +78,13 @@ type SaveData = {
   loanRateType?: string | null;
   loanStartDate?: string | null;
   loanOutstandingOverride?: number | null;
+  chitFundPatch?: {
+    startDate?: string;
+    durationMonths?: number;
+    totalValue?: number;
+    monthlyUnliftedAmount?: number;
+    monthlyLiftedAmount?: number | null;
+  };
 };
 
 export function TemplatesClient({
@@ -114,7 +121,23 @@ export function TemplatesClient({
     });
     if (!res.ok) { toast.error("Failed to save"); return; }
     const updated = await res.json();
-    setTemplates((prev) => prev.map((x) => x.id === editing.id ? { ...x, ...updated } : x));
+
+    // For chit funds, also update the ChitFund record
+    if (editing.category === "CHIT_FUND" && editing.chitFund?.id && data.chitFundPatch) {
+      const chitRes = await fetch(`/api/chits/${editing.chitFund.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data.chitFundPatch),
+      });
+      if (!chitRes.ok) { toast.error("Failed to update chit details"); return; }
+      const updatedChit = await chitRes.json();
+      setTemplates((prev) => prev.map((x) =>
+        x.id === editing.id ? { ...x, ...updated, chitFund: updatedChit } : x
+      ));
+    } else {
+      setTemplates((prev) => prev.map((x) => x.id === editing.id ? { ...x, ...updated } : x));
+    }
+
     toast.success("Item updated");
     setEditing(null);
   }
@@ -226,7 +249,7 @@ export function TemplatesClient({
         iconClass="text-violet-600"
         bgClass="bg-violet-50 border-violet-100"
         title="Set up your recurring items here"
-        desc="Add salary, EMIs, rent, and subscriptions once — they auto-fill your dashboard every month. Income items go under the Income tab."
+        desc="Add salary, EMIs, rent, and subscriptions once; they auto-fill your dashboard every month. Income items go under the Income tab."
       />
       <div className="flex items-center justify-between">
         <div>
@@ -417,7 +440,7 @@ export function TemplatesClient({
                               )}
                               {isClosed && (
                                 <Badge className="text-xs bg-zinc-100 text-zinc-500 hover:bg-zinc-100 border-0">
-                                  Closed · {format(new Date(t.foreClosedOn!), "MMM yyyy")}
+                                  Closed {format(new Date(t.foreClosedOn!), "MMM yyyy")}
                                 </Badge>
                               )}
                               {hasPending && (
@@ -434,16 +457,35 @@ export function TemplatesClient({
                             <p className="text-xs text-muted-foreground">
                               {isClosed && t.foreCloseAmount
                                 ? `Settled ${fmt(t.foreCloseAmount)}`
-                                : `${fmt(t.amount)}/${t.frequency === "YEARLY" ? "year" : "month"}`}
+                                : t.category === "LOAN"
+                                  ? `EMI ${fmt(t.amount)}/month`
+                                  : t.category === "CHIT_FUND"
+                                    ? `${fmt(t.amount)}/month${t.chitFund ? ` · pot ${fmt(t.chitFund.totalValue)}` : ""}`
+                                    : `${fmt(t.amount)}/${t.frequency === "YEARLY" ? "year" : "month"}`}
                               {!isClosed && t.category === "CREDIT_CARD" && (t.statementDay || t.dueDateDay) && (
                                 <span className="ml-1.5 text-blue-500">
-                                  {t.statementDay ? `· closes ${t.statementDay}th` : ""}
+                                  {t.statementDay ? `closes ${t.statementDay}th` : ""}
                                   {t.dueDateDay ? ` · due ${t.dueDateDay}th` : ""}
                                 </span>
                               )}
-                              {!isClosed && t.loanInterestRate && (
-                                <span className="ml-1.5 text-muted-foreground/70">{t.loanInterestRate}% {t.loanRateType === "FLOATING" ? "floating" : "fixed"}</span>
+                              {!isClosed && t.category === "LOAN" && t.loanInterestRate && (
+                                <span className="ml-1.5 text-muted-foreground/70">· {t.loanInterestRate}% {t.loanRateType === "FLOATING" ? "floating" : "fixed"}</span>
                               )}
+                              {!isClosed && t.category === "LOAN" && t.loanInterestRate && (() => {
+                                const amort = computeLoanAmortization({ emi: t.amount, annualRate: t.loanInterestRate!, originalPrincipal: t.loanOriginalPrincipal, startDate: t.loanStartDate, outstandingOverride: t.loanOutstandingOverride });
+                                return amort && amort.monthsRemaining > 0 ? (
+                                  <span className="ml-1.5 text-muted-foreground/70">· {amort.monthsRemaining} mo left</span>
+                                ) : null;
+                              })()}
+                              {!isClosed && t.category === "CHIT_FUND" && t.chitFund?.startDate && t.chitFund?.durationMonths && (() => {
+                                const cur = computeChitCurrentMonth(t.chitFund.startDate);
+                                const dur = t.chitFund.durationMonths;
+                                return cur <= dur ? (
+                                  <span className="ml-1.5 text-muted-foreground/70">
+                                    · month {cur} of {dur}
+                                  </span>
+                                ) : null;
+                              })()}
                             </p>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
@@ -548,8 +590,7 @@ function TemplateDialog({
   );
   const [loading, setLoading] = useState(false);
 
-  // Part 1: apply to current month
-  const [updateCurrentMonth, setUpdateCurrentMonth] = useState(false);
+  // Apply to current month (new templates only)
   const [addToCurrentMonth, setAddToCurrentMonth] = useState(true);
 
   // Part 2: scheduled future change — auto-expand for income edits
@@ -586,6 +627,24 @@ function TemplateDialog({
   const [loanStartDate, setLoanStartDate] = useState(initial?.loanStartDate ? initial.loanStartDate.slice(0, 10) : "");
   const [loanOutstanding, setLoanOutstanding] = useState(initial?.loanOutstandingOverride != null ? String(initial.loanOutstandingOverride) : "");
 
+  // Chit fund fields
+  const now2 = new Date();
+  const existingChitStart = initial?.chitFund?.startDate ? new Date(initial.chitFund.startDate) : null;
+  const [chitStartMonth, setChitStartMonth] = useState(existingChitStart ? existingChitStart.getUTCMonth() + 1 : now2.getMonth() + 1);
+  const [chitStartYear, setChitStartYear] = useState(existingChitStart ? existingChitStart.getUTCFullYear() : now2.getFullYear());
+  const [chitDuration, setChitDuration] = useState(initial?.chitFund?.durationMonths != null ? String(initial.chitFund.durationMonths) : "");
+  const [chitTotalValue, setChitTotalValue] = useState(initial?.chitFund?.totalValue != null ? String(initial.chitFund.totalValue) : "");
+  const [chitMonthlyLifted, setChitMonthlyLifted] = useState(initial?.chitFund?.monthlyLiftedAmount != null ? String(initial.chitFund.monthlyLiftedAmount) : "");
+
+  function chitEndLabel() {
+    const dur = parseInt(chitDuration);
+    if (!dur || !chitStartMonth || !chitStartYear) return "";
+    const totalMonths = (chitStartMonth - 1) + dur - 1;
+    const endMonth = (totalMonths % 12) + 1;
+    const endYear = chitStartYear + Math.floor(totalMonths / 12);
+    return `${MONTHS[endMonth - 1]} ${endYear}`;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!category) return;
@@ -606,7 +665,6 @@ function TemplateDialog({
       frequency,
       dueMonth: frequency === "YEARLY" ? dueMonth : null,
       templateType,
-      ...(isEditing && { updateCurrentMonth }),
       ...(!isEditing && templateType !== "INCOME" && { addToCurrentMonth }),
       ...(pendingValid && {
         pendingAmount: parseFloat(pendingAmt),
@@ -624,327 +682,142 @@ function TemplateDialog({
         loanStartDate: loanStartDate || null,
         loanOutstandingOverride: loanOutstanding ? parseFloat(loanOutstanding) : null,
       }),
+      // Chit fund fields (only for CHIT_FUND category, edit only)
+      ...(category === "CHIT_FUND" && isEditing && {
+        chitFundPatch: {
+          startDate: `${chitStartYear}-${String(chitStartMonth).padStart(2, "0")}-01`,
+          durationMonths: parseInt(chitDuration) || undefined,
+          totalValue: chitTotalValue ? parseFloat(chitTotalValue) : undefined,
+          monthlyUnliftedAmount: parseFloat(amount),
+          monthlyLiftedAmount: chitMonthlyLifted ? parseFloat(chitMonthlyLifted) : null,
+        },
+      }),
     });
     setLoading(false);
   }
 
   const isCustom = category === "__custom__";
   const isIncome = templateType === "INCOME";
+  const isLoan = category === "LOAN";
+  const isCC = category === "CREDIT_CARD";
+  const isChit = category === "CHIT_FUND";
   const isValid = name && category && (!isCustom || customLabel) && amount && (frequency === "MONTHLY" || dueMonth !== null);
+
+  function amountLabel() {
+    if (isIncome) return "Monthly amount (₹)";
+    if (isLoan) return "EMI amount (₹)";
+    if (isCC) return isEditing ? "Bill amount (₹)" : "Expected monthly bill (₹)";
+    if (isChit) return "Monthly contribution (₹)";
+    return "Monthly amount (₹)";
+  }
+
+  const scheduleLabel = isLoan
+    ? (showSchedule ? "EMI update planned" : "Update EMI amount")
+    : (showSchedule ? "Planned amount change" : "Plan an upcoming change");
+
+  const MonthChips = ({ value, onChange }: { value: number; onChange: (v: number) => void }) => (
+    <div className="flex flex-wrap gap-1">
+      {MONTHS.map((m, i) => (
+        <button key={m} type="button" onClick={() => onChange(i + 1)}
+          className={cn("px-2 py-0.5 rounded text-xs font-medium border transition-colors",
+            value === i + 1 ? "bg-zinc-900 text-white border-zinc-900" : "border-border text-muted-foreground hover:border-zinc-500"
+          )}>
+          {m}
+        </button>
+      ))}
+    </div>
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-3">
-          {/* Income vs Expense toggle — only on new templates */}
+        <form onSubmit={handleSubmit} className="space-y-4">
+
+          {/* Income vs Expense toggle — new templates only */}
           {!isEditing && (
             <div className="flex gap-2">
               {(["EXPENSE", "INCOME"] as const).map(t => (
-                <button
-                  key={t}
-                  type="button"
+                <button key={t} type="button"
                   onClick={() => { setTemplateType(t); setCategory(""); setCustomLabel(""); }}
                   className={cn(
                     "flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors",
                     templateType === t
-                      ? t === "INCOME"
-                        ? "bg-green-600 text-white border-green-600"
-                        : "bg-zinc-900 text-white border-zinc-900"
+                      ? t === "INCOME" ? "bg-green-600 text-white border-green-600" : "bg-zinc-900 text-white border-zinc-900"
                       : "border-border text-muted-foreground hover:border-zinc-500"
-                  )}
-                >
+                  )}>
                   {t === "INCOME" ? "Income" : "Expense"}
                 </button>
               ))}
             </div>
           )}
 
-          <div>
-            <Label className="text-xs">Name</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} required />
-          </div>
+          {/* ── Basics ── */}
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs">Name</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} required className="mt-1" />
+            </div>
 
-          <div>
-            <Label className="text-xs mb-2 block">Category</Label>
-            <div className="flex flex-wrap gap-1.5">
-              {(isIncome ? INCOME_CATEGORY_CHIPS_LABELS : EXPENSE_CATEGORY_CHIPS).map(([k, v]) => (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => { setCategory(k); setCustomLabel(""); }}
-                  className={cn(
-                    "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
-                    category === k
-                      ? "bg-zinc-900 text-white border-zinc-900"
-                      : "border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"
-                  )}
-                >
-                  {v}
-                </button>
-              ))}
-              {!isIncome && (
-                <button
-                  type="button"
-                  onClick={() => setCategory("__custom__")}
-                  className={cn(
-                    "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
-                    isCustom
-                      ? "bg-zinc-900 text-white border-zinc-900"
-                      : "border-dashed border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"
-                  )}
-                >
-                  + Custom
-                </button>
+            <div>
+              <Label className="text-xs mb-2 block">Category</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {(isIncome ? INCOME_CATEGORY_CHIPS_LABELS : EXPENSE_CATEGORY_CHIPS).map(([k, v]) => (
+                  <button key={k} type="button" onClick={() => { setCategory(k); setCustomLabel(""); }}
+                    className={cn(
+                      "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
+                      category === k ? "bg-zinc-900 text-white border-zinc-900" : "border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"
+                    )}>
+                    {v}
+                  </button>
+                ))}
+                {!isIncome && (
+                  <button type="button" onClick={() => setCategory("__custom__")}
+                    className={cn(
+                      "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
+                      isCustom ? "bg-zinc-900 text-white border-zinc-900" : "border-dashed border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"
+                    )}>
+                    + Custom
+                  </button>
+                )}
+              </div>
+              {isCustom && !isIncome && (
+                <Input className="mt-2" placeholder="Category name (e.g. Insurance)"
+                  value={customLabel} onChange={(e) => setCustomLabel(e.target.value)} autoFocus required={isCustom} />
               )}
             </div>
-            {isCustom && !isIncome && (
-              <Input
-                className="mt-2"
-                placeholder="Category name (e.g. Insurance)"
-                value={customLabel}
-                onChange={(e) => setCustomLabel(e.target.value)}
-                autoFocus
-                required={isCustom}
-              />
+
+            <div>
+              <Label className="text-xs">{amountLabel()}</Label>
+              <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} required className="mt-1" />
+            </div>
+
+            {!isEditing && !isIncome && (
+              <div className="flex items-center justify-between rounded-lg border px-3 py-2 bg-muted/30">
+                <Label className="text-xs cursor-pointer">Show in current month</Label>
+                <Switch checked={addToCurrentMonth} onCheckedChange={setAddToCurrentMonth} />
+              </div>
             )}
           </div>
 
-          <div>
-            <Label className="text-xs">
-              {isEditing ? "Current amount (₹)" : "Default Amount (₹)"}
-            </Label>
-            <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} required />
-          </div>
-
-          {/* Apply to current month */}
-          {isEditing && (
-            <div className="flex items-center justify-between rounded-lg border px-3 py-2 bg-muted/30">
-              <Label className="text-xs cursor-pointer">Also update this month&apos;s entry</Label>
-              <Switch checked={updateCurrentMonth} onCheckedChange={setUpdateCurrentMonth} />
-            </div>
-          )}
-          {!isEditing && !isIncome && (
-            <div className="flex items-center justify-between rounded-lg border px-3 py-2 bg-muted/30">
-              <Label className="text-xs cursor-pointer">Show in current month</Label>
-              <Switch checked={addToCurrentMonth} onCheckedChange={setAddToCurrentMonth} />
-            </div>
-          )}
-
-          {!isIncome && (
-            <div className="flex items-center justify-between">
-              <Label className="text-xs">Same amount every month</Label>
-              <Switch checked={isFixed} onCheckedChange={setIsFixed} />
-            </div>
-          )}
-
-          {/* Frequency */}
-          <div>
-            <Label className="text-xs mb-2 block">Frequency</Label>
-            <div className="flex gap-2">
-              {(["MONTHLY", "YEARLY"] as const).map((f) => (
-                <button
-                  key={f}
-                  type="button"
-                  onClick={() => setFrequency(f)}
-                  className={cn(
-                    "flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors",
-                    frequency === f
-                      ? "bg-zinc-900 text-white border-zinc-900"
-                      : "border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"
-                  )}
-                >
-                  {f === "MONTHLY" ? "Monthly" : "Yearly"}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {frequency === "YEARLY" && (
-            <div>
-              <Label className="text-xs mb-2 block">Due month</Label>
-              <div className="flex flex-wrap gap-1.5">
-                {MONTHS.map((m, i) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => setDueMonth(i + 1)}
-                    className={cn(
-                      "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
-                      dueMonth === i + 1
-                        ? "bg-zinc-900 text-white border-zinc-900"
-                        : "border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"
-                    )}
-                  >
-                    {m}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {!isIncome && (
-            <div>
-              <Label className="text-xs">Due Date (day of month, optional)</Label>
-              <Input type="number" min="1" max="31" value={dueDateDay} onChange={(e) => setDueDateDay(e.target.value)} placeholder="e.g. 21" />
-            </div>
-          )}
-
-          {!isIncome && category === "CREDIT_CARD" && (
-            <div>
-              <Label className="text-xs">Billing cut-off day (optional)</Label>
-              <Input type="number" min="1" max="31" value={statementDay} onChange={(e) => setStatementDay(e.target.value)} placeholder="e.g. 15" />
-              {statementDay && (
-                <p className="text-[11px] text-muted-foreground mt-1">
-                  Charges on/before {statementDay}th → this month's bill · charges after → next month
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Part 2: schedule a future amount change */}
-          {isEditing && (
-            <div className="border rounded-lg overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setShowSchedule(v => !v)}
-                className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-medium bg-muted/30 hover:bg-muted/50 transition-colors"
-              >
-                <span>{showSchedule ? "Planned amount change" : "Plan an upcoming change"}</span>
-                <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform", showSchedule && "rotate-180")} />
-              </button>
-
-              {showSchedule && (
-                <div className="px-3 pb-3 pt-2 space-y-3">
-                  <div>
-                    <Label className="text-xs">New amount from that month (₹)</Label>
-                    <Input
-                      type="number"
-                      value={pendingAmt}
-                      onChange={(e) => setPendingAmt(e.target.value)}
-                      placeholder="e.g. 25000"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs mb-2 block">Effective from</Label>
-                    <div className="flex flex-wrap gap-1 mb-2">
-                      {MONTHS.map((m, i) => (
-                        <button
-                          key={m}
-                          type="button"
-                          onClick={() => setPendingMonth(i + 1)}
-                          className={cn(
-                            "px-2 py-0.5 rounded text-xs font-medium border transition-colors",
-                            pendingMonth === i + 1
-                              ? "bg-zinc-900 text-white border-zinc-900"
-                              : "border-border text-muted-foreground hover:border-zinc-500"
-                          )}
-                        >
-                          {m}
-                        </button>
-                      ))}
-                    </div>
-                    <Input
-                      type="number"
-                      value={pendingYear}
-                      onChange={(e) => setPendingYear(parseInt(e.target.value) || nextMonth.year)}
-                      placeholder="Year"
-                      className="w-24"
-                    />
-                  </div>
-                  {pendingAmt && (
-                    <p className="text-[10px] text-muted-foreground">
-                      From {MONTHS[pendingMonth - 1]} {pendingYear}, this template will use{" "}
-                      <span className="font-semibold text-foreground">{fmt(parseFloat(pendingAmt) || 0)}</span>/month
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {!isIncome && (
-            <div className="border rounded-lg overflow-hidden">
-              <div className="flex items-center justify-between px-3 py-2.5 bg-muted/30">
-                <span className="text-xs font-medium">End date</span>
-                <div className="flex gap-1">
-                  {(["indefinite", "date"] as const).map(v => (
-                    <button
-                      key={v}
-                      type="button"
-                      onClick={() => setEndsType(v)}
-                      className={cn(
-                        "px-2.5 py-1 rounded text-xs font-medium border transition-colors",
-                        endsType === v
-                          ? "bg-zinc-900 text-white border-zinc-900"
-                          : "border-border text-muted-foreground hover:border-zinc-500"
-                      )}
-                    >
-                      {v === "indefinite" ? "Indefinite" : "Set month"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {endsType === "date" && (
-                <div className="px-3 pb-3 pt-2 space-y-2">
-                  <div className="flex flex-wrap gap-1">
-                    {MONTHS.map((m, i) => (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => setEndsOnMonth(i + 1)}
-                        className={cn(
-                          "px-2 py-0.5 rounded text-xs font-medium border transition-colors",
-                          endsOnMonth === i + 1
-                            ? "bg-zinc-900 text-white border-zinc-900"
-                            : "border-border text-muted-foreground hover:border-zinc-500"
-                        )}
-                      >
-                        {m}
-                      </button>
-                    ))}
-                  </div>
-                  <Input
-                    type="number"
-                    value={endsOnYear}
-                    onChange={e => setEndsOnYear(parseInt(e.target.value) || defaultEndYear)}
-                    placeholder="Year"
-                    className="w-24"
-                  />
-                  <p className="text-[10px] text-muted-foreground">
-                    Template will not appear in projections after {MONTHS[endsOnMonth - 1]} {endsOnYear}
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Loan interest fields — only for LOAN category */}
-          {category === "LOAN" && (
+          {/* ── Loan amortization details (right after amount, before payment settings) ── */}
+          {isLoan && (
             <div className="space-y-3 rounded-xl border border-red-100 bg-red-50/50 p-3">
-              <p className="text-xs font-semibold text-red-700">Loan details (optional)</p>
+              <div>
+                <p className="text-xs font-semibold text-red-700">Amortization details</p>
+                <p className="text-[10px] text-red-600/70 mt-0.5">Optional. Enables principal vs interest breakdown on the dashboard.</p>
+              </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Original principal (₹)</label>
-                  <Input
-                    type="number"
-                    value={loanPrincipal}
-                    onChange={e => setLoanPrincipal(e.target.value)}
-                    placeholder="e.g. 2000000"
-                    className="mt-1 h-8 text-sm"
-                  />
+                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Original loan amount (₹)</label>
+                  <Input type="number" value={loanPrincipal} onChange={e => setLoanPrincipal(e.target.value)}
+                    placeholder="e.g. 20,00,000" className="mt-1 h-8 text-sm" />
                 </div>
                 <div>
                   <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Interest rate (% p.a.)</label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={loanRate}
-                    onChange={e => setLoanRate(e.target.value)}
-                    placeholder="e.g. 8.5"
-                    className="mt-1 h-8 text-sm"
-                  />
+                  <Input type="number" step="0.01" value={loanRate} onChange={e => setLoanRate(e.target.value)}
+                    placeholder="e.g. 8.5" className="mt-1 h-8 text-sm" />
                 </div>
               </div>
 
@@ -952,48 +825,240 @@ function TemplateDialog({
                 <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Rate type</label>
                 <div className="flex gap-2 mt-1">
                   {(["FIXED", "FLOATING"] as const).map(t => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => setLoanRateType(t)}
-                      className={cn(
-                        "flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors",
+                    <button key={t} type="button" onClick={() => setLoanRateType(t)}
+                      className={cn("flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors",
                         loanRateType === t ? "bg-red-600 text-white border-red-600" : "bg-white border-border text-muted-foreground"
-                      )}
-                    >
+                      )}>
                       {t.charAt(0) + t.slice(1).toLowerCase()}
                     </button>
                   ))}
                 </div>
                 {loanRateType === "FLOATING" && (
-                  <p className="text-[10px] text-muted-foreground mt-1">Update rate + outstanding when your bank revises it.</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">Update the rate and outstanding balance whenever your bank revises it.</p>
                 )}
               </div>
 
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Loan start date</label>
+                  <Input type="date" value={loanStartDate} onChange={e => setLoanStartDate(e.target.value)} className="mt-1 h-8 text-sm" />
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                    Current balance (₹){loanRateType === "FLOATING" && <span className="text-red-600">*</span>}
+                  </label>
+                  <Input type="number" value={loanOutstanding} onChange={e => setLoanOutstanding(e.target.value)}
+                    placeholder="From bank" className="mt-1 h-8 text-sm" />
+                </div>
+              </div>
+              <p className="text-[10px] text-muted-foreground">Leave current balance blank to auto-compute from start date.</p>
+            </div>
+          )}
+
+          {/* ── Chit fund details (edit only) ── */}
+          {isChit && isEditing && (
+            <div className="space-y-3 rounded-xl border border-amber-100 bg-amber-50/50 p-3">
               <div>
-                <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Loan start date</label>
-                <Input
-                  type="date"
-                  value={loanStartDate}
-                  onChange={e => setLoanStartDate(e.target.value)}
-                  className="mt-1 h-8 text-sm"
-                />
+                <p className="text-xs font-semibold text-amber-700">Chit details</p>
               </div>
 
               <div>
-                <label className="text-[10px] text-muted-foreground uppercase tracking-wide">
-                  Current loan balance (₹)
-                  {loanRateType === "FLOATING" && <span className="ml-1 text-red-600">required for floating</span>}
-                </label>
-                <Input
-                  type="number"
-                  value={loanOutstanding}
-                  onChange={e => setLoanOutstanding(e.target.value)}
-                  placeholder="From your bank statement"
-                  className="mt-1 h-8 text-sm"
-                />
-                <p className="text-[10px] text-muted-foreground mt-0.5">Leave blank to auto-compute from start date.</p>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Start month</label>
+                  {chitEndLabel() && <span className="text-[11px] text-muted-foreground">ends {chitEndLabel()}</span>}
+                </div>
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {MONTHS.map((m, i) => (
+                    <button key={m} type="button" onClick={() => setChitStartMonth(i + 1)}
+                      className={cn("px-2 py-0.5 rounded text-xs font-medium border transition-colors",
+                        chitStartMonth === i + 1 ? "bg-zinc-900 text-white border-zinc-900" : "border-border text-muted-foreground"
+                      )}>
+                      {m}
+                    </button>
+                  ))}
+                </div>
+                <Input type="number" value={chitStartYear}
+                  onChange={e => setChitStartYear(parseInt(e.target.value) || new Date().getFullYear())}
+                  placeholder="Year" min={2020} max={2040} className="h-8 text-sm" />
               </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Duration (months)</label>
+                  <Input type="number" value={chitDuration} onChange={e => setChitDuration(e.target.value)}
+                    placeholder="e.g. 20" className="mt-1 h-8 text-sm" />
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Pot value (₹)</label>
+                  <Input type="number" value={chitTotalValue} onChange={e => setChitTotalValue(e.target.value)}
+                    placeholder="e.g. 300000" className="mt-1 h-8 text-sm" />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Monthly contribution after lifting (₹)</label>
+                <p className="text-[10px] text-muted-foreground mb-1">Leave blank if same as before lifting</p>
+                <Input type="number" value={chitMonthlyLifted} onChange={e => setChitMonthlyLifted(e.target.value)}
+                  placeholder="Optional" className="h-8 text-sm" />
+              </div>
+            </div>
+          )}
+
+          {/* ── Payment settings ── */}
+          <div className="space-y-3 rounded-xl border bg-muted/20 px-3 py-3">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Payment settings</p>
+
+            {!isIncome && (
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Same amount every month</Label>
+                <Switch checked={isFixed} onCheckedChange={setIsFixed} />
+              </div>
+            )}
+
+            <div>
+              <Label className="text-xs mb-2 block">Frequency</Label>
+              <div className="flex gap-2">
+                {(["MONTHLY", "YEARLY"] as const).map((f) => (
+                  <button key={f} type="button" onClick={() => setFrequency(f)}
+                    className={cn("flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors",
+                      frequency === f ? "bg-zinc-900 text-white border-zinc-900" : "border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"
+                    )}>
+                    {f === "MONTHLY" ? "Monthly" : "Yearly"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {frequency === "YEARLY" && (
+              <div>
+                <Label className="text-xs mb-2 block">Due month</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {MONTHS.map((m, i) => (
+                    <button key={m} type="button" onClick={() => setDueMonth(i + 1)}
+                      className={cn("px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
+                        dueMonth === i + 1 ? "bg-zinc-900 text-white border-zinc-900" : "border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"
+                      )}>
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!isIncome && (
+              <div>
+                <Label className="text-xs">Due date (day of month, optional)</Label>
+                <Input type="number" min="1" max="31" value={dueDateDay}
+                  onChange={(e) => setDueDateDay(e.target.value)} placeholder="e.g. 21" className="mt-1" />
+              </div>
+            )}
+
+            {isCC && (
+              <div>
+                <Label className="text-xs">Billing cut-off day (optional)</Label>
+                <Input type="number" min="1" max="31" value={statementDay}
+                  onChange={(e) => setStatementDay(e.target.value)} placeholder="e.g. 15" className="mt-1" />
+                {statementDay && (
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Charges on/before {statementDay}th go into this month&apos;s bill; charges after go into next month&apos;s.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ── Advanced: upcoming change + end date ── */}
+          {isEditing && (
+            <div className="border rounded-lg overflow-hidden">
+              <button type="button" onClick={() => setShowSchedule(v => !v)}
+                className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-medium bg-muted/30 hover:bg-muted/50 transition-colors">
+                <span>{scheduleLabel}</span>
+                <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform", showSchedule && "rotate-180")} />
+              </button>
+
+              {showSchedule && (
+                <div className="px-3 pb-3 pt-2 space-y-3">
+                  <div>
+                    <Label className="text-xs">{isLoan ? "New EMI from that month (₹)" : "New amount from that month (₹)"}</Label>
+                    <Input type="number" value={pendingAmt} onChange={(e) => setPendingAmt(e.target.value)}
+                      placeholder="e.g. 25000" className="mt-1" />
+                  </div>
+                  <div>
+                    <Label className="text-xs mb-2 block">Effective from</Label>
+                    <MonthChips value={pendingMonth} onChange={setPendingMonth} />
+                    <Input type="number" value={pendingYear}
+                      onChange={(e) => setPendingYear(parseInt(e.target.value) || nextMonth.year)}
+                      placeholder="Year" className="w-24 mt-2" />
+                  </div>
+                  {pendingAmt && (
+                    <p className="text-[10px] text-muted-foreground">
+                      From {MONTHS[pendingMonth - 1]} {pendingYear},{" "}
+                      {isLoan ? "EMI becomes" : "amount changes to"}{" "}
+                      <span className="font-semibold text-foreground">{fmt(parseFloat(pendingAmt) || 0)}</span>/month
+                    </p>
+                  )}
+
+                  {/* End date (not applicable for loans — use Mark as closed instead) */}
+                  {!isLoan && (
+                    <div className="border-t border-border pt-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-medium">Stop after</span>
+                        <div className="flex gap-1">
+                          {(["indefinite", "date"] as const).map(v => (
+                            <button key={v} type="button" onClick={() => setEndsType(v)}
+                              className={cn("px-2.5 py-1 rounded text-xs font-medium border transition-colors",
+                                endsType === v ? "bg-zinc-900 text-white border-zinc-900" : "border-border text-muted-foreground hover:border-zinc-500"
+                              )}>
+                              {v === "indefinite" ? "Never" : "Set month"}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {endsType === "date" && (
+                        <div className="space-y-2">
+                          <MonthChips value={endsOnMonth} onChange={setEndsOnMonth} />
+                          <Input type="number" value={endsOnYear}
+                            onChange={e => setEndsOnYear(parseInt(e.target.value) || defaultEndYear)}
+                            placeholder="Year" className="w-24" />
+                          <p className="text-[10px] text-muted-foreground">
+                            Stops appearing in projections after {MONTHS[endsOnMonth - 1]} {endsOnYear}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* End date for new templates (non-loan, non-income) */}
+          {!isEditing && !isIncome && !isLoan && (
+            <div className="border rounded-lg overflow-hidden">
+              <div className="flex items-center justify-between px-3 py-2.5 bg-muted/30">
+                <span className="text-xs font-medium">Stop after</span>
+                <div className="flex gap-1">
+                  {(["indefinite", "date"] as const).map(v => (
+                    <button key={v} type="button" onClick={() => setEndsType(v)}
+                      className={cn("px-2.5 py-1 rounded text-xs font-medium border transition-colors",
+                        endsType === v ? "bg-zinc-900 text-white border-zinc-900" : "border-border text-muted-foreground hover:border-zinc-500"
+                      )}>
+                      {v === "indefinite" ? "Never" : "Set month"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {endsType === "date" && (
+                <div className="px-3 pb-3 pt-2 space-y-2">
+                  <MonthChips value={endsOnMonth} onChange={setEndsOnMonth} />
+                  <Input type="number" value={endsOnYear}
+                    onChange={e => setEndsOnYear(parseInt(e.target.value) || defaultEndYear)}
+                    placeholder="Year" className="w-24" />
+                  <p className="text-[10px] text-muted-foreground">
+                    Stops appearing in projections after {MONTHS[endsOnMonth - 1]} {endsOnYear}
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

@@ -49,7 +49,7 @@ export function ForecloseDialog({ open, onOpenChange, template, onForeclose }: F
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Foreclose — {template.name}</DialogTitle>
+          <DialogTitle>Foreclose: {template.name}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="text-xs text-muted-foreground bg-muted rounded-lg p-3">

@@ -1,4 +1,4 @@
-export const metadata = { title: "Privacy Policy — FinanceOS" };
+export const metadata = { title: "Privacy Policy | FinanceOS" };
 
 export default function PrivacyPage() {
   return (
