@@ -893,6 +893,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
 
         {/* Right column: Recharts loaded lazily so it doesn't block navigation */}
         <div className="space-y-4">
+          {!isProjected && <PaidSummaryPanel entries={entries} totalCommitted={totalCommitted} fmt={fmt} />}
           <DashboardCharts
             categoryBreakdown={categoryBreakdown}
             trendData={trendData}
@@ -905,7 +906,6 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths, chit
             variableAmount={dispVariable}
             upcomingPayments={isProjected ? [] : upcomingPayments}
           />
-          {!isProjected && <PaidSummaryPanel entries={entries} fmt={fmt} />}
         </div>
       </div>
 
@@ -1003,7 +1003,7 @@ function ProjectedEntryRow({ entry }: { entry: ProjectedEntry }) {
   );
 }
 
-function PaidSummaryPanel({ entries, fmt }: { entries: EntryWithTemplate[]; fmt: (v: number) => string }) {
+function PaidSummaryPanel({ entries, totalCommitted, fmt }: { entries: EntryWithTemplate[]; totalCommitted: number; fmt: (v: number) => string }) {
   const [collapsed, setCollapsed] = useState(false);
   const netAmt = (e: EntryWithTemplate) => e.amount - (e.cashbackAmount ?? 0);
   const paidAmt = (e: EntryWithTemplate): number => e.isPaid ? (e.paidAmount ?? netAmt(e)) : (e.paidAmount ?? 0);
@@ -1030,7 +1030,9 @@ function PaidSummaryPanel({ entries, fmt }: { entries: EntryWithTemplate[]; fmt:
     }
   }
 
-  const total = shown.reduce((s, e) => s + paidAmt(e), 0);
+  const totalPaidOut = shown.reduce((s, e) => s + paidAmt(e), 0);
+  const partialEntries = entries.filter(e => !e.isPaid && e.paidAmount != null && e.paidAmount > 0);
+  const partialTotal = partialEntries.reduce((s, e) => s + (e.paidAmount ?? 0), 0);
   const fullyPaidCount = entries.filter(e => e.isPaid).length;
 
   return (
@@ -1040,15 +1042,25 @@ function PaidSummaryPanel({ entries, fmt }: { entries: EntryWithTemplate[]; fmt:
         onClick={() => setCollapsed(c => !c)}
         className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/40 transition-colors"
       >
-        <div className="flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-green-500" />
-          <span className="text-sm font-semibold">Settled</span>
-          <span className="text-xs text-muted-foreground">{fullyPaidCount} of {entries.length} done</span>
+        <div className="flex items-center gap-2 min-w-0">
+          <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-semibold">Settled</span>
+              <span className="text-xs text-muted-foreground">{fullyPaidCount} of {entries.length}</span>
+              {partialEntries.length > 0 && (
+                <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">
+                  {partialEntries.length} partial
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground tabular-nums">
+              {fmt(totalPaidOut)} of {fmt(totalCommitted)}
+              {partialTotal > 0 && <span className="text-amber-600 ml-1">· {fmt(partialTotal)} in partials</span>}
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-bold text-green-600">{fmt(total)}</span>
-          <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform duration-200", !collapsed && "rotate-180")} />
-        </div>
+        <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform duration-200 shrink-0 ml-2", !collapsed && "rotate-180")} />
       </button>
 
       {!collapsed && (
@@ -1097,7 +1109,7 @@ function PaidSummaryPanel({ entries, fmt }: { entries: EntryWithTemplate[]; fmt:
           })}
           <div className="flex items-center justify-between px-4 py-2.5 bg-green-50/60">
             <span className="text-xs font-semibold text-muted-foreground">Total paid out</span>
-            <span className="text-sm font-bold text-green-600 tabular-nums">{fmt(total)}</span>
+            <span className="text-sm font-bold text-green-600 tabular-nums">{fmt(totalPaidOut)} of {fmt(totalCommitted)}</span>
           </div>
         </div>
       )}
