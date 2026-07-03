@@ -420,10 +420,42 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
         <StatCard label="Avg savings" value={`${avgSavingsRate}%`} color={avgSavingsRate >= 20 ? "text-green-600" : avgSavingsRate >= 10 ? "text-amber-600" : "text-red-600"} />
       </div>
 
+      {/* Monthly overview — full width, above the columns */}
+      {data.monthlyTrends.length > 0 && (
+        <div>
+          <SectionTitle>Monthly overview</SectionTitle>
+          <Card>
+            <CardContent className="p-3 sm:p-4 space-y-3">
+              <TrendChart data={data.monthlyTrends} />
+              <div className="pt-1 border-t border-border">
+                <p className="text-[10px] text-muted-foreground mb-2">Savings rate by month</p>
+                <SavingsRateBar trends={data.monthlyTrends} />
+              </div>
+              {(data.bestMonth || data.worstMonth) && data.bestMonth?.label !== data.worstMonth?.label && (
+                <div className="flex gap-4 pt-1 border-t border-border">
+                  {data.bestMonth && (
+                    <div className="flex items-center gap-1.5">
+                      <TrendingUp className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                      <p className="text-xs"><span className="text-muted-foreground">Best </span><span className="font-semibold">{data.bestMonth.label} {data.bestMonth.savingsRate}%</span></p>
+                    </div>
+                  )}
+                  {data.worstMonth && (
+                    <div className="flex items-center gap-1.5">
+                      <TrendingDown className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                      <p className="text-xs"><span className="text-muted-foreground">Worst </span><span className="font-semibold">{data.worstMonth.label} {data.worstMonth.savingsRate}%</span></p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* 2-column grid on desktop */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:items-start">
 
-        {/* ── Left column ── */}
+        {/* ── Left column: spending analysis ── */}
         <div className="space-y-4">
 
           {/* Where your money went + spending character inline */}
@@ -456,6 +488,24 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
               </CardContent>
             </Card>
           </div>
+
+          {/* Income by source */}
+          {data.monthlyTrends.length > 0 && (
+            <div>
+              <SectionTitle>Income by source</SectionTitle>
+              <Card>
+                <CardContent className="p-3 sm:p-4">
+                  <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-3">
+                    <div><span className="text-[10px] text-muted-foreground">Salary </span><span className="text-xs font-semibold text-emerald-600">{fmt(data.incomeSources.salary)}</span></div>
+                    {data.incomeSources.freelance > 0 && <div><span className="text-[10px] text-muted-foreground">Freelance </span><span className="text-xs font-semibold text-cyan-600">{fmt(data.incomeSources.freelance)}</span><span className="text-[9px] text-muted-foreground ml-1">({data.freelancePct}%)</span></div>}
+                    {data.incomeSources.other > 0 && <div><span className="text-[10px] text-muted-foreground">Other </span><span className="text-xs font-semibold">{fmt(data.incomeSources.other)}</span></div>}
+                    {data.incomeSources.adHoc > 0 && <div><span className="text-[10px] text-muted-foreground">One-off </span><span className="text-xs font-semibold text-violet-600">{fmt(data.incomeSources.adHoc)}</span></div>}
+                  </div>
+                  <IncomeChart data={data.monthlyTrends} />
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
           {/* Chit funds — consolidated */}
           {data.chits.length > 0 && (
@@ -500,56 +550,8 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
           )}
         </div>
 
-        {/* ── Right column ── */}
+        {/* ── Right column: commitments ── */}
         <div className="space-y-4">
-
-          {/* Monthly overview — chart + savings rate grid */}
-          <div>
-            <SectionTitle>Monthly overview</SectionTitle>
-            <Card>
-              <CardContent className="p-3 sm:p-4 space-y-3">
-                <TrendChart data={data.monthlyTrends} />
-                <div className="pt-1 border-t border-border">
-                  <p className="text-[10px] text-muted-foreground mb-2">Savings rate by month</p>
-                  <SavingsRateBar trends={data.monthlyTrends} />
-                </div>
-                {(data.bestMonth || data.worstMonth) && data.bestMonth?.label !== data.worstMonth?.label && (
-                  <div className="flex gap-4 pt-1 border-t border-border">
-                    {data.bestMonth && (
-                      <div className="flex items-center gap-1.5">
-                        <TrendingUp className="w-3.5 h-3.5 text-green-500 shrink-0" />
-                        <p className="text-xs"><span className="text-muted-foreground">Best </span><span className="font-semibold">{data.bestMonth.label} {data.bestMonth.savingsRate}%</span></p>
-                      </div>
-                    )}
-                    {data.worstMonth && (
-                      <div className="flex items-center gap-1.5">
-                        <TrendingDown className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                        <p className="text-xs"><span className="text-muted-foreground">Worst </span><span className="font-semibold">{data.worstMonth.label} {data.worstMonth.savingsRate}%</span></p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Income breakdown */}
-          {data.monthlyTrends.length > 0 && (
-            <div>
-              <SectionTitle>Income by source</SectionTitle>
-              <Card>
-                <CardContent className="p-3 sm:p-4">
-                  <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-3">
-                    <div><span className="text-[10px] text-muted-foreground">Salary </span><span className="text-xs font-semibold text-emerald-600">{fmt(data.incomeSources.salary)}</span></div>
-                    {data.incomeSources.freelance > 0 && <div><span className="text-[10px] text-muted-foreground">Freelance </span><span className="text-xs font-semibold text-cyan-600">{fmt(data.incomeSources.freelance)}</span><span className="text-[9px] text-muted-foreground ml-1">({data.freelancePct}%)</span></div>}
-                    {data.incomeSources.other > 0 && <div><span className="text-[10px] text-muted-foreground">Other </span><span className="text-xs font-semibold">{fmt(data.incomeSources.other)}</span></div>}
-                    {data.incomeSources.adHoc > 0 && <div><span className="text-[10px] text-muted-foreground">One-off </span><span className="text-xs font-semibold text-violet-600">{fmt(data.incomeSources.adHoc)}</span></div>}
-                  </div>
-                  <IncomeChart data={data.monthlyTrends} />
-                </CardContent>
-              </Card>
-            </div>
-          )}
 
           {/* Relief timeline — when expenses will drop */}
           {(data.loans.length > 0 || data.chits.some(c => c.remainingMonths > 0)) && (
