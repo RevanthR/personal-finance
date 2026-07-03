@@ -181,30 +181,22 @@ function CategorySection({ data, totalExpenses, fmt }: {
   );
 }
 
-function SavingsRateBar({ trends, fmt }: {
+function SavingsRateBar({ trends }: {
   trends: AnalyticsData["monthlyTrends"];
-  fmt: (v: number) => string;
 }) {
   if (!trends.length) return <p className="text-sm text-muted-foreground">No data yet.</p>;
-  const max = Math.max(...trends.map(t => Math.abs(t.balance)), 1);
 
   return (
-    <div className="space-y-2.5">
+    <div className="grid grid-cols-4 sm:grid-cols-6 gap-x-2 gap-y-2.5">
       {trends.map(t => (
-        <div key={t.label} className="flex items-center gap-2.5">
-          <span className="text-xs text-muted-foreground w-8 shrink-0">{t.label}</span>
-          <div className="flex-1 h-5 rounded-lg bg-zinc-50 border border-zinc-100 overflow-hidden relative">
-            <div
-              className={cn("h-full rounded-md transition-all duration-500", t.balance >= 0 ? "bg-green-400" : "bg-red-400")}
-              style={{ width: `${(Math.abs(t.balance) / max) * 100}%`, opacity: 0.7 }}
-            />
-          </div>
-          <span className={cn("text-xs font-semibold tabular-nums w-14 text-right shrink-0", t.savingsRate >= 20 ? "text-green-600" : t.savingsRate >= 0 ? "text-amber-600" : "text-red-600")}>
+        <div key={t.label} className="text-center">
+          <p className="text-[10px] text-muted-foreground">{t.label}</p>
+          <p className={cn(
+            "text-xs font-bold tabular-nums",
+            t.savingsRate >= 20 ? "text-green-600" : t.savingsRate >= 0 ? "text-amber-600" : "text-red-600"
+          )}>
             {t.savingsRate}%
-          </span>
-          <span className="text-xs text-muted-foreground tabular-nums w-20 text-right shrink-0 hidden sm:block">
-            {fmt(t.balance)}
-          </span>
+          </p>
         </div>
       ))}
     </div>
@@ -418,7 +410,7 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
 
       {/* Summary cards — always full width */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -429,117 +421,100 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
       </div>
 
       {/* 2-column grid on desktop */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:items-start">
 
         {/* ── Left column ── */}
-        <div className="space-y-5">
+        <div className="space-y-4">
 
-          {/* Where your money went */}
+          {/* Where your money went + spending character inline */}
           <div>
             <SectionTitle>Where your money went</SectionTitle>
             <Card>
               <CardContent className="p-3 sm:p-4">
                 <CategorySection data={data.spendByCategory} totalExpenses={data.fyExpenses} fmt={fmt} />
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Spending character */}
-          <div>
-            <SectionTitle>Spending character</SectionTitle>
-            <Card>
-              <CardContent className="p-4 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">Recurring</p>
-                    <div className="h-2 rounded-full bg-zinc-100 overflow-hidden">
-                      <div className="h-full rounded-full bg-indigo-400" style={{ width: `${recurringPct}%` }} />
+                <div className="mt-3 pt-3 border-t border-border space-y-1.5">
+                  {[
+                    { label: "Recurring", value: recurringPct, color: "#818cf8" },
+                    { label: "One-off",   value: 100 - recurringPct, color: "#fbbf24" },
+                    { label: "Essential", value: essentialPct, color: "#64748b" },
+                    { label: "Lifestyle", value: lifestylePct, color: "#f472b6" },
+                  ].map(({ label, value, color }) => (
+                    <div key={label} className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground w-16 shrink-0">{label}</span>
+                      <div className="flex-1 h-1.5 rounded-full bg-zinc-100 overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${value}%`, backgroundColor: color, opacity: 0.75 }} />
+                      </div>
+                      <span className="text-xs font-semibold tabular-nums w-8 text-right shrink-0">{value}%</span>
                     </div>
-                    <p className="text-xs font-semibold">{recurringPct}%</p>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">One-off</p>
-                    <div className="h-2 rounded-full bg-zinc-100 overflow-hidden">
-                      <div className="h-full rounded-full bg-amber-400" style={{ width: `${100 - recurringPct}%` }} />
-                    </div>
-                    <p className="text-xs font-semibold">{100 - recurringPct}%</p>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">Essential</p>
-                    <div className="h-2 rounded-full bg-zinc-100 overflow-hidden">
-                      <div className="h-full rounded-full bg-slate-500" style={{ width: `${essentialPct}%` }} />
-                    </div>
-                    <p className="text-xs font-semibold">{essentialPct}%</p>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">Lifestyle</p>
-                    <div className="h-2 rounded-full bg-zinc-100 overflow-hidden">
-                      <div className="h-full rounded-full bg-pink-400" style={{ width: `${lifestylePct}%` }} />
-                    </div>
-                    <p className="text-xs font-semibold">{lifestylePct}%</p>
-                  </div>
+                  ))}
+                  <p className="text-[10px] text-muted-foreground pt-0.5">
+                    Committed overhead <span className="font-semibold text-foreground">{fmt(data.committedOverhead)}/mo</span>
+                    <span className="mx-1.5">·</span>
+                    Essential = Loan, Maintenance, Savings
+                  </p>
                 </div>
-                <p className="text-[10px] text-muted-foreground pt-1 border-t border-border">
-                  Committed overhead <span className="font-semibold text-foreground">{fmt(data.committedOverhead)}/mo</span>
-                  <span className="mx-1.5">·</span>
-                  Essential = Loan, Maintenance, Savings
-                </p>
               </CardContent>
             </Card>
           </div>
 
-          {/* Chit funds */}
+          {/* Chit funds — consolidated */}
           {data.chits.length > 0 && (
             <div>
               <SectionTitle>Chit fund progress</SectionTitle>
-              <div className="space-y-2">
-                {data.chits.map(c => {
-                  const elapsed = c.durationMonths - c.remainingMonths;
-                  const progressPct = c.durationMonths > 0 ? Math.round((elapsed / c.durationMonths) * 100) : 100;
-                  return (
-                    <div key={c.name} className="rounded-xl border bg-card px-4 py-3">
-                      <div className="flex items-start justify-between gap-3 mb-2">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium">{c.name}</p>
-                          <p className="text-xs text-muted-foreground">{fmt(c.monthlyAmount)}/mo · pot {fmt(c.totalValue)}</p>
+              <Card>
+                <CardContent className="p-3 sm:p-4 divide-y divide-border">
+                  {data.chits.map(c => {
+                    const elapsed = c.durationMonths - c.remainingMonths;
+                    const progressPct = c.durationMonths > 0 ? Math.round((elapsed / c.durationMonths) * 100) : 100;
+                    return (
+                      <div key={c.name} className="py-3 first:pt-0 last:pb-0">
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium">{c.name}</p>
+                            <p className="text-xs text-muted-foreground">{fmt(c.monthlyAmount)}/mo · pot {fmt(c.totalValue)}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            {c.remainingMonths === 0 ? (
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">Done</span>
+                            ) : (
+                              <>
+                                <p className="text-xs font-semibold">ends {MONTHS_FULL[c.endsMonth - 1]} {c.endsYear}</p>
+                                <p className="text-[10px] text-muted-foreground">{c.remainingMonths} mo left</p>
+                              </>
+                            )}
+                          </div>
                         </div>
-                        <div className="text-right shrink-0">
-                          {c.remainingMonths === 0 ? (
-                            <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 font-medium">Done</span>
-                          ) : (
-                            <>
-                              <p className="text-xs font-semibold">ends {MONTHS_FULL[c.endsMonth - 1]} {c.endsYear}</p>
-                              <p className="text-[10px] text-muted-foreground">{c.remainingMonths} mo left</p>
-                            </>
-                          )}
+                        <div className="h-1.5 rounded-full bg-zinc-100 overflow-hidden">
+                          <div className="h-full rounded-full bg-indigo-400 transition-all" style={{ width: `${progressPct}%` }} />
+                        </div>
+                        <div className="flex justify-between mt-1">
+                          <span className="text-[10px] text-muted-foreground">{fmt(c.accumulated)} saved</span>
+                          <span className="text-[10px] text-muted-foreground">{progressPct}%</span>
                         </div>
                       </div>
-                      <div className="h-1.5 rounded-full bg-zinc-100 overflow-hidden">
-                        <div className="h-full rounded-full bg-indigo-400 transition-all" style={{ width: `${progressPct}%` }} />
-                      </div>
-                      <div className="flex justify-between mt-1">
-                        <span className="text-[10px] text-muted-foreground">{fmt(c.accumulated)} saved</span>
-                        <span className="text-[10px] text-muted-foreground">{progressPct}%</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
             </div>
           )}
         </div>
 
         {/* ── Right column ── */}
-        <div className="space-y-5">
+        <div className="space-y-4">
 
-          {/* Monthly savings trend */}
+          {/* Monthly overview — chart + savings rate grid */}
           <div>
-            <SectionTitle>Monthly savings trend</SectionTitle>
+            <SectionTitle>Monthly overview</SectionTitle>
             <Card>
-              <CardContent className="p-3 sm:p-4">
-                <SavingsRateBar trends={data.monthlyTrends} fmt={fmt} />
+              <CardContent className="p-3 sm:p-4 space-y-3">
+                <TrendChart data={data.monthlyTrends} />
+                <div className="pt-1 border-t border-border">
+                  <p className="text-[10px] text-muted-foreground mb-2">Savings rate by month</p>
+                  <SavingsRateBar trends={data.monthlyTrends} />
+                </div>
                 {(data.bestMonth || data.worstMonth) && data.bestMonth?.label !== data.worstMonth?.label && (
-                  <div className="flex gap-4 mt-3 pt-3 border-t border-border">
+                  <div className="flex gap-4 pt-1 border-t border-border">
                     {data.bestMonth && (
                       <div className="flex items-center gap-1.5">
                         <TrendingUp className="w-3.5 h-3.5 text-green-500 shrink-0" />
