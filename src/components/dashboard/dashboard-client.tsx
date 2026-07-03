@@ -783,70 +783,58 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
         )}
       </div>
 
-      {/* FY Summary Strip */}
-      {recentMonths.length > 1 && (
-        <Card className="bg-slate-900 text-white border-slate-800">
-          <CardContent className="p-3">
-            <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-2">Last {recentMonths.length} months</p>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <p className="text-[10px] text-slate-400">Income</p>
-                <p className="text-sm font-bold text-green-400">{fmt(fyIncome)}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-400">Expenses</p>
-                <p className="text-sm font-bold text-red-400">{fmt(fyExpenses)}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-400">{fyBalance >= 0 ? "Leftover" : "Deficit"}</p>
-                <p className={cn("text-sm font-bold", fyBalance >= 0 ? "text-green-400" : "text-red-400")}>
-                  {fyBalance >= 0 ? "+" : "-"}{fmt(Math.abs(fyBalance))}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Metric cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* Metric cards — always 3 columns, no orphans */}
+      <div className="grid grid-cols-3 gap-3">
+        {/* Income */}
         {isProjected ? (
           <MetricCard label="Est. Income" value={fmt(dispIncome)} icon={<Wallet className="w-4 h-4" />} color="text-green-600" sub="projected" gradient="linear-gradient(135deg, white 0%, #f0fdf4 100%)" />
         ) : (
-          <button onClick={openIncomeEdit} className="text-left">
+          <button onClick={openIncomeEdit} className="text-left h-full">
             <Card className="hover:border-zinc-400 transition-colors cursor-pointer h-full" style={{ background: "linear-gradient(135deg, white 0%, #f0fdf4 100%)" }}>
               <CardContent className="p-3">
                 <div className="flex items-center justify-between mb-1">
                   <p className="text-xs text-muted-foreground">Income</p>
                   <div className="flex items-center gap-1">
-                    <span className="text-green-600"><Wallet className="w-4 h-4" /></span>
+                    <Wallet className="w-4 h-4 text-green-600" />
                     <Pencil className="w-2.5 h-2.5 text-muted-foreground" />
                   </div>
                 </div>
-                <p className="text-base font-bold">{fmt(grandIncome)}</p>
-                {adHocIncome > 0 && (
-                  <p className="text-[10px] text-green-600 mt-0.5">
-                    +{fmt(adHocIncome)} one-time
-                  </p>
-                )}
+                <p className="text-base font-bold leading-tight">{fmt(grandIncome)}</p>
+                {adHocIncome > 0 && <p className="text-[10px] text-green-600 mt-0.5">+{fmt(adHocIncome)} one-time</p>}
               </CardContent>
             </Card>
           </button>
         )}
-        <MetricCard label="Spending" value={fmt(dispCommitted)} icon={<TrendingDown className="w-4 h-4" />} color="text-red-600" sub={isProjected ? `${projEntries.length} items` : pendingCount > 0 ? `${pendingCount} pending` : undefined} gradient="linear-gradient(135deg, white 0%, #fef2f2 100%)" />
-        {!isProjected && chitInvestment > 0 && (
-          <MetricCard label="Invested" value={fmt(chitInvestment)} icon={<TrendingUp className="w-4 h-4" />} color="text-amber-600" sub="chit fund" gradient="linear-gradient(135deg, white 0%, #fffbeb 100%)" />
-        )}
+
+        {/* Spending — with embedded progress bar and secondary sub-lines */}
+        <Card style={{ background: "linear-gradient(135deg, white 0%, #fef2f2 100%)" }}>
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs text-muted-foreground">Spending</p>
+              <TrendingDown className="w-4 h-4 text-red-600" />
+            </div>
+            <p className="text-base font-bold leading-tight">{fmt(dispCommitted)}</p>
+            {!isProjected && (adHocExpense > 0 || chitInvestment > 0) && (
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                {[adHocExpense > 0 && `+${fmt(adHocExpense)} extra`, chitInvestment > 0 && `${fmt(chitInvestment)} invested`].filter(Boolean).join(" · ")}
+              </p>
+            )}
+            {isProjected && <p className="text-[10px] text-muted-foreground mt-0.5">{projEntries.length} items</p>}
+            {!isProjected && totalCommitted > 0 && (
+              <div className="mt-2 space-y-1">
+                <div className="flex justify-between text-[9px] text-muted-foreground">
+                  <span>{fmt(totalPaid)} paid</span>
+                  <span className="font-semibold text-foreground">{paidPercent}%</span>
+                </div>
+                <Progress value={paidPercent} className="h-1" />
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Balance */}
         <MetricCard
-          label="Extra Spending"
-          value={isProjected ? "-" : fmt(adHocExpense)}
-          icon={<CheckCircle2 className="w-4 h-4" />}
-          color="text-amber-600"
-          sub={isProjected ? "not yet tracked" : adHocExpense > 0 ? `${adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").length} transaction${adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").length !== 1 ? "s" : ""}` : "no extra expenses"}
-          gradient="linear-gradient(135deg, white 0%, #fffbeb 100%)"
-        />
-        <MetricCard
-          label={dispBalance >= 0 ? "Est. Leftover" : "Est. Deficit"}
+          label={dispBalance >= 0 ? "Leftover" : "Deficit"}
           value={fmt(Math.abs(dispBalance))}
           icon={dispBalance >= 0 ? <TrendingUp className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
           color={dispBalance >= 0 ? "text-green-600" : "text-red-600"}
@@ -854,6 +842,27 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
           gradient={dispBalance >= 0 ? "linear-gradient(135deg, white 0%, #f0fdf4 100%)" : "linear-gradient(135deg, white 0%, #fef2f2 100%)"}
         />
       </div>
+
+      {/* Category spending breakdown */}
+      {categoryBreakdown.length > 0 && (
+        <div className="rounded-xl border bg-card px-3 py-2.5 space-y-2">
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Spending by category</p>
+          <div className="space-y-1.5">
+            {categoryBreakdown.slice(0, 6).map(cat => {
+              const pct = categoryBreakdown[0].value > 0 ? Math.round((cat.value / categoryBreakdown[0].value) * 100) : 0;
+              return (
+                <div key={cat.key} className="flex items-center gap-2">
+                  <span className="text-[10px] text-muted-foreground w-20 truncate shrink-0">{cat.name}</span>
+                  <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: cat.color }} />
+                  </div>
+                  <span className="text-[10px] font-medium tabular-nums shrink-0 w-16 text-right">{fmt(cat.value)}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* CC carry-forward summary */}
       {ccStatementTotal > 0 && (
@@ -866,20 +875,10 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
         </div>
       )}
 
-      {/* Progress */}
-      <div className="space-y-1.5">
-        <div className="flex justify-between text-xs text-muted-foreground">
-          <span>{isProjected ? "Paid: none" : `Paid ${fmt(totalPaid)}`}</span>
-          <span className="font-semibold text-foreground">{dispPaidPct}%</span>
-          <span>{isProjected ? `Projected ${fmt(dispPending)}` : `Pending ${fmt(dispPending)}`}</span>
-        </div>
-        <Progress value={dispPaidPct} className="h-1.5" />
-      </div>
-
       {/* Two-column layout on desktop */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
         {/* Entries */}
-        <div className="lg:col-span-2 space-y-4">
+        <div className="lg:col-span-3 space-y-4">
           {Object.entries(grouped).map(([groupKey, items]) => {
             const firstEntry   = items.find(i => i.kind === "entry");
             const firstProj    = items.find(i => i.kind === "projected");
@@ -1011,7 +1010,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
         </div>
 
         {/* Right column: Recharts loaded lazily so it doesn't block navigation */}
-        <div className="space-y-4">
+        <div className="lg:col-span-2 space-y-4">
           {!isProjected && <PaidSummaryPanel entries={entries} totalCommitted={totalCommitted} grandIncome={grandIncome} adHocExpense={adHocExpense} fmt={fmt} />}
           <DashboardCharts
             trendData={trendData}
@@ -1020,6 +1019,10 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             prevMonthName={isProjected ? null : prevMonthName}
             fixedAmount={dispFixed}
             variableAmount={dispVariable}
+            fyIncome={recentMonths.length > 1 ? fyIncome : undefined}
+            fyExpenses={recentMonths.length > 1 ? fyExpenses : undefined}
+            fyBalance={recentMonths.length > 1 ? fyBalance : undefined}
+            fyMonths={recentMonths.length}
           />
         </div>
       </div>

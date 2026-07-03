@@ -18,6 +18,10 @@ interface DashboardChartsProps {
   prevMonthName: string | null;
   fixedAmount: number;
   variableAmount: number;
+  fyIncome?: number;
+  fyExpenses?: number;
+  fyBalance?: number;
+  fyMonths?: number;
 }
 
 export function DashboardCharts({
@@ -27,6 +31,10 @@ export function DashboardCharts({
   prevMonthName,
   fixedAmount,
   variableAmount,
+  fyIncome,
+  fyExpenses,
+  fyBalance,
+  fyMonths,
 }: DashboardChartsProps) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
@@ -97,12 +105,12 @@ export function DashboardCharts({
         <Card>
           <CardHeader className="pb-2 pt-3 px-4">
             <CardTitle className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-              6-Month Trend
+              {fyMonths ? `${fyMonths}-Month Trend` : "Trend"}
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-4 pb-3">
-            <ResponsiveContainer width="100%" height={110}>
-              <BarChart data={trendData} barSize={8} barGap={2}>
+          <CardContent className="px-4 pb-3 space-y-2">
+            <ResponsiveContainer width="100%" height={120}>
+              <BarChart data={trendData} barSize={10} barGap={2}>
                 <XAxis
                   dataKey="name"
                   tick={{ fontSize: 9, fill: "#9ca3af" }}
@@ -119,6 +127,19 @@ export function DashboardCharts({
                 <Bar dataKey="Expenses" fill="#fca5a5" radius={[2, 2, 0, 0]} opacity={0.85} />
               </BarChart>
             </ResponsiveContainer>
+            {fyIncome !== undefined && fyExpenses !== undefined && fyBalance !== undefined && (
+              <div className="flex items-center justify-between pt-1 border-t">
+                <span className="text-[10px] text-muted-foreground">
+                  In: <span className="text-green-600 font-semibold">{fmt(fyIncome)}</span>
+                </span>
+                <span className="text-[10px] text-muted-foreground">
+                  Out: <span className="text-red-500 font-semibold">{fmt(fyExpenses)}</span>
+                </span>
+                <span className={cn("text-[10px] font-semibold", fyBalance >= 0 ? "text-green-600" : "text-red-500")}>
+                  {fyBalance >= 0 ? "+" : "-"}{fmt(Math.abs(fyBalance))}
+                </span>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
