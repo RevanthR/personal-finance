@@ -1347,9 +1347,10 @@ function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, 
   }
 
   const totalPaidOut = shown.reduce((s, e) => s + paidAmt(e), 0);
-  const partialEntries = entries.filter(e => !e.isPaid && e.paidAmount != null && e.paidAmount > 0);
+  const partialEntries = entries.filter(e => !e.isPaid && e.paidAmount != null && e.paidAmount > 0 && e.template.category !== "CREDIT_CARD");
   const partialTotal = partialEntries.reduce((s, e) => s + (e.paidAmount ?? 0), 0);
-  const fullyPaidCount = entries.filter(e => e.isPaid).length;
+  const nonCCEntries = entries.filter(e => !isPreLift(e) && e.template.category !== "CREDIT_CARD");
+  const fullyPaidCount = nonCCEntries.filter(e => e.isPaid).length;
 
   return (
     <div className="rounded-xl border bg-card overflow-hidden">
@@ -1363,7 +1364,7 @@ function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, 
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <span className="text-sm font-semibold">Paid</span>
-              <span className="text-xs text-muted-foreground">{fullyPaidCount} of {entries.length}</span>
+              <span className="text-xs text-muted-foreground">{fullyPaidCount} of {nonCCEntries.length}</span>
               {partialEntries.length > 0 && (
                 <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">
                   {partialEntries.length} partial payment{partialEntries.length !== 1 ? "s" : ""}
