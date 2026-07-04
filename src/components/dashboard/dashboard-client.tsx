@@ -885,7 +885,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
 
         {/* CC bill being paid this month */}
         <MetricCard
-          label="CC bill"
+          label="Current month CC bill"
           value={dispCCBills > 0 ? fmt(dispCCBills) : "—"}
           icon={<CreditCard className="w-4 h-4" />}
           color="text-purple-600"
@@ -905,7 +905,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
 
         {/* Next month CC liability */}
         <MetricCard
-          label="Current month CC bill"
+          label="Next month CC bill"
           value={dispCCNextMonth > 0 ? fmt(dispCCNextMonth) : "—"}
           icon={<AlertCircle className="w-4 h-4" />}
           color={dispCCNextMonth > 0 ? "text-blue-600" : "text-muted-foreground"}
