@@ -63,5 +63,6 @@ export async function POST(req: NextRequest) {
   });
 
   revalidatePath("/receivables");
+  revalidatePath("/dashboard");
   return NextResponse.json(entry);
 }

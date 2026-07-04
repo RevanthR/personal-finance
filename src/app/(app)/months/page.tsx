@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { computeLoanAmortization, computeChitEndDate } from "@/lib/loan-utils";
 import { YearOverviewClient, type MonthData } from "@/components/months/year-overview-client";
-import { CATEGORY_LABELS, CATEGORY_COLORS } from "@/lib/utils";
+import { CATEGORY_LABELS, CATEGORY_COLORS, MONTHS } from "@/lib/utils";
 import type { AnalyticsData } from "@/components/months/stats-breakdown";
 
 function getFY(month: number, year: number) {
@@ -282,11 +282,6 @@ export default async function MonthsPage() {
         catMap.set(cat, (catMap.get(cat) ?? 0) + a.amount);
       }
     }
-    const COLORS: Record<string, string> = {
-      HOUSE_MAINTENANCE: "#fb923c", LOAN: "#f87171", CHIT_FUND: "#a78bfa",
-      CREDIT_CARD: "#60a5fa", SAVINGS: "#34d399", PERSONAL: "#f472b6",
-      MISCELLANEOUS: "#94a3b8",
-    };
     const categoryBreakdown = [...catMap.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 6)
@@ -294,7 +289,7 @@ export default async function MonthsPage() {
         key,
         name: key.split("_").map(w => w[0] + w.slice(1).toLowerCase()).join(" "),
         value,
-        color: COLORS[key] ?? "#94a3b8",
+        color: CATEGORY_COLORS[key] ?? "#94a3b8",
       }));
 
     // CC sub-category breakdown from adHocItems notes ("CardName · Subcategory")
@@ -333,7 +328,6 @@ export default async function MonthsPage() {
   }
 
   // ── Analytics computation ────────────────────────────────────────
-  const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const fyActual = analyticsMonths.filter(m => {
     const { fyStart: mFYStart } = getFY(m.month, m.year);
     return mFYStart === fyStart;
@@ -421,7 +415,7 @@ export default async function MonthsPage() {
       .reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
       + m.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0);
     return {
-      label: MONTHS_SHORT[m.month - 1],
+      label: MONTHS[m.month - 1],
       income,
       expenses,
       balance: income - expenses,
@@ -544,7 +538,6 @@ export default async function MonthsPage() {
       eventMap.get(key)!.push({ name: c.name, type: "CHIT", monthlyRelief: c.monthlyAmount });
     }
   }
-  const MONTHS_SHORT2 = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   let runningCommitted = loans.reduce((s, l) => s + l.monthlyAmount, 0)
     + chits.reduce((s, c) => s + (c.isLifted && c.remainingMonths > 0 ? c.monthlyAmount : 0), 0);
   const currentMonthlyCommitted = runningCommitted;
@@ -555,7 +548,7 @@ export default async function MonthsPage() {
       const monthsFromNow = Math.max(0, (y - todayY2) * 12 + (m - todayM2));
       const totalRelief = items.reduce((s, i) => s + i.monthlyRelief, 0);
       runningCommitted -= totalRelief;
-      return { month: m, year: y, label: `${MONTHS_SHORT2[m - 1]} ${y}`, monthsFromNow, items, totalRelief, committedAfter: runningCommitted };
+      return { month: m, year: y, label: `${MONTHS[m - 1]} ${y}`, monthsFromNow, items, totalRelief, committedAfter: runningCommitted };
     });
 
   // CC annual subcats
@@ -582,7 +575,7 @@ export default async function MonthsPage() {
       .filter(e => !isCurrentM || !pendingCCBillIds.has(e.id))
       .reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
       + m.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0);
-    return { label: `${MONTHS_SHORT[m.month - 1]} ${m.year}`, income, expenses, balance: income - expenses, savingsRate: income > 0 ? Math.round(((income - expenses) / income) * 100) : 0 };
+    return { label: `${MONTHS[m.month - 1]} ${m.year}`, income, expenses, balance: income - expenses, savingsRate: income > 0 ? Math.round(((income - expenses) / income) * 100) : 0 };
   });
   const bestMonth = allTimeStats.length ? [...allTimeStats].sort((a, b) => b.savingsRate - a.savingsRate)[0] : null;
   const worstMonth = allTimeStats.length ? [...allTimeStats].sort((a, b) => a.savingsRate - b.savingsRate)[0] : null;

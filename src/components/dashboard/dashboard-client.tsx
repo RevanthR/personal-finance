@@ -3,7 +3,7 @@
 import { useState, useMemo, useTransition } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { formatCurrency, formatMonthYear, getCategoryDisplay, getCategoryColor } from "@/lib/utils";
+import { formatCurrency, formatMonthYear, getCategoryDisplay, getCategoryColor, MONTHS, pendingAmountKicks } from "@/lib/utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -108,9 +108,18 @@ const INCOME_SOURCES = [
   { value: "refund",    label: "Refund",    dbCategory: "OTHER_INCOME" },
   { value: "other",     label: "Other",     dbCategory: "OTHER_INCOME" },
 ];
-const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 const CC_SUBCATEGORIES = ["Food", "Coffee", "Groceries", "Fuel", "Shopping", "Travel", "Health", "Bills", "Entertainment", "Other"];
+
+function net(e: EntryWithTemplate) { return e.amount - (e.cashbackAmount ?? 0); }
+function effectivePaid(e: EntryWithTemplate): number {
+  if (e.isPaid) return e.paidAmount ?? net(e);
+  return e.paidAmount ?? 0;
+}
+function isPreLiftChit(e: EntryWithTemplate) { return e.template.category === "CHIT_FUND" && !e.template.chitFund?.isLifted; }
+function isBillPending(e: EntryWithTemplate, isCurrentMonth: boolean, todayDay: number) {
+  return isCurrentMonth && e.template.category === "CREDIT_CARD" && e.template.statementDay != null && todayDay < e.template.statementDay;
+}
 
 function parseCCSubcat(notes: string | null): string {
   if (!notes) return "Other";
@@ -316,43 +325,29 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     }
     return incomeTemplates.reduce((sum, t) => {
       if (overrides.has(t.id)) return sum + overrides.get(t.id)!;
-      const kicks = t.pendingAmount != null && t.pendingFromYear != null && t.pendingFromMonth != null &&
-        (viewYear > t.pendingFromYear || (viewYear === t.pendingFromYear && viewMonth >= t.pendingFromMonth));
-      return sum + (kicks ? t.pendingAmount! : t.amount);
+      return sum + (pendingAmountKicks(t, viewMonth, viewYear) ? t.pendingAmount! : t.amount);
     }, 0);
   }, [incomeTemplates, adHocItems, viewMonth, viewYear]);
 
+  const hasCCCards = ccTemplates.length > 0;
   const adHocIncome      = useMemo(() => adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0), [adHocItems]);
   // Post-close CC charges live in statementAmount (next month's bill); pre-close go into entry.amount (Recurring)
   const ccStatementTotal = useMemo(() => entries.filter(e => e.template.category === "CREDIT_CARD").reduce((s, e) => s + (e.statementAmount ?? 0), 0), [entries]);
   const adHocExpense     = useMemo(() => adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0), [adHocItems]);
   const totalIncome = templateIncome;
   const grandIncome = totalIncome + adHocIncome;
-  const net = (e: EntryWithTemplate) => e.amount - (e.cashbackAmount ?? 0);
-  // Actual money paid: paidAmount if set, else net(e) for fully paid, else 0
-  const effectivePaid = (e: EntryWithTemplate): number => {
-    if (e.isPaid) return e.paidAmount ?? net(e);
-    return e.paidAmount ?? 0;
-  };
-  // CC entries where the statement hasn't closed yet don't count as liabilities
-  const isBillPending = (e: EntryWithTemplate) =>
-    isCurrentMonth &&
-    e.template.category === "CREDIT_CARD" &&
-    e.template.statementDay != null &&
-    todayDay < e.template.statementDay;
-  const isPreLiftChit  = (e: EntryWithTemplate) => e.template.category === "CHIT_FUND" && !e.template.chitFund?.isLifted;
-  const totalCommitted = useMemo(() => entries.filter(e => !isBillPending(e) && !isPreLiftChit(e)).reduce((s, e) => s + net(e), 0), [entries, isCurrentMonth, todayDay]);
-  const totalPaid      = useMemo(() => entries.filter(e => !isBillPending(e) && !isPreLiftChit(e)).reduce((s, e) => s + effectivePaid(e), 0), [entries, isCurrentMonth, todayDay]);
+  const totalCommitted = useMemo(() => entries.filter(e => !isBillPending(e, isCurrentMonth, todayDay) && !isPreLiftChit(e)).reduce((s, e) => s + net(e), 0), [entries, isCurrentMonth, todayDay]);
+  const totalPaid      = useMemo(() => entries.filter(e => !isBillPending(e, isCurrentMonth, todayDay) && !isPreLiftChit(e)).reduce((s, e) => s + effectivePaid(e), 0), [entries, isCurrentMonth, todayDay]);
   const chitInvestment = useMemo(() => entries.filter(e => isPreLiftChit(e)).reduce((s, e) => s + net(e), 0), [entries]);
   const totalPending   = totalCommitted - totalPaid;
   const balance        = grandIncome - totalCommitted - chitInvestment - adHocExpense;
   const paidPercent    = totalCommitted > 0 ? Math.round((totalPaid / totalCommitted) * 100) : 0;
-  const pendingCount   = useMemo(() => entries.filter(e => !e.isPaid && !isBillPending(e) && !isPreLiftChit(e)).length, [entries, isCurrentMonth, todayDay]);
+  const pendingCount   = useMemo(() => entries.filter(e => !e.isPaid && !isBillPending(e, isCurrentMonth, todayDay) && !isPreLiftChit(e)).length, [entries, isCurrentMonth, todayDay]);
 
   // ── New metric breakdown ───────────────────────────────────────────────────
   // CC bill payments this month (obligation from last month's statement)
   const ccBillsThisMonth = useMemo(() =>
-    entries.filter(e => e.template.category === "CREDIT_CARD" && !isBillPending(e))
+    entries.filter(e => e.template.category === "CREDIT_CARD" && !isBillPending(e, isCurrentMonth, todayDay))
            .reduce((s, e) => s + net(e), 0),
     [entries, isCurrentMonth, todayDay]
   );
@@ -454,7 +449,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     }
     const totals: Record<string, { amount: number; templateCat: string; customCat: string | null }> = {};
     for (const e of entries) {
-      if (isBillPending(e)) continue;
+      if (isBillPending(e, isCurrentMonth, todayDay)) continue;
       const key = e.template.customCategory ?? e.template.category;
       if (!totals[key]) totals[key] = { amount: 0, templateCat: e.template.category, customCat: e.template.customCategory };
       totals[key].amount += net(e);
@@ -532,7 +527,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   }, [recentMonths, currentMonth, totalCommitted, adHocExpense]);
 
   const fixedAmount = useMemo(
-    () => entries.filter(e => e.template.isFixed && !isBillPending(e) && !isPreLiftChit(e)).reduce((s, e) => s + net(e), 0),
+    () => entries.filter(e => e.template.isFixed && !isBillPending(e, isCurrentMonth, todayDay) && !isPreLiftChit(e)).reduce((s, e) => s + net(e), 0),
     [entries, isCurrentMonth, todayDay]
   );
   const variableAmount = totalCommitted - fixedAmount + adHocExpense;
@@ -851,7 +846,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       )}
 
       {/* Metric cards */}
-      <div className="grid grid-cols-3 lg:grid-cols-6 gap-2">
+      <div className={cn("grid gap-2", hasCCCards ? "grid-cols-3 lg:grid-cols-6" : "grid-cols-2 lg:grid-cols-4")}>
         {/* Income */}
         {isProjected ? (
           <MetricCard label="Est. Income" value={fmt(dispIncome)} icon={<Wallet className="w-4 h-4" />} color="text-green-600" sub="projected" gradient="linear-gradient(135deg, white 0%, #f0fdf4 100%)" />
@@ -883,15 +878,17 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
           gradient="linear-gradient(135deg, white 0%, #fef2f2 100%)"
         />
 
-        {/* CC bill being paid this month */}
-        <MetricCard
-          label="CC due"
-          value={dispCCBills > 0 ? fmt(dispCCBills) : "—"}
-          icon={<CreditCard className="w-4 h-4" />}
-          color="text-purple-600"
-          sub={isProjected ? "last month's bill" : dispCCBills > 0 ? "from last month" : "no CC bills"}
-          gradient="linear-gradient(135deg, white 0%, #faf5ff 100%)"
-        />
+        {/* CC bill being paid this month — only when user has CC cards */}
+        {hasCCCards && (
+          <MetricCard
+            label="CC due"
+            value={dispCCBills > 0 ? fmt(dispCCBills) : "—"}
+            icon={<CreditCard className="w-4 h-4" />}
+            color="text-purple-600"
+            sub={isProjected ? "last month's bill" : dispCCBills > 0 ? "from last month" : "no CC bills"}
+            gradient="linear-gradient(135deg, white 0%, #faf5ff 100%)"
+          />
+        )}
 
         {/* Cash spend (ad-hoc from account) */}
         <MetricCard
@@ -903,15 +900,17 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
           gradient="linear-gradient(135deg, white 0%, #fff7ed 100%)"
         />
 
-        {/* Next month CC liability */}
-        <MetricCard
-          label="CC next"
-          value={dispCCNextMonth > 0 ? fmt(dispCCNextMonth) : "—"}
-          icon={<AlertCircle className="w-4 h-4" />}
-          color={dispCCNextMonth > 0 ? "text-blue-600" : "text-muted-foreground"}
-          sub={isProjected ? "unknown" : dispCCNextMonth > 0 ? "building up" : "nothing yet"}
-          gradient="linear-gradient(135deg, white 0%, #eff6ff 100%)"
-        />
+        {/* Next month CC liability — only when user has CC cards */}
+        {hasCCCards && (
+          <MetricCard
+            label="CC next"
+            value={dispCCNextMonth > 0 ? fmt(dispCCNextMonth) : "—"}
+            icon={<AlertCircle className="w-4 h-4" />}
+            color={dispCCNextMonth > 0 ? "text-blue-600" : "text-muted-foreground"}
+            sub={isProjected ? "unknown" : dispCCNextMonth > 0 ? "building up" : "nothing yet"}
+            gradient="linear-gradient(135deg, white 0%, #eff6ff 100%)"
+          />
+        )}
 
         {/* Net cash position */}
         <MetricCard
@@ -953,7 +952,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             const txItems = items.filter(i => i.kind === "transaction").map(i => i.data as AdHocItem);
             const catTotal = isProjected
               ? projectedItems.reduce((s, i) => s + i.data.amount, 0)
-              : entryItems.filter(i => !isBillPending(i.data)).reduce((s, i) => s + net(i.data), 0);
+              : entryItems.filter(i => !isBillPending(i.data, isCurrentMonth, todayDay)).reduce((s, i) => s + net(i.data), 0);
             const catPaid  = entryItems.reduce((s, i) => s + effectivePaid(i.data), 0);
             const catCarry = entryItems.reduce((s, i) => s + (i.data.statementAmount ?? 0), 0);
             const allPaid  = !isProjected && entryItems.length > 0 && entryItems.every(i => i.data.isPaid);
@@ -1024,7 +1023,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                             entry={item.data}
                             txItems={cardTxs}
                             nextMonthName={nextMonthName}
-                            isBillPending={isBillPending(item.data)}
+                            isBillPending={isBillPending(item.data, isCurrentMonth, todayDay)}
                             onUpdate={handleEntryUpdate}
                             onDelete={handleAdHocDelete}
                             onClearStatement={handleClearStatement}
@@ -1101,9 +1100,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                 <div className="space-y-1">
                   {incomeTemplates.map(t => {
                     const override = adHocItems.find(i => i.notes === `income_override:${t.id}`);
-                    const kicks = !override && t.pendingAmount != null && t.pendingFromYear != null && t.pendingFromMonth != null &&
-                      (viewYear > t.pendingFromYear || (viewYear === t.pendingFromYear && viewMonth >= t.pendingFromMonth));
-                    const baseAmt = kicks ? t.pendingAmount! : t.amount;
+                    const baseAmt = !override && pendingAmountKicks(t, viewMonth, viewYear) ? t.pendingAmount! : t.amount;
                     const effectiveAmt = override ? override.amount : baseAmt;
                     const isEditing = editingIncomeTemplateId === t.id;
 

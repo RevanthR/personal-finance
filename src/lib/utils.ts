@@ -63,6 +63,17 @@ export const CATEGORY_COLORS: Record<string, string> = {
   OTHER_INCOME:     "#6b7280",
 };
 
+export const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"] as const;
+
+export function pendingAmountKicks(
+  t: { pendingAmount: number | null; pendingFromMonth: number | null; pendingFromYear: number | null },
+  month: number,
+  year: number,
+): boolean {
+  if (t.pendingAmount == null || t.pendingFromMonth == null || t.pendingFromYear == null) return false;
+  return year > t.pendingFromYear || (year === t.pendingFromYear && month >= t.pendingFromMonth);
+}
+
 export const EXPENSE_CATEGORIES = [
   "HOUSE_MAINTENANCE", "LOAN", "CHIT_FUND", "CREDIT_CARD", "SAVINGS", "PERSONAL", "MISCELLANEOUS",
 ] as const;

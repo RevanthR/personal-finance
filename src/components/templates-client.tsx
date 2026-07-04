@@ -12,7 +12,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  formatCurrency, CATEGORY_LABELS, INCOME_CATEGORIES, getCategoryDisplay, getCategoryColor, cn,
+  formatCurrency, CATEGORY_LABELS, INCOME_CATEGORIES, getCategoryDisplay, getCategoryColor, cn, MONTHS,
 } from "@/lib/utils";
 import { Plus, Pencil, Trash2, Lock, ChevronDown, TrendingUp, SlidersHorizontal } from "lucide-react";
 import { computeLoanAmortization, computeChitCurrentMonth, computeChitEndDate } from "@/lib/loan-utils";
@@ -21,8 +21,6 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import { ForecloseDialog } from "@/components/templates/foreclose-dialog";
 import { usePrivacy } from "@/contexts/privacy-context";
-
-const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 type Template = {
   id: string;

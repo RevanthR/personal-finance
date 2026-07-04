@@ -4,11 +4,9 @@ import {
   ComposedChart, Bar, Line, XAxis, YAxis, Tooltip,
   Cell, ResponsiveContainer, ReferenceLine,
 } from "recharts";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, MONTHS } from "@/lib/utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import type { MonthData } from "./year-overview-client";
-
-const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 export function YearChart({ months }: { months: MonthData[] }) {
   const { hidden } = usePrivacy();

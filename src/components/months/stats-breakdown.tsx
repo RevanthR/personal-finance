@@ -3,7 +3,7 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatCurrency, CATEGORY_COLORS } from "@/lib/utils";
+import { formatCurrency, CATEGORY_COLORS, MONTHS } from "@/lib/utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus } from "lucide-react";
@@ -95,8 +95,6 @@ export type AnalyticsData = {
   freelancePct: number;
   incomeSources: { salary: number; freelance: number; other: number; adHoc: number };
 };
-
-const MONTHS_FULL = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 function pct(a: number, b: number) {
   return b > 0 ? Math.round((a / b) * 100) : 0;
@@ -282,7 +280,7 @@ function ReliefTimeline({ data, fmt }: {
                       </div>
                       {a.monthsRemaining > 0 && l.endsMonth && l.endsYear && (
                         <p className="text-[10px] text-muted-foreground">
-                          {a.monthsRemaining} months left · clears {MONTHS_FULL[l.endsMonth - 1]} {l.endsYear}
+                          {a.monthsRemaining} months left · clears {MONTHS[l.endsMonth - 1]} {l.endsYear}
                           <span className="text-emerald-600 ml-1">· saves {fmt(l.monthlyAmount)}/mo</span>
                         </p>
                       )}
@@ -291,7 +289,7 @@ function ReliefTimeline({ data, fmt }: {
                 ) : (
                   <p className="text-[10px] text-muted-foreground/60 italic">
                     {l.endsMonth && l.endsYear
-                      ? `Ends ${MONTHS_FULL[l.endsMonth - 1]} ${l.endsYear} · add interest rate in Templates for breakdown`
+                      ? `Ends ${MONTHS[l.endsMonth - 1]} ${l.endsYear} · add interest rate in Templates for breakdown`
                       : "Add interest rate + outstanding in Templates to see principal/interest breakdown."}
                   </p>
                 )}
@@ -528,7 +526,7 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
                               <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">Done</span>
                             ) : (
                               <>
-                                <p className="text-xs font-semibold">ends {MONTHS_FULL[c.endsMonth - 1]} {c.endsYear}</p>
+                                <p className="text-xs font-semibold">ends {MONTHS[c.endsMonth - 1]} {c.endsYear}</p>
                                 <p className="text-[10px] text-muted-foreground">{c.remainingMonths} mo left</p>
                               </>
                             )}

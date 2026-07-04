@@ -70,5 +70,6 @@ export async function POST(req: NextRequest) {
   });
 
   revalidatePath("/receivables");
+  revalidatePath("/dashboard");
   return NextResponse.json(card, { status: 201 });
 }

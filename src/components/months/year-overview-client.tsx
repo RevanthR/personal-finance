@@ -3,9 +3,8 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useState } from "react";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, cn, MONTHS } from "@/lib/utils";
 import { usePrivacy } from "@/contexts/privacy-context";
-import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import type { AnalyticsData } from "./stats-breakdown";
 import { PageCoach } from "@/components/coach/page-coach";
@@ -21,7 +20,6 @@ const YearChart = dynamic(
   { ssr: false, loading: () => <div className="h-52 rounded-xl border bg-muted animate-pulse" /> }
 );
 
-const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 function ordinal(n: number) {
   const s = ["th","st","nd","rd"], v = n % 100;

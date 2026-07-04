@@ -61,6 +61,7 @@ export async function PATCH(
   });
 
   revalidatePath("/receivables");
+  revalidatePath("/dashboard");
   return NextResponse.json(updated);
 }
 
