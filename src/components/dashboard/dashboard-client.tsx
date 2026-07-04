@@ -14,7 +14,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Wallet, TrendingDown, CheckCircle2, AlertCircle, TrendingUp, Plus, Pencil, ChevronDown, Trash2, CreditCard, ChevronLeft, ChevronRight,
+  Wallet, TrendingDown, CheckCircle2, AlertCircle, TrendingUp, Plus, Pencil, ChevronDown, Trash2, CreditCard, ChevronLeft, ChevronRight, IndianRupee,
 } from "lucide-react";
 import { toast } from "sonner";
 import { EntryRow } from "./entry-row";
@@ -345,10 +345,38 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   const totalPaid      = useMemo(() => entries.filter(e => !isBillPending(e) && !isPreLiftChit(e)).reduce((s, e) => s + effectivePaid(e), 0), [entries, isCurrentMonth, todayDay]);
   const chitInvestment = useMemo(() => entries.filter(e => isPreLiftChit(e)).reduce((s, e) => s + net(e), 0), [entries]);
   const totalPending   = totalCommitted - totalPaid;
-  // CC purchases this month pay next month — excluded from current balance
   const balance        = grandIncome - totalCommitted - chitInvestment - adHocExpense;
   const paidPercent    = totalCommitted > 0 ? Math.round((totalPaid / totalCommitted) * 100) : 0;
   const pendingCount   = useMemo(() => entries.filter(e => !e.isPaid && !isBillPending(e) && !isPreLiftChit(e)).length, [entries, isCurrentMonth, todayDay]);
+
+  // ── New metric breakdown ───────────────────────────────────────────────────
+  // CC bill payments this month (obligation from last month's statement)
+  const ccBillsThisMonth = useMemo(() =>
+    entries.filter(e => e.template.category === "CREDIT_CARD" && !isBillPending(e))
+           .reduce((s, e) => s + net(e), 0),
+    [entries, isCurrentMonth, todayDay]
+  );
+  // Fixed recurring obligations paid from account (everything except CC)
+  const recurringNonCC = totalCommitted - ccBillsThisMonth;
+  // Next month's CC liability: post-close charges (statementAmount) + rolling underpaid bills
+  const ccNextMonth = useMemo(() =>
+    entries.filter(e => e.template.category === "CREDIT_CARD").reduce((s, e) => {
+      const rolling = !e.isPaid ? Math.max(0, (e.billedAmount ?? e.amount) - e.amount) : 0;
+      return s + (e.statementAmount ?? 0) + rolling;
+    }, 0),
+    [entries]
+  );
+  // Non-CC pending count and paid percent for progress bar
+  const nonCCPaidAmount  = useMemo(() =>
+    entries.filter(e => e.template.category !== "CREDIT_CARD" && !isPreLiftChit(e))
+           .reduce((s, e) => s + effectivePaid(e), 0),
+    [entries]
+  );
+  const nonCCPendingCount = useMemo(() =>
+    entries.filter(e => e.template.category !== "CREDIT_CARD" && !e.isPaid && !isPreLiftChit(e)).length,
+    [entries]
+  );
+  const nonCCPaidPercent = recurringNonCC > 0 ? Math.round((nonCCPaidAmount / recurringNonCC) * 100) : 0;
   const nextMonthName  = MONTHS[todayMonth % 12]; // todayMonth is 1-12; % 12 maps Dec→Jan correctly
 
   type GroupedItem =
@@ -510,15 +538,20 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   const variableAmount = totalCommitted - fixedAmount + adHocExpense;
 
   // Projected-mode display overrides — shadow the actual values when viewing a future month
-  const dispIncome    = isProjected ? (projectedIncome ?? 0) : grandIncome;
-  const dispCommitted = isProjected ? projEntries.reduce((s, e) => s + e.amount, 0) : totalCommitted;
-  const dispAdHoc     = isProjected ? 0 : adHocExpense;
-  const dispBalance   = dispIncome - dispCommitted - dispAdHoc;
-  const dispPaidPct   = isProjected ? 0 : paidPercent;
-  const dispPending   = isProjected ? dispCommitted : totalPending;
-  const dispFixed     = isProjected ? projEntries.filter(e => e.isFixed).reduce((s, e) => s + e.amount, 0) : fixedAmount;
-  const dispVariable  = isProjected ? (dispCommitted - dispFixed) : variableAmount;
-  const dispSavings   = dispIncome > 0 ? Math.round(((dispIncome - dispCommitted - dispAdHoc) / dispIncome) * 100) : 0;
+  const dispIncome          = isProjected ? (projectedIncome ?? 0) : grandIncome;
+  const dispCommitted       = isProjected ? projEntries.reduce((s, e) => s + e.amount, 0) : totalCommitted;
+  const dispAdHoc           = isProjected ? 0 : adHocExpense;
+  const dispBalance         = dispIncome - dispCommitted - dispAdHoc;
+  const dispPaidPct         = isProjected ? 0 : paidPercent;
+  const dispPending         = isProjected ? dispCommitted : totalPending;
+  const dispFixed           = isProjected ? projEntries.filter(e => e.isFixed).reduce((s, e) => s + e.amount, 0) : fixedAmount;
+  const dispVariable        = isProjected ? (dispCommitted - dispFixed) : variableAmount;
+  const dispSavings         = dispIncome > 0 ? Math.round(((dispIncome - dispCommitted - dispAdHoc) / dispIncome) * 100) : 0;
+  const dispRecurringNonCC  = isProjected ? projEntries.filter(e => e.category !== "CREDIT_CARD").reduce((s, e) => s + e.amount, 0) : recurringNonCC;
+  const dispCCBills         = isProjected ? projEntries.filter(e => e.category === "CREDIT_CARD").reduce((s, e) => s + e.amount, 0) : ccBillsThisMonth;
+  const dispCCNextMonth     = isProjected ? 0 : ccNextMonth;
+  const dispNonCCPaidPct    = isProjected ? 0 : nonCCPaidPercent;
+  const dispNonCCPending    = isProjected ? dispRecurringNonCC : (recurringNonCC - nonCCPaidAmount);
 
   const upcomingPayments = useMemo(() => {
     const isCurrentMonth = currentMonth?.month === todayMonth && currentMonth?.year === todayYear;
@@ -819,6 +852,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
 
       {/* Metric cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* Income */}
         {isProjected ? (
           <MetricCard label="Est. Income" value={fmt(dispIncome)} icon={<Wallet className="w-4 h-4" />} color="text-green-600" sub="projected" gradient="linear-gradient(135deg, white 0%, #f0fdf4 100%)" />
         ) : (
@@ -833,56 +867,71 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                   </div>
                 </div>
                 <p className="text-base font-bold">{fmt(grandIncome)}</p>
-                {adHocIncome > 0 && (
-                  <p className="text-[10px] text-green-600 mt-0.5">
-                    +{fmt(adHocIncome)} one-time
-                  </p>
-                )}
+                {adHocIncome > 0 && <p className="text-[10px] text-green-600 mt-0.5">+{fmt(adHocIncome)} one-time</p>}
               </CardContent>
             </Card>
           </button>
         )}
-        <MetricCard label="Spending" value={fmt(dispCommitted)} icon={<TrendingDown className="w-4 h-4" />} color="text-red-600" sub={isProjected ? `${projEntries.length} items` : pendingCount > 0 ? `${pendingCount} pending` : undefined} gradient="linear-gradient(135deg, white 0%, #fef2f2 100%)" />
-        {!isProjected && chitInvestment > 0 && (
-          <MetricCard label="Invested" value={fmt(chitInvestment)} icon={<TrendingUp className="w-4 h-4" />} color="text-amber-600" sub="chit fund" gradient="linear-gradient(135deg, white 0%, #fffbeb 100%)" />
-        )}
+
+        {/* Recurring (non-CC fixed obligations) */}
         <MetricCard
-          label="Extra Spending"
-          value={isProjected ? "-" : fmt(adHocExpense)}
-          icon={<CheckCircle2 className="w-4 h-4" />}
-          color="text-amber-600"
-          sub={isProjected ? "not yet tracked" : adHocExpense > 0 ? `${adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").length} transaction${adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").length !== 1 ? "s" : ""}` : "no extra expenses"}
-          gradient="linear-gradient(135deg, white 0%, #fffbeb 100%)"
+          label="Recurring"
+          value={fmt(dispRecurringNonCC)}
+          icon={<TrendingDown className="w-4 h-4" />}
+          color="text-red-600"
+          sub={isProjected ? `${projEntries.filter(e => e.category !== "CREDIT_CARD").length} items` : nonCCPendingCount > 0 ? `${nonCCPendingCount} pending` : "all paid"}
+          gradient="linear-gradient(135deg, white 0%, #fef2f2 100%)"
         />
+
+        {/* CC bill being paid this month */}
         <MetricCard
-          label={dispBalance >= 0 ? "Est. Leftover" : "Est. Deficit"}
+          label="CC bill"
+          value={dispCCBills > 0 ? fmt(dispCCBills) : "—"}
+          icon={<CreditCard className="w-4 h-4" />}
+          color="text-purple-600"
+          sub={isProjected ? "last month's bill" : dispCCBills > 0 ? "from last month" : "no CC bills"}
+          gradient="linear-gradient(135deg, white 0%, #faf5ff 100%)"
+        />
+
+        {/* Cash spend (ad-hoc from account) */}
+        <MetricCard
+          label="Cash spend"
+          value={isProjected ? "—" : adHocExpense > 0 ? fmt(adHocExpense) : "—"}
+          icon={<IndianRupee className="w-4 h-4" />}
+          color="text-orange-600"
+          sub={isProjected ? "not yet tracked" : adHocExpense > 0 ? `${adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").length} txn` : "nothing yet"}
+          gradient="linear-gradient(135deg, white 0%, #fff7ed 100%)"
+        />
+
+        {/* Next month CC liability */}
+        <MetricCard
+          label={`${nextMonthName} CC bill`}
+          value={dispCCNextMonth > 0 ? fmt(dispCCNextMonth) : "—"}
+          icon={<AlertCircle className="w-4 h-4" />}
+          color={dispCCNextMonth > 0 ? "text-blue-600" : "text-muted-foreground"}
+          sub={isProjected ? "unknown" : dispCCNextMonth > 0 ? "building up" : "nothing yet"}
+          gradient="linear-gradient(135deg, white 0%, #eff6ff 100%)"
+        />
+
+        {/* Net cash position */}
+        <MetricCard
+          label={dispBalance >= 0 ? "Net left" : "Deficit"}
           value={fmt(Math.abs(dispBalance))}
           icon={dispBalance >= 0 ? <TrendingUp className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
           color={dispBalance >= 0 ? "text-green-600" : "text-red-600"}
-          sub={isProjected ? "if no extra expenses" : dispBalance >= 0 ? "after all expenses" : "exceeds income"}
+          sub={isProjected ? "projected" : dispBalance >= 0 ? "in your account" : "overspent income"}
           gradient={dispBalance >= 0 ? "linear-gradient(135deg, white 0%, #f0fdf4 100%)" : "linear-gradient(135deg, white 0%, #fef2f2 100%)"}
         />
       </div>
 
-      {/* CC carry-forward summary */}
-      {ccStatementTotal > 0 && (
-        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-blue-50 border border-blue-200">
-          <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
-            <span className="text-sm text-blue-800 font-medium">Rolls into {nextMonthName}&apos;s bill</span>
-          </div>
-          <span className="text-sm text-blue-900 font-bold">{fmt(ccStatementTotal)}</span>
-        </div>
-      )}
-
-      {/* Progress */}
+      {/* Progress — non-CC recurring only */}
       <div className="space-y-1.5">
         <div className="flex justify-between text-xs text-muted-foreground">
-          <span>{isProjected ? "Paid: none" : `Paid ${fmt(totalPaid)}`}</span>
-          <span className="font-semibold text-foreground">{dispPaidPct}%</span>
-          <span>{isProjected ? `Projected ${fmt(dispPending)}` : `Pending ${fmt(dispPending)}`}</span>
+          <span>{isProjected ? "Paid: none" : `Paid ${fmt(nonCCPaidAmount)}`}</span>
+          <span className="font-semibold text-foreground">{dispNonCCPaidPct}%</span>
+          <span>{isProjected ? `Projected ${fmt(dispNonCCPending)}` : `Pending ${fmt(Math.max(0, dispNonCCPending))}`}</span>
         </div>
-        <Progress value={dispPaidPct} className="h-1.5" />
+        <Progress value={dispNonCCPaidPct} className="h-1.5" />
       </div>
 
       {/* Two-column layout on desktop */}
