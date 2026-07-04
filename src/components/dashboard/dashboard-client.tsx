@@ -851,7 +851,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       )}
 
       {/* Metric cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-3 lg:grid-cols-6 gap-2">
         {/* Income */}
         {isProjected ? (
           <MetricCard label="Est. Income" value={fmt(dispIncome)} icon={<Wallet className="w-4 h-4" />} color="text-green-600" sub="projected" gradient="linear-gradient(135deg, white 0%, #f0fdf4 100%)" />
@@ -905,7 +905,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
 
         {/* Next month CC liability */}
         <MetricCard
-          label={`${nextMonthName} CC bill`}
+          label="Next month CC bill"
           value={dispCCNextMonth > 0 ? fmt(dispCCNextMonth) : "—"}
           icon={<AlertCircle className="w-4 h-4" />}
           color={dispCCNextMonth > 0 ? "text-blue-600" : "text-muted-foreground"}
