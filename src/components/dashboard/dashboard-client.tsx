@@ -924,14 +924,14 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
         />
       </div>
 
-      {/* Progress — non-CC recurring only */}
+      {/* Progress — recurring + CC bill this month */}
       <div className="space-y-1.5">
         <div className="flex justify-between text-xs text-muted-foreground">
-          <span>{isProjected ? "Paid: none" : `Paid ${fmt(nonCCPaidAmount)}`}</span>
-          <span className="font-semibold text-foreground">{dispNonCCPaidPct}%</span>
-          <span>{isProjected ? `Projected ${fmt(dispNonCCPending)}` : `Pending ${fmt(Math.max(0, dispNonCCPending))}`}</span>
+          <span>{isProjected ? "Paid: none" : `Paid ${fmt(totalPaid)}`}</span>
+          <span className="font-semibold text-foreground">{dispPaidPct}%</span>
+          <span>{isProjected ? `Projected ${fmt(dispPending)}` : `Pending ${fmt(Math.max(0, totalPending))}`}</span>
         </div>
-        <Progress value={dispNonCCPaidPct} className="h-1.5" />
+        <Progress value={dispPaidPct} className="h-1.5" />
       </div>
 
       {/* Two-column layout on desktop */}
