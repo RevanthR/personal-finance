@@ -219,8 +219,9 @@ export function TemplatesClient({
     if (created.length > 0) toast.success(`Imported ${created.length} income template${created.length !== 1 ? "s" : ""}`);
   }
 
-  const incomeTemplates = templates.filter(t => t.templateType === "INCOME");
-  const expenseTemplates = templates.filter(t => t.templateType !== "INCOME");
+  const incomeTemplates  = templates.filter(t => t.templateType === "INCOME");
+  const expenseTemplates = templates.filter(t => t.templateType !== "INCOME" && t.category !== "CREDIT_CARD");
+  const ccTemplateCount  = templates.filter(t => t.category === "CREDIT_CARD").length;
 
   const groupedIncome = incomeTemplates.reduce<Record<string, Template[]>>((acc, t) => {
     const key = t.customCategory ?? t.category;
@@ -399,6 +400,16 @@ export function TemplatesClient({
 
         {/* ── Expenses tab ── */}
         <TabsContent value="expenses" className="space-y-4">
+          {ccTemplateCount > 0 && (
+            <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/60 border border-border">
+              <span className="text-xs text-muted-foreground">
+                {ccTemplateCount} credit card{ccTemplateCount !== 1 ? "s" : ""} managed separately
+              </span>
+              <a href="/receivables" className="text-xs font-medium text-primary hover:underline">
+                Manage cards →
+              </a>
+            </div>
+          )}
           {expenseTemplates.length === 0 && (
             <div className="text-center py-10 text-muted-foreground text-sm">
               No expense templates yet.

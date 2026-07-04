@@ -72,6 +72,7 @@ model User {
   months            Month[]
   templates         LineItemTemplate[]
   chitFunds         ChitFund[]
+  creditCards       CreditCard[]
   receivables       Receivable[]
   pushSubscriptions PushSubscription[]
   payments          Payment[]
@@ -154,6 +155,7 @@ model LineItemTemplate {
   createdAt        DateTime       @default(now())
   entries          MonthlyEntry[]
   chitFund         ChitFund?
+  creditCard       CreditCard?
 }
 
 // One record per calendar month per user
@@ -189,6 +191,7 @@ model MonthlyEntry {
   cashbackAmount  Float?
   notes           String?
   statementAmount Float?
+  billedAmount    Float?           // CC only: obligation at month open; used for carry-forward instead of amount
   createdAt       DateTime         @default(now())
 
   @@unique([monthId, templateId])
@@ -213,6 +216,18 @@ model ChitFund {
   accumulatedSavings    Float            @default(0)
   endDate               DateTime?
   createdAt             DateTime         @default(now())
+}
+
+// Credit card — linked 1:1 to a LineItemTemplate of category CREDIT_CARD
+model CreditCard {
+  id           String           @id @default(cuid())
+  templateId   String           @unique
+  template     LineItemTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bank         String?
+  network      String?          // "Visa" | "Mastercard" | "Rupay" | "Amex"
+  createdAt    DateTime         @default(now())
 }
 
 // One-off income or expense for a month

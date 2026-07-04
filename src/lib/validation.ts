@@ -46,13 +46,14 @@ export const MonthPatchSchema = z.object({
 });
 
 export const EntryPatchSchema = z.object({
-  entryId:       z.string().min(1),
-  isPaid:        z.boolean().optional(),
-  amount:        zMoney.optional(),
-  notes:         zNotes,
+  entryId:        z.string().min(1),
+  isPaid:         z.boolean().optional(),
+  amount:         zMoney.optional(),
+  billedAmount:   zMoney.optional(),
+  notes:          zNotes,
   statementAmount: z.number().finite().min(0).nullable().optional(),
-  paidAmount:    z.number().finite().min(0).nullable().optional(),
-  cashbackAmount:z.number().finite().min(0).nullable().optional(),
+  paidAmount:     z.number().finite().min(0).nullable().optional(),
+  cashbackAmount: z.number().finite().min(0).nullable().optional(),
 });
 
 export const AdHocPostSchema = z.object({

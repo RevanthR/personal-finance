@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
         entries: {
           select: {
             templateId: true, statementAmount: true,
-            isPaid: true, amount: true, paidAmount: true, cashbackAmount: true,
+            isPaid: true, amount: true, billedAmount: true, paidAmount: true, cashbackAmount: true,
             template: { select: { category: true, name: true } },
           },
         },
@@ -74,6 +74,8 @@ export async function POST(req: NextRequest) {
 
     // Carry-forward: unpaid/partially-paid entries from previous month
     // Excluded: LOAN and CHIT_FUND (intentional — those are tracked differently)
+    // CC uses billedAmount (the actual obligation) instead of amount, so manually
+    // setting amount=0 does not erase the carry-forward.
     const CARRY_FORWARD_EXCLUDE = new Set(["LOAN", "CHIT_FUND"]);
     const prevCCOutstanding = new Map<string, number>(); // templateId → outstanding
     const nonCCCarryForwards: { name: string; amount: number; category: string }[] = [];
@@ -81,7 +83,8 @@ export async function POST(req: NextRequest) {
       if (e.isPaid) continue;
       const cat = e.template.category;
       if (CARRY_FORWARD_EXCLUDE.has(cat)) continue;
-      const outstanding = e.amount - (e.cashbackAmount ?? 0) - (e.paidAmount ?? 0);
+      const obligation = cat === "CREDIT_CARD" ? (e.billedAmount ?? e.amount) : e.amount;
+      const outstanding = obligation - (e.cashbackAmount ?? 0) - (e.paidAmount ?? 0);
       if (outstanding <= 0) continue;
       if (cat === "CREDIT_CARD") {
         prevCCOutstanding.set(e.templateId, outstanding);
@@ -138,18 +141,20 @@ export async function POST(req: NextRequest) {
       }
 
       let amount = baseAmount;
+      let billedAmount: number | undefined;
       if (t.chitFund) {
         amount = t.chitFund.isLifted
           ? (t.chitFund.monthlyLiftedAmount ?? baseAmount)
           : t.chitFund.monthlyUnliftedAmount;
       } else if (t.category === "CREDIT_CARD") {
-        amount = prevStatements.get(t.id) ?? baseAmount;
+        amount = prevStatements.get(t.id) ?? 0;
         amount += prevCCOutstanding.get(t.id) ?? 0;
+        billedAmount = amount; // snapshot obligation at creation
       }
 
       await db.monthlyEntry.upsert({
         where: { monthId_templateId: { monthId: monthRecord.id, templateId: t.id } },
-        create: { monthId: monthRecord.id, templateId: t.id, amount },
+        create: { monthId: monthRecord.id, templateId: t.id, amount, ...(billedAmount !== undefined && { billedAmount }) },
         update: {},
       });
     }

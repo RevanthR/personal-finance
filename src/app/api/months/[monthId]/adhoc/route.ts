@@ -77,7 +77,7 @@ export async function POST(
       });
       if (template) {
         entry = await db.monthlyEntry.create({
-          data: { monthId, templateId, amount: template.amount, isPaid: false, statementAmount: 0 },
+          data: { monthId, templateId, amount: 0, billedAmount: 0, isPaid: false, statementAmount: 0 },
         });
       }
     }
@@ -92,8 +92,11 @@ export async function POST(
       if (isPreClose) {
         updatedEntry = await db.monthlyEntry.update({
           where: { id: entry.id },
-          data: { amount: entry.amount + body.amount },
-          select: { id: true, amount: true, statementAmount: true },
+          data: {
+            amount: entry.amount + body.amount,
+            billedAmount: (entry.billedAmount ?? entry.amount) + body.amount,
+          },
+          select: { id: true, amount: true, statementAmount: true, billedAmount: true },
         });
       } else {
         updatedEntry = await recomputeStatementAmount(monthId, entry.id, cardName, statementDay);
@@ -139,7 +142,7 @@ export async function DELETE(
         },
       },
       select: {
-        id: true, amount: true, statementAmount: true,
+        id: true, amount: true, statementAmount: true, billedAmount: true,
         template: { select: { statementDay: true } },
       },
     });
@@ -150,10 +153,14 @@ export async function DELETE(
       const isPreClose = statementDay !== null && expenseDay <= statementDay;
 
       if (isPreClose) {
+        const newAmount = Math.max(0, entry.amount - item.amount);
         updatedEntry = await db.monthlyEntry.update({
           where: { id: entry.id },
-          data: { amount: Math.max(0, entry.amount - item.amount) },
-          select: { id: true, amount: true, statementAmount: true },
+          data: {
+            amount: newAmount,
+            billedAmount: Math.max(0, (entry.billedAmount ?? entry.amount) - item.amount),
+          },
+          select: { id: true, amount: true, statementAmount: true, billedAmount: true },
         });
       } else {
         updatedEntry = await recomputeStatementAmount(monthId, entry.id, cardName, statementDay);

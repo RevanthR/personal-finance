@@ -91,7 +91,7 @@ type RecentMonthSummary = {
 
 type EntryWithTemplate = {
   id: string; amount: number; isPaid: boolean; paidOn: string | null; paidAmount: number | null; cashbackAmount: number | null; notes: string | null; templateId: string;
-  statementAmount: number | null;
+  statementAmount: number | null; billedAmount: number | null;
   template: { id: string; name: string; category: string; customCategory: string | null; isFixed: boolean; dueDateDay: number | null; statementDay: number | null; chitFund: { isLifted: boolean; accumulatedSavings: number; startDate: string | null; durationMonths: number | null } | null; loanInterestRate: number | null; loanRateType: string | null; loanOriginalPrincipal: number | null; loanStartDate: string | null; loanOutstandingOverride: number | null };
 };
 
@@ -209,6 +209,16 @@ function CCCardBlock({
           </span>
         )}
       </div>
+
+      {/* Billed vs paying indicator — only when they differ */}
+      {entry.billedAmount != null && entry.billedAmount > entry.amount && (
+        <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-amber-100 bg-amber-50/60">
+          <span className="text-[10px] text-amber-700">
+            Statement <span className="font-semibold">{fmt(entry.billedAmount)}</span>
+            {" · "}Rolling <span className="font-semibold">{fmt(entry.billedAmount - entry.amount)}</span> to next month
+          </span>
+        </div>
+      )}
 
       {/* Current bill */}
       <div className="p-2">

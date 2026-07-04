@@ -15,7 +15,7 @@ export async function PATCH(
 
   const parsed = validate(EntryPatchSchema, await req.json());
   if (!parsed.ok) return parsed.response;
-  const { entryId, isPaid, amount, notes, statementAmount, paidAmount, cashbackAmount } = parsed.data;
+  const { entryId, isPaid, amount, billedAmount, notes, statementAmount, paidAmount, cashbackAmount } = parsed.data;
 
   // Resolve payment state — paidAmount takes precedence over isPaid toggle
   const paymentData: Record<string, unknown> = {};
@@ -49,6 +49,7 @@ export async function PATCH(
     data: {
       ...paymentData,
       ...(amount          !== undefined && { amount }),
+      ...(billedAmount    !== undefined && { billedAmount }),
       ...(notes           !== undefined && { notes }),
       ...(statementAmount !== undefined && { statementAmount: statementAmount === null ? null : statementAmount }),
       ...(cashbackAmount  !== undefined && { cashbackAmount: cashbackAmount !== null && cashbackAmount > 0 ? cashbackAmount : null }),
