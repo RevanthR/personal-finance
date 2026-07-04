@@ -147,21 +147,46 @@ function AddCardDialog({ open, onOpenChange, onAdd }: {
 
 // ── CC Card row ───────────────────────────────────────────────────────────────
 
-function CCCardRow({ card, fmt, currentMonthLabel, onEntryUpdate, onDelete }: {
+const NETWORK_ACCENT: Record<string, { bar: string; badge: string }> = {
+  Visa:       { bar: "bg-blue-600",   badge: "bg-blue-50 text-blue-700 border-blue-200" },
+  Mastercard: { bar: "bg-red-500",    badge: "bg-red-50 text-red-700 border-red-200" },
+  Rupay:      { bar: "bg-orange-500", badge: "bg-orange-50 text-orange-700 border-orange-200" },
+  Amex:       { bar: "bg-emerald-600",badge: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+};
+
+function CCCardTile({ card, fmt, currentMonthLabel, onEntryUpdate, onDelete, onMetaUpdate }: {
   card: CCCard;
   fmt: (v: number) => string;
   currentMonthLabel: string;
   onEntryUpdate: (cardTemplateId: string, updates: { amount?: number; billedAmount?: number; isPaid?: boolean }) => Promise<void>;
   onDelete: (cardId: string) => void;
+  onMetaUpdate: (cardId: string, updates: { statementDay?: number | null; dueDateDay?: number | null }) => Promise<void>;
 }) {
-  const entry = card.currentEntry;
-  const billed = entry ? (entry.billedAmount ?? entry.amount) : null;
-  const paying = entry?.amount ?? 0;
+  const entry   = card.currentEntry;
+  const billed  = entry ? (entry.billedAmount ?? entry.amount) : null;
+  const paying  = entry?.amount ?? 0;
   const rolling = billed != null ? Math.max(0, billed - paying) : 0;
-  const [settingBill, setSettingBill] = useState(false);
-  const [billInput, setBillInput]     = useState("");
-  const [saving, setSaving]           = useState(false);
+  const accent  = card.network ? NETWORK_ACCENT[card.network] : null;
+
+  const [settingBill, setSettingBill]     = useState(false);
+  const [billInput, setBillInput]         = useState("");
+  const [saving, setSaving]               = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [editingDates, setEditingDates]   = useState(false);
+  const [stmtInput, setStmtInput]         = useState(String(card.template.statementDay ?? ""));
+  const [dueInput, setDueInput]           = useState(String(card.template.dueDateDay ?? ""));
+  const [savingDates, setSavingDates]     = useState(false);
+
+  async function handleSaveDates() {
+    setSavingDates(true);
+    try {
+      await onMetaUpdate(card.id, {
+        statementDay: stmtInput ? parseInt(stmtInput) : null,
+        dueDateDay:   dueInput  ? parseInt(dueInput)  : null,
+      });
+      setEditingDates(false);
+    } finally { setSavingDates(false); }
+  }
 
   async function handleSetBill() {
     const val = parseFloat(billInput);
@@ -169,129 +194,133 @@ function CCCardRow({ card, fmt, currentMonthLabel, onEntryUpdate, onDelete }: {
     setSaving(true);
     try {
       await onEntryUpdate(card.template.id, { billedAmount: val, amount: val });
-      setSettingBill(false);
-      setBillInput("");
+      setSettingBill(false); setBillInput("");
     } finally { setSaving(false); }
   }
 
-  async function handleMarkPaid() {
-    if (!entry) return;
-    await onEntryUpdate(card.template.id, { isPaid: true });
-  }
-
-  const networkBadgeColor: Record<string, string> = {
-    Visa: "bg-blue-50 text-blue-700 border-blue-200",
-    Mastercard: "bg-red-50 text-red-700 border-red-200",
-    Rupay: "bg-orange-50 text-orange-700 border-orange-200",
-    Amex: "bg-green-50 text-green-700 border-green-200",
-  };
-
   return (
-    <Card className={cn(entry?.isPaid && "opacity-70")}>
-      <CardHeader className="pb-2 px-4 pt-4">
-        <div className="flex items-start justify-between gap-2">
+    <div className={cn(
+      "relative rounded-xl border border-border bg-card overflow-hidden flex flex-col",
+      entry?.isPaid && "opacity-60"
+    )}>
+      {/* Network colour bar */}
+      <div className={cn("h-1 w-full shrink-0", accent?.bar ?? "bg-zinc-200")} />
+
+      <div className="flex flex-col gap-2 px-3 pt-2.5 pb-3 flex-1">
+        {/* Top row: name + delete */}
+        <div className="flex items-start justify-between gap-1">
           <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <CardTitle className="text-sm font-semibold truncate">{card.template.name}</CardTitle>
-              {card.network && (
-                <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded border", networkBadgeColor[card.network] ?? "bg-zinc-50 text-zinc-600 border-zinc-200")}>
-                  {card.network}
-                </span>
-              )}
-              {entry?.isPaid && (
-                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-green-50 text-green-700 border border-green-200">Paid</span>
-              )}
+            <p className="text-xs font-semibold leading-tight truncate">{card.template.name}</p>
+            {card.bank && <p className="text-[10px] text-muted-foreground truncate">{card.bank}</p>}
+          </div>
+          {confirmDelete ? (
+            <div className="flex items-center gap-1 shrink-0">
+              <button className="text-[10px] text-destructive font-medium" onClick={() => onDelete(card.id)}>Yes</button>
+              <button className="text-[10px] text-muted-foreground" onClick={() => setConfirmDelete(false)}>No</button>
             </div>
-            {(card.template.statementDay || card.template.dueDateDay || card.bank) && (
-              <p className="text-[11px] text-muted-foreground mt-0.5">
-                {card.bank && <span>{card.bank} · </span>}
-                {card.template.statementDay && <span>Closes {card.template.statementDay}th · </span>}
-                {card.template.dueDateDay && <span>Due {card.template.dueDateDay}th</span>}
-              </p>
-            )}
-          </div>
-          <div className="flex items-center gap-1 shrink-0">
-            {confirmDelete ? (
-              <>
-                <Button variant="destructive" size="sm" className="h-6 text-xs px-2" onClick={() => onDelete(card.id)}>Confirm</Button>
-                <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setConfirmDelete(false)}>Cancel</Button>
-              </>
-            ) : (
-              <button onClick={() => setConfirmDelete(true)} className="p-1 rounded text-muted-foreground hover:text-destructive transition-colors">
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
+          ) : (
+            <button onClick={() => setConfirmDelete(true)} className="shrink-0 p-0.5 text-muted-foreground/40 hover:text-destructive transition-colors">
+              <Trash2 className="w-3 h-3" />
+            </button>
+          )}
         </div>
-      </CardHeader>
 
-      <CardContent className="px-4 pb-4">
-        {entry ? (
-          <div className="space-y-2">
-            <div className="grid grid-cols-2 gap-2">
-              <div className="rounded-lg bg-zinc-50 border border-zinc-100 px-3 py-2">
-                <p className="text-[10px] text-muted-foreground mb-0.5">Statement balance</p>
-                <p className="text-sm font-bold tabular-nums">{fmt(billed ?? 0)}</p>
-              </div>
-              <div className="rounded-lg bg-zinc-50 border border-zinc-100 px-3 py-2">
-                <p className="text-[10px] text-muted-foreground mb-0.5">Paying this month</p>
-                <p className="text-sm font-bold tabular-nums">{fmt(paying)}</p>
-              </div>
-            </div>
-            {rolling > 0 && (
-              <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-amber-50 border border-amber-200">
-                <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                <span className="text-xs text-amber-700">
-                  <span className="font-semibold">{fmt(rolling)}</span> rolls into next month&apos;s bill
-                </span>
-              </div>
-            )}
-            {entry.statementAmount != null && entry.statementAmount > 0 && (
-              <p className="text-[10px] text-muted-foreground">
-                <span className="font-medium">{fmt(entry.statementAmount)}</span> accumulating for next bill
-              </p>
-            )}
-            {!entry.isPaid && (
-              <div className="flex gap-2">
-                <Button size="sm" className="flex-1 h-8 text-xs bg-green-600 hover:bg-green-700" onClick={handleMarkPaid}>
-                  <CheckCircle2 className="w-3.5 h-3.5 mr-1" />Mark Paid
-                </Button>
-                <Button size="sm" variant="outline" className="h-8 text-xs px-3" onClick={() => { setBillInput(String(billed ?? 0)); setSettingBill(true); }}>
-                  Edit bill
-                </Button>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">No bill set for {currentMonthLabel}.</p>
-            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => { setBillInput(""); setSettingBill(true); }}>
-              <Plus className="w-3.5 h-3.5 mr-1" />Set bill amount
-            </Button>
-          </div>
-        )}
-
-        {settingBill && (
-          <div className="mt-3 pt-3 border-t border-border space-y-2">
-            <Label className="text-xs">Statement balance for {currentMonthLabel} (₹)</Label>
-            <div className="flex gap-2">
+        {/* Amount */}
+        <div className="flex-1">
+          {settingBill ? (
+            <div className="flex gap-1">
               <Input
                 type="number" min={0} step={1}
                 value={billInput} onChange={e => setBillInput(e.target.value)}
-                placeholder="e.g. 61134" className="flex-1 h-8 text-sm"
-                autoFocus
+                placeholder="amount" className="h-6 text-xs px-2 flex-1 min-w-0"
+                autoFocus onKeyDown={e => { if (e.key === "Enter") handleSetBill(); if (e.key === "Escape") setSettingBill(false); }}
               />
-              <Button size="sm" className="h-8 text-xs" disabled={saving} onClick={handleSetBill}>
-                {saving ? "Saving..." : "Set"}
-              </Button>
-              <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setSettingBill(false)}>
-                Cancel
-              </Button>
+              <button className="text-[10px] font-medium text-primary shrink-0" onClick={handleSetBill} disabled={saving}>
+                {saving ? "…" : "Set"}
+              </button>
+              <button className="text-[10px] text-muted-foreground shrink-0" onClick={() => setSettingBill(false)}>✕</button>
+            </div>
+          ) : billed != null ? (
+            <div>
+              <p className="text-base font-bold tabular-nums leading-none">{fmt(billed)}</p>
+              {rolling > 0 && (
+                <p className="text-[10px] text-amber-600 mt-0.5">
+                  <AlertCircle className="w-2.5 h-2.5 inline mr-0.5" />{fmt(rolling)} rolling
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="text-[11px] text-muted-foreground/60 italic">no bill</p>
+          )}
+        </div>
+
+        {/* Footer: dates + network + action */}
+        {editingDates ? (
+          <div className="space-y-1.5">
+            <div className="grid grid-cols-2 gap-1">
+              <div>
+                <p className="text-[9px] text-muted-foreground mb-0.5">Closes (day)</p>
+                <Input type="number" min={1} max={31} value={stmtInput} onChange={e => setStmtInput(e.target.value)}
+                  placeholder="15" className="h-6 text-xs px-2" />
+              </div>
+              <div>
+                <p className="text-[9px] text-muted-foreground mb-0.5">Due (day)</p>
+                <Input type="number" min={1} max={31} value={dueInput} onChange={e => setDueInput(e.target.value)}
+                  placeholder="5" className="h-6 text-xs px-2" />
+              </div>
+            </div>
+            <div className="flex gap-1">
+              <button onClick={handleSaveDates} disabled={savingDates} className="text-[10px] font-semibold text-primary hover:underline">
+                {savingDates ? "…" : "Save"}
+              </button>
+              <button onClick={() => setEditingDates(false)} className="text-[10px] text-muted-foreground hover:underline">Cancel</button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-end justify-between gap-1">
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-1">
+                {(card.template.statementDay || card.template.dueDateDay) ? (
+                  <p className="text-[10px] text-muted-foreground leading-tight">
+                    {card.template.statementDay && `cls ${card.template.statementDay}`}
+                    {card.template.statementDay && card.template.dueDateDay && " · "}
+                    {card.template.dueDateDay && `due ${card.template.dueDateDay}`}
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-muted-foreground/50 leading-tight italic">no dates</p>
+                )}
+                <button onClick={() => setEditingDates(true)} className="text-muted-foreground/40 hover:text-muted-foreground transition-colors">
+                  <Pencil className="w-2.5 h-2.5" />
+                </button>
+              </div>
+              {card.network && (
+                <span className={cn("inline-block text-[9px] font-medium px-1 py-0.5 rounded border", accent?.badge ?? "bg-zinc-50 text-zinc-600 border-zinc-200")}>
+                  {card.network}
+                </span>
+              )}
+            </div>
+            <div className="shrink-0 text-right">
+              {entry?.isPaid ? (
+                <span className="text-[10px] font-medium text-green-600">✓ Paid</span>
+              ) : billed != null ? (
+                <div className="flex flex-col items-end gap-0.5">
+                  <button onClick={() => onEntryUpdate(card.template.id, { isPaid: true })} className="text-[10px] font-semibold text-green-700 hover:text-green-800 leading-none">
+                    Mark paid
+                  </button>
+                  <button onClick={() => { setBillInput(String(billed)); setSettingBill(true); }} className="text-[10px] text-muted-foreground hover:text-foreground leading-none">
+                    Edit
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => { setBillInput(""); setSettingBill(true); }} className="text-[10px] font-semibold text-primary hover:underline leading-none">
+                  Set bill
+                </button>
+              )}
             </div>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -351,6 +380,20 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
     if (!res.ok) { toast.error("Failed to remove card"); return; }
     setCards(prev => prev.filter(c => c.id !== cardId));
     toast.success("Card removed");
+  }
+
+  async function handleCardMetaUpdate(cardId: string, updates: { statementDay?: number | null; dueDateDay?: number | null }) {
+    const res = await fetch(`/api/credit-cards/${cardId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) { toast.error("Failed to update dates"); return; }
+    const updated = await res.json();
+    setCards(prev => prev.map(c => c.id === cardId
+      ? { ...c, template: { ...c.template, statementDay: updated.template.statementDay, dueDateDay: updated.template.dueDateDay } }
+      : c));
+    toast.success("Dates updated");
   }
 
   // ── Chit handlers ──────────────────────────────────────────────────────────
@@ -467,15 +510,16 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
               <p className="text-xs mt-1">Add your cards to track bills and carry-forwards.</p>
             </div>
           )}
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
             {activeCards.map(card => (
-              <CCCardRow
+              <CCCardTile
                 key={card.id}
                 card={card}
                 fmt={fmt}
                 currentMonthLabel={currentMonthLabel}
                 onEntryUpdate={handleCardEntryUpdate}
                 onDelete={handleDeleteCard}
+                onMetaUpdate={handleCardMetaUpdate}
               />
             ))}
           </div>
