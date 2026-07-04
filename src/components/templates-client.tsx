@@ -595,10 +595,10 @@ function TemplateDialog({
   // Apply to current month (new templates only)
   const [addToCurrentMonth, setAddToCurrentMonth] = useState(true);
 
-  // Part 2: scheduled future change — auto-expand for income edits
+  // Part 2: scheduled future change — auto-expand only if a pending change is already saved
   const isEditingIncome = isEditing && (initial?.templateType === "INCOME");
   const [showSchedule, setShowSchedule] = useState(
-    isEditing && (initial?.pendingAmount != null || isEditingIncome)
+    isEditing && initial?.pendingAmount != null
   );
   const nextMonth = (() => {
     const d = new Date(); d.setMonth(d.getMonth() + 1);

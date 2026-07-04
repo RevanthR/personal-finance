@@ -526,12 +526,11 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       .slice(0, 6);
   }, [entries, currentMonth, todayMonth, todayYear]);
 
-  // Collapsible groups: track user overrides; default = collapse if all entries paid
+  // Collapsible groups: track user overrides; default = always collapsed
   const [groupToggled, setGroupToggled] = useState<Record<string, boolean>>({});
   function isGroupCollapsed(key: string, entryItems: { data: EntryWithTemplate }[]): boolean {
     if (key in groupToggled) return groupToggled[key];
-    // projected: entryItems is empty → defaults to expanded (false); actual: collapses when all paid
-    return entryItems.length > 0 && entryItems.every(i => i.data.isPaid);
+    return true;
   }
   function toggleGroup(key: string, entryItems: { data: EntryWithTemplate }[]) {
     setGroupToggled(prev => ({ ...prev, [key]: !isGroupCollapsed(key, entryItems) }));
@@ -1260,7 +1259,7 @@ function ProjectedEntryRow({ entry }: { entry: ProjectedEntry }) {
 }
 
 function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, fmt }: { entries: EntryWithTemplate[]; totalCommitted: number; grandIncome: number; adHocExpense: number; fmt: (v: number) => string }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const netAmt = (e: EntryWithTemplate) => e.amount - (e.cashbackAmount ?? 0);
   const paidAmt = (e: EntryWithTemplate): number => e.isPaid ? (e.paidAmount ?? netAmt(e)) : (e.paidAmount ?? 0);
   const isPreLift = (e: EntryWithTemplate) => e.template.category === "CHIT_FUND" && !e.template.chitFund?.isLifted;
