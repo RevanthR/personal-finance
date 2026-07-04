@@ -905,7 +905,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
 
         {/* Next month CC liability */}
         <MetricCard
-          label="Next month CC bill"
+          label="Current month CC bill"
           value={dispCCNextMonth > 0 ? fmt(dispCCNextMonth) : "—"}
           icon={<AlertCircle className="w-4 h-4" />}
           color={dispCCNextMonth > 0 ? "text-blue-600" : "text-muted-foreground"}
