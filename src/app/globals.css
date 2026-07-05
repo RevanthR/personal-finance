@@ -9,19 +9,19 @@
   --card-foreground:        #09090b;
   --popover:                #ffffff;
   --popover-foreground:     #09090b;
-  --primary:                #09090b;
-  --primary-foreground:     #fafafa;
-  --secondary:              #f4f4f5;
-  --secondary-foreground:   #18181b;
-  --muted:                  #f4f4f5;
-  --muted-foreground:       #71717a;
-  --accent:                 #f4f4f5;
-  --accent-foreground:      #18181b;
+  --primary:                #1d4ed8;   /* blue-700 */
+  --primary-foreground:     #ffffff;
+  --secondary:              #eff6ff;   /* blue-50 */
+  --secondary-foreground:   #1e3a5f;
+  --muted:                  #f0f4f8;   /* cool slate-blue tint */
+  --muted-foreground:       #64748b;   /* slate-500 */
+  --accent:                 #eff6ff;   /* blue-50 */
+  --accent-foreground:      #1e3a5f;
   --destructive:            #dc2626;
   --destructive-foreground: #fafafa;
-  --border:                 #e4e4e7;
-  --input:                  #e4e4e7;
-  --ring:                   #09090b;
+  --border:                 #dde3ed;   /* slate-200 with blue tint */
+  --input:                  #dde3ed;
+  --ring:                   #1d4ed8;   /* blue-700 */
   --radius:                 0.5rem;
 
   /* ── Semantic financial colors ───────────────────────────────────────────── */

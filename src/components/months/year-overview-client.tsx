@@ -161,7 +161,7 @@ export function YearOverviewClient({
       {/* Year-end projection */}
       <Card className={cn(
         "border-2",
-        yearEndBalance >= 0 ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"
+        yearEndBalance >= 0 ? "bg-emerald-50/60 border-emerald-200" : "bg-red-50/60 border-red-200"
       )}>
         <CardContent className="p-4">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
@@ -211,7 +211,7 @@ export function YearOverviewClient({
               <div className={cn(
                 "rounded-xl p-2.5 border select-none",
                 m.isCurrent
-                  ? "bg-emerald-50 border-emerald-400 ring-1 ring-emerald-300"
+                  ? "bg-blue-50 border-blue-400 ring-1 ring-blue-200"
                   : m.isPopulated
                     ? "bg-card border-border hover:border-zinc-400 transition-colors cursor-pointer"
                     : "bg-zinc-50 border-dashed border-zinc-200 hover:border-zinc-400 transition-colors cursor-pointer"
@@ -220,7 +220,7 @@ export function YearOverviewClient({
                 <div className="flex items-center justify-between mb-2">
                   <span className={cn(
                     "text-xs font-bold",
-                    m.isCurrent ? "text-emerald-600" : "text-foreground"
+                    m.isCurrent ? "text-blue-600" : "text-foreground"
                   )}>
                     {MONTHS[m.month - 1]}
                   </span>

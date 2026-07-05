@@ -14,14 +14,14 @@ export default function DashboardLoading() {
       </div>
 
       {/* FY strip */}
-      <Card className="bg-slate-900 border-slate-800">
+      <Card className="bg-[#1a2840] border-[#243350]">
         <CardContent className="p-3">
-          <Skeleton className="h-3 w-40 mb-3 bg-slate-700" />
+          <Skeleton className="h-3 w-40 mb-3 bg-[#243350]" />
           <div className="grid grid-cols-3 gap-3">
             {[0, 1, 2].map(i => (
               <div key={i} className="space-y-1">
-                <Skeleton className="h-2.5 w-12 bg-slate-700" />
-                <Skeleton className="h-4 w-20 bg-slate-700" />
+                <Skeleton className="h-2.5 w-12 bg-[#243350]" />
+                <Skeleton className="h-4 w-20 bg-[#243350]" />
               </div>
             ))}
           </div>
