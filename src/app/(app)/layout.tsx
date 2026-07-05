@@ -33,7 +33,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <WelcomeModal />
       <PwaInstallBanner />
       <PullToRefresh />
-      <div className="flex flex-col h-screen overflow-hidden bg-[#f0f4fa]">
+      <div className="flex flex-col h-screen overflow-hidden bg-white">
         {showTrialBanner && <TrialBanner trialEndsAt={user.trialEndsAt!} />}
         <div className="flex flex-1 min-h-0 overflow-hidden">
           <Suspense><NavProgress /></Suspense>

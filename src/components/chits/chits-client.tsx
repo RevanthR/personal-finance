@@ -158,16 +158,16 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
       <div className="grid grid-cols-2 gap-3">
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground mb-1">Monthly Commitment</p>
-            <p className="text-2xl font-bold">
+            <p className="text-xs text-gray-400 uppercase tracking-widest font-medium mb-1">Monthly Commitment</p>
+            <p className="text-2xl font-bold tabular-nums tracking-tight">
               {fmt(activeChits.reduce((s, c) => s + c.monthlyUnliftedAmount, 0))}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground mb-1">Total Accumulated</p>
-            <p className="text-2xl font-bold text-emerald-600">{fmt(totalSavings)}</p>
+            <p className="text-xs text-gray-400 uppercase tracking-widest font-medium mb-1">Total Accumulated</p>
+            <p className="text-2xl font-bold tabular-nums tracking-tight text-emerald-600">{fmt(totalSavings)}</p>
           </CardContent>
         </Card>
       </div>
@@ -186,7 +186,7 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-base">{chit.template.name}</CardTitle>
-                      <Badge variant="secondary" className="text-xs">
+                      <Badge className="text-xs bg-amber-50 text-amber-700 border border-amber-200">
                         <TrendingUp className="w-3 h-3 mr-1" />
                         Saving
                       </Badge>
@@ -249,7 +249,7 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base">{chit.template.name}</CardTitle>
                     <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-xs text-indigo-600 border-indigo-300">
+                      <Badge variant="outline" className="text-xs text-gray-500 border-gray-200">
                         <TrendingDown className="w-3 h-3 mr-1" />
                         Lifted
                       </Badge>

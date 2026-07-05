@@ -5,9 +5,9 @@ import { IndianRupee, LayoutDashboard, TrendingUp, SlidersHorizontal, Coins } fr
 import { cn } from "@/lib/utils";
 
 const features = [
-  { icon: LayoutDashboard, color: "text-indigo-500 bg-indigo-50", label: "Dashboard", desc: "Mark bills paid, track monthly progress." },
-  { icon: TrendingUp, color: "text-blue-500 bg-blue-50", label: "Statistics", desc: "Full-year income vs expense view." },
-  { icon: SlidersHorizontal, color: "text-violet-500 bg-violet-50", label: "Configuration", desc: "Set up recurring items once; they auto-fill every month." },
+  { icon: LayoutDashboard, color: "text-amber-600 bg-amber-50", label: "Dashboard", desc: "Mark bills paid, track monthly progress." },
+  { icon: TrendingUp, color: "text-emerald-600 bg-emerald-50", label: "Statistics", desc: "Full-year income vs expense view." },
+  { icon: SlidersHorizontal, color: "text-orange-600 bg-orange-50", label: "Configuration", desc: "Set up recurring items once; they auto-fill every month." },
   { icon: Coins, color: "text-amber-500 bg-amber-50", label: "Chit Funds", desc: "Track contributions, savings, and lifts." },
 ];
 
@@ -18,23 +18,22 @@ export function WelcomeModal() {
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={dismiss} />
+      <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" onClick={dismiss} />
 
-      {/* Bottom sheet on mobile, centered dialog on desktop */}
       <div className="fixed inset-x-0 bottom-0 z-50 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-sm md:px-0 px-0">
         <div className="rounded-t-3xl md:rounded-2xl bg-background shadow-2xl border-t md:border overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
           {/* Handle pill — mobile only */}
           <div className="flex justify-center pt-3 pb-1 md:hidden">
-            <div className="w-10 h-1 rounded-full bg-zinc-300" />
+            <div className="w-10 h-1 rounded-full bg-gray-200" />
           </div>
 
           {/* Header */}
-          <div className="bg-zinc-950 mx-4 md:mx-0 rounded-xl px-5 pt-5 pb-5 text-white text-center mt-2 md:mt-0 md:rounded-none">
-            <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center mx-auto mb-3">
+          <div className="bg-gradient-to-br from-amber-50 to-orange-50 mx-4 md:mx-0 rounded-xl px-5 pt-5 pb-5 text-center mt-2 md:mt-0 md:rounded-none border border-amber-100 md:border-x-0">
+            <div className="w-12 h-12 bg-amber-500 rounded-xl flex items-center justify-center mx-auto mb-3">
               <IndianRupee className="w-6 h-6 text-white" />
             </div>
-            <p className="text-lg font-bold">Welcome to FinanceOS</p>
-            <p className="text-sm text-zinc-400 mt-1">Your personal finance command centre</p>
+            <p className="text-lg font-bold text-gray-900">Welcome to FinanceOS</p>
+            <p className="text-sm text-gray-500 mt-1">Your personal finance command centre</p>
           </div>
 
           {/* Features */}
@@ -55,14 +54,14 @@ export function WelcomeModal() {
             })}
           </div>
 
-          {/* Button — padded for home indicator */}
+          {/* Button */}
           <div
             className="px-5 pt-1 pb-5"
             style={{ paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}
           >
             <button
               onClick={dismiss}
-              className="w-full bg-zinc-950 text-white rounded-xl py-3 text-sm font-medium hover:bg-zinc-800 transition-colors"
+              className="w-full bg-primary text-white rounded-xl py-3 text-sm font-medium hover:bg-primary/90 transition-colors"
             >
               Get started
             </button>

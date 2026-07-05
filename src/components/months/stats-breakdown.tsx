@@ -101,7 +101,7 @@ function pct(a: number, b: number) {
 
 function Bar({ value, max, color }: { value: number; max: number; color: string }) {
   return (
-    <div className="h-1.5 rounded-full bg-zinc-100 overflow-hidden flex-1">
+    <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden flex-1">
       <div className="h-full rounded-full transition-all duration-500" style={{ width: `${max > 0 ? (value / max) * 100 : 0}%`, backgroundColor: color, opacity: 0.7 }} />
     </div>
   );
@@ -221,14 +221,14 @@ function ReliefTimeline({ data, fmt }: {
     <div className="space-y-3">
       {/* Current committed header */}
       <div className="grid grid-cols-2 gap-2">
-        <div className="rounded-xl border bg-red-50 border-red-100 p-3">
-          <p className="text-xs text-red-500 uppercase tracking-wider mb-0.5">Monthly committed</p>
+        <div className="rounded-xl border bg-red-50 border-red-200 p-3">
+          <p className="text-xs text-red-500 uppercase tracking-widest font-medium mb-0.5">Monthly committed</p>
           <p className="text-lg font-bold text-red-500 tabular-nums">{fmt(currentMonthlyCommitted)}</p>
           <p className="text-xs text-red-500">{loans.length} loan{loans.length !== 1 ? "s" : ""} · {chits.filter(c => c.remainingMonths > 0).length} chit{chits.filter(c => c.remainingMonths > 0).length !== 1 ? "s" : ""}</p>
         </div>
         {lastMilestone && (
-          <div className="rounded-xl border bg-emerald-50 border-emerald-100 p-3">
-            <p className="text-xs text-emerald-600 uppercase tracking-wider mb-0.5">After all clear</p>
+          <div className="rounded-xl border bg-emerald-50 border-emerald-200 p-3">
+            <p className="text-xs text-emerald-600 uppercase tracking-widest font-medium mb-0.5">After all clear</p>
             <p className="text-lg font-bold text-emerald-600 tabular-nums">{fmt(Math.max(0, lastMilestone.committedAfter))}</p>
             <p className="text-xs text-emerald-600">by {lastMilestone.label}</p>
           </div>
@@ -273,7 +273,7 @@ function ReliefTimeline({ data, fmt }: {
                         <span className="text-emerald-600 font-medium">{fmt(a.principalThisMonth)} principal this month</span>
                         <span className="text-red-500 font-medium">{fmt(a.interestThisMonth)} interest</span>
                       </div>
-                      <div className="h-1.5 rounded-full bg-zinc-100 overflow-hidden flex">
+                      <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden flex">
                         <div className="h-full bg-emerald-400" style={{ width: `${100 - iPct}%` }} />
                         <div className="h-full bg-red-500 flex-1" />
                       </div>
@@ -307,7 +307,7 @@ function ReliefTimeline({ data, fmt }: {
               const chitItems = ms.items.filter(x => x.type === "CHIT");
               return (
                 <div key={ms.label} className="relative rounded-xl border bg-card px-4 py-3">
-                  <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl bg-indigo-400" />
+                  <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl bg-amber-400" />
                   <div className="flex items-start justify-between gap-3 pl-1">
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
@@ -317,7 +317,7 @@ function ReliefTimeline({ data, fmt }: {
                       <div className="mt-1 space-y-0.5">
                         {chitItems.map(item => (
                           <div key={item.name} className="flex items-center gap-1.5">
-                            <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-indigo-400" />
+                            <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-amber-400" />
                             <span className="text-xs text-muted-foreground">{item.name}</span>
                           </div>
                         ))}
@@ -330,8 +330,8 @@ function ReliefTimeline({ data, fmt }: {
                   </div>
                   {ms.monthsFromNow > 0 && i === 0 && (
                     <div className="mt-2 pl-1">
-                      <div className="h-1 rounded-full bg-zinc-100 overflow-hidden">
-                        <div className="h-full rounded-full bg-emerald-400 transition-all" style={{ width: `${Math.min(100, Math.round((1 - ms.monthsFromNow / (data.chits.find(c => ms.items.some(x => x.name === c.name))?.durationMonths ?? 24)) * 100))}%` }} />
+                      <div className="h-1 rounded-full bg-gray-100 overflow-hidden">
+                        <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${Math.min(100, Math.round((1 - ms.monthsFromNow / (data.chits.find(c => ms.items.some(x => x.name === c.name))?.durationMonths ?? 24)) * 100))}%` }} />
                       </div>
                     </div>
                   )}
@@ -372,7 +372,7 @@ function YoYSection({ current, prev, prevLabel, fmt }: {
             <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: c.color }} />
             <span className="text-xs truncate">{c.name}</span>
             {c.delta !== null && (
-              <span className={cn("text-xs font-semibold px-1 py-0.5 rounded", c.delta > 10 ? "text-red-500 bg-red-50" : c.delta < -10 ? "text-emerald-600 bg-emerald-50" : "text-zinc-500 bg-zinc-100")}>
+              <span className={cn("text-xs font-semibold px-1 py-0.5 rounded", c.delta > 10 ? "text-red-500 bg-red-50" : c.delta < -10 ? "text-emerald-600 bg-emerald-50" : "text-gray-400 bg-gray-100")}>
                 {c.delta > 0 ? "+" : ""}{c.delta}%
               </span>
             )}
@@ -463,14 +463,14 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
                 <CategorySection data={data.spendByCategory} totalExpenses={data.fyExpenses} fmt={fmt} />
                 <div className="mt-3 pt-3 border-t border-border space-y-1.5">
                   {[
-                    { label: "Recurring", value: recurringPct, color: "#818cf8" },
-                    { label: "One-off",   value: 100 - recurringPct, color: "#fbbf24" },
+                    { label: "Recurring", value: recurringPct, color: "#f59e0b" },
+                    { label: "One-off",   value: 100 - recurringPct, color: "#6b7280" },
                     { label: "Essential", value: essentialPct, color: "#64748b" },
-                    { label: "Lifestyle", value: lifestylePct, color: "#f472b6" },
+                    { label: "Lifestyle", value: lifestylePct, color: "#ef4444" },
                   ].map(({ label, value, color }) => (
                     <div key={label} className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground w-16 shrink-0">{label}</span>
-                      <div className="flex-1 h-1.5 rounded-full bg-zinc-100 overflow-hidden">
+                      <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
                         <div className="h-full rounded-full" style={{ width: `${value}%`, backgroundColor: color, opacity: 0.75 }} />
                       </div>
                       <span className="text-xs font-semibold tabular-nums w-8 text-right shrink-0">{value}%</span>
@@ -494,9 +494,9 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
                 <CardContent className="p-3 sm:p-4">
                   <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-3">
                     <div><span className="text-xs text-muted-foreground">Salary </span><span className="text-xs font-semibold text-emerald-600">{fmt(data.incomeSources.salary)}</span></div>
-                    {data.incomeSources.freelance > 0 && <div><span className="text-xs text-muted-foreground">Freelance </span><span className="text-xs font-semibold text-cyan-600">{fmt(data.incomeSources.freelance)}</span><span className="text-xs text-muted-foreground ml-1">({data.freelancePct}%)</span></div>}
+                    {data.incomeSources.freelance > 0 && <div><span className="text-xs text-muted-foreground">Freelance </span><span className="text-xs font-semibold text-emerald-600">{fmt(data.incomeSources.freelance)}</span><span className="text-xs text-muted-foreground ml-1">({data.freelancePct}%)</span></div>}
                     {data.incomeSources.other > 0 && <div><span className="text-xs text-muted-foreground">Other </span><span className="text-xs font-semibold">{fmt(data.incomeSources.other)}</span></div>}
-                    {data.incomeSources.adHoc > 0 && <div><span className="text-xs text-muted-foreground">One-off </span><span className="text-xs font-semibold text-violet-600">{fmt(data.incomeSources.adHoc)}</span></div>}
+                    {data.incomeSources.adHoc > 0 && <div><span className="text-xs text-muted-foreground">One-off </span><span className="text-xs font-semibold text-amber-600">{fmt(data.incomeSources.adHoc)}</span></div>}
                   </div>
                   <IncomeChart data={data.monthlyTrends} />
                 </CardContent>
@@ -531,8 +531,8 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
                             )}
                           </div>
                         </div>
-                        <div className="h-1.5 rounded-full bg-zinc-100 overflow-hidden">
-                          <div className="h-full rounded-full bg-indigo-400 transition-all" style={{ width: `${progressPct}%` }} />
+                        <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                          <div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${progressPct}%` }} />
                         </div>
                         <div className="flex justify-between mt-1">
                           <span className="text-xs text-muted-foreground">month {elapsed} of {c.durationMonths}</span>

@@ -119,8 +119,8 @@ export function YearOverviewClient({
       <PageCoach
         coachKey="months"
         icon={Calendar}
-        iconClass="text-blue-600"
-        bgClass="bg-blue-50 border-blue-100"
+        iconClass="text-amber-600"
+        bgClass="bg-amber-50 border-amber-100"
         title="Your financial year at a glance"
         desc="April to March. Solid months are real data; dashed months are projections. Tap any past month to see its full breakdown."
       />
@@ -211,7 +211,7 @@ export function YearOverviewClient({
               <div className={cn(
                 "rounded-xl p-2.5 border select-none",
                 m.isCurrent
-                  ? "bg-blue-50 border-blue-400 ring-1 ring-blue-200"
+                  ? "bg-amber-50 border-amber-400 ring-1 ring-amber-200"
                   : m.isPopulated
                     ? "bg-card border-border hover:border-zinc-400 transition-colors cursor-pointer"
                     : "bg-zinc-50 border-dashed border-zinc-200 hover:border-zinc-400 transition-colors cursor-pointer"
@@ -220,7 +220,7 @@ export function YearOverviewClient({
                 <div className="flex items-center justify-between mb-2">
                   <span className={cn(
                     "text-xs font-bold",
-                    m.isCurrent ? "text-blue-600" : "text-foreground"
+                    m.isCurrent ? "text-amber-700" : "text-foreground"
                   )}>
                     {MONTHS[m.month - 1]}
                   </span>

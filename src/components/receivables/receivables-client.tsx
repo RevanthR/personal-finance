@@ -65,8 +65,10 @@ interface Props {
 const NETWORKS = ["Visa", "Mastercard", "Rupay", "Amex"] as const;
 const RECV_LABELS: Record<string, string> = { INVESTMENT: "Investment", PERSONAL_LOAN: "Personal Loan", CUSTOM: "Custom" };
 const RECV_COLORS: Record<string, string> = {
-  INVESTMENT: "bg-blue-100 text-blue-700", PERSONAL_LOAN: "bg-orange-100 text-orange-700",
-  CUSTOM: "bg-purple-100 text-purple-700", CHIT_FUND: "bg-amber-100 text-amber-700",
+  INVESTMENT: "bg-emerald-50 text-emerald-700 border border-emerald-200",
+  PERSONAL_LOAN: "bg-amber-50 text-amber-700 border border-amber-200",
+  CUSTOM: "bg-gray-100 text-gray-600 border border-gray-200",
+  CHIT_FUND: "bg-amber-50 text-amber-700 border border-amber-200",
 };
 
 type MainTab = "cards" | "chits" | "receivables";
@@ -148,10 +150,10 @@ function AddCardDialog({ open, onOpenChange, onAdd }: {
 // ── CC Card row ───────────────────────────────────────────────────────────────
 
 const NETWORK_ACCENT: Record<string, { bar: string; badge: string }> = {
-  Visa:       { bar: "bg-blue-600",   badge: "bg-blue-50 text-blue-700 border-blue-200" },
-  Mastercard: { bar: "bg-red-500",    badge: "bg-red-50 text-red-500 border-red-200" },
-  Rupay:      { bar: "bg-orange-500", badge: "bg-orange-50 text-orange-700 border-orange-200" },
-  Amex:       { bar: "bg-emerald-600",badge: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  Visa:       { bar: "bg-gray-400",    badge: "bg-gray-50 text-gray-600 border-gray-200" },
+  Mastercard: { bar: "bg-red-500",     badge: "bg-red-50 text-red-500 border-red-200" },
+  Rupay:      { bar: "bg-amber-500",   badge: "bg-amber-50 text-amber-700 border-amber-200" },
+  Amex:       { bar: "bg-emerald-600", badge: "bg-emerald-50 text-emerald-700 border-emerald-200" },
 };
 
 function CCCardTile({ card, fmt, onEntryUpdate, onDelete, onMetaUpdate }: {
@@ -328,7 +330,7 @@ function CCCardTile({ card, fmt, onEntryUpdate, onDelete, onMetaUpdate }: {
               <Button
                 size="sm"
                 onClick={() => onEntryUpdate(card.template.id, { isPaid: true })}
-                className="flex-1 h-10 bg-emerald-600 hover:bg-emerald-700 text-white"
+                className="flex-1 h-10 bg-primary hover:bg-primary/90 text-white"
               >
                 Mark paid
               </Button>
@@ -586,7 +588,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                       <CardHeader className="pb-2 px-4 pt-4">
                         <div className="flex items-center justify-between gap-2">
                           <CardTitle className="text-sm font-semibold truncate">{chit.template.name}</CardTitle>
-                          <Badge className="text-xs shrink-0 bg-amber-100 text-amber-700 border-0">
+                          <Badge className="text-xs shrink-0 bg-amber-50 text-amber-700 border border-amber-200">
                             <TrendingUp className="w-3 h-3 mr-1" />Active
                           </Badge>
                         </div>
@@ -646,7 +648,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                       <div className="flex items-center justify-between gap-2">
                         <CardTitle className="text-sm font-semibold truncate">{chit.template.name}</CardTitle>
                         <div className="flex items-center gap-2 shrink-0">
-                          <Badge variant="outline" className="text-xs text-indigo-600 border-indigo-300">
+                          <Badge variant="outline" className="text-xs text-gray-500 border-gray-200">
                             <TrendingDown className="w-3 h-3 mr-1" />Lifted
                           </Badge>
                           {deletingChitId === chit.id ? (
@@ -731,7 +733,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                       <CardHeader className="pb-2 px-4 pt-4">
                         <div className="flex items-center justify-between gap-2">
                           <CardTitle className="text-sm font-semibold truncate">{r.description}</CardTitle>
-                          <Badge className={cn("text-xs shrink-0 border-0", RECV_COLORS[r.category])}>
+                          <Badge className={cn("text-xs shrink-0", RECV_COLORS[r.category])}>
                             {r.customCategory ?? RECV_LABELS[r.category]}
                           </Badge>
                         </div>
@@ -748,7 +750,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                           </div>
                         </div>
                         <div className="flex gap-2">
-                          <Button size="sm" className="flex-1 h-8 text-xs bg-emerald-600 hover:bg-emerald-700" onClick={() => setReceivingItem(r)}>
+                          <Button size="sm" className="flex-1 h-8 text-xs bg-primary hover:bg-primary/90 text-white" onClick={() => setReceivingItem(r)}>
                             <Wallet className="w-3.5 h-3.5 mr-1" />Mark Received
                           </Button>
                           <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteReceivable(r.id)}>
@@ -777,7 +779,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                       <CardHeader className="pb-2 px-4 pt-4">
                         <div className="flex items-center justify-between gap-2">
                           <CardTitle className="text-sm font-semibold truncate">{r.description}</CardTitle>
-                          <Badge className="text-xs bg-emerald-100 text-emerald-600 border-0 shrink-0">
+                          <Badge className="text-xs bg-emerald-50 text-emerald-600 border border-emerald-200 shrink-0">
                             <CheckCircle2 className="w-3 h-3 mr-1" />Received
                           </Badge>
                         </div>

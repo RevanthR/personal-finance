@@ -214,7 +214,7 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
               </span>
             )}
             {!isBillPending && entry.template.category === "CREDIT_CARD" && entry.template.statementDay && !isPaid && (
-              <span className="text-blue-600">
+              <span className="text-amber-600">
                 closes {entry.template.statementDay}th
                 {entry.template.dueDateDay ? ` · due ${entry.template.dueDateDay}th` : ""}
               </span>

@@ -248,8 +248,8 @@ export function TemplatesClient({
       <PageCoach
         coachKey="templates"
         icon={SlidersHorizontal}
-        iconClass="text-violet-600"
-        bgClass="bg-violet-50 border-violet-100"
+        iconClass="text-amber-600"
+        bgClass="bg-amber-50 border-amber-100"
         title="Set up your recurring items here"
         desc="Add salary, EMIs, rent, and subscriptions once; they auto-fill your dashboard every month. Income items go under the Income tab."
       />
@@ -275,7 +275,7 @@ export function TemplatesClient({
         <TabsContent value="income" className="space-y-4">
           {/* Income summary bar */}
           {activeIncome.length > 0 && (
-            <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 space-y-1.5">
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 space-y-1.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
                   <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
@@ -295,7 +295,7 @@ export function TemplatesClient({
           )}
 
           {incomeTemplates.length === 0 && recentIncome && (recentIncome.salary + recentIncome.freelance + recentIncome.other) > 0 ? (
-            <div className="rounded-xl border border-dashed border-green-200 bg-green-50/40 p-4">
+            <div className="rounded-xl border border-dashed border-emerald-200 bg-emerald-50/40 p-4">
               <p className="text-xs font-semibold text-emerald-600 mb-1">Import from your history</p>
               <p className="text-xs text-emerald-600/70 mb-3">
                 We found recurring income from your recent months. Create templates so future months auto-fill.
@@ -325,7 +325,7 @@ export function TemplatesClient({
                 variant="outline"
                 onClick={handleImportIncome}
                 disabled={importLoading}
-                className="border-green-300 text-emerald-600 hover:bg-green-100 hover:text-emerald-600"
+                className="border-emerald-300 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-600"
               >
                 {importLoading ? "Importing…" : "Import as templates"}
               </Button>
@@ -361,7 +361,7 @@ export function TemplatesClient({
                             <div className="flex items-center gap-2 flex-wrap">
                               <p className="text-sm font-medium truncate">{t.name}</p>
                               {t.frequency === "YEARLY" && (
-                                <Badge className="text-xs bg-violet-50 text-violet-700 hover:bg-violet-50 border border-violet-200">
+                                <Badge className="text-xs bg-gray-100 text-gray-500 hover:bg-gray-100 border border-gray-200">
                                   Yearly{t.dueMonth ? ` · ${MONTHS[t.dueMonth - 1]}` : ""}
                                 </Badge>
                               )}
@@ -443,7 +443,7 @@ export function TemplatesClient({
                               <p className="text-sm font-medium truncate">{t.name}</p>
                               {!t.isFixed && !isClosed && <Badge variant="outline" className="text-xs">Variable</Badge>}
                               {t.frequency === "YEARLY" && !isClosed && (
-                                <Badge className="text-xs bg-violet-50 text-violet-700 hover:bg-violet-50 border border-violet-200">
+                                <Badge className="text-xs bg-gray-100 text-gray-500 hover:bg-gray-100 border border-gray-200">
                                   Yearly{t.dueMonth ? ` · ${MONTHS[t.dueMonth - 1]}` : ""}
                                 </Badge>
                               )}
@@ -451,7 +451,7 @@ export function TemplatesClient({
                                 <Badge variant="secondary" className="text-xs">Due {t.dueDateDay}th</Badge>
                               )}
                               {isClosed && (
-                                <Badge className="text-xs bg-zinc-100 text-zinc-500 hover:bg-zinc-100 border-0">
+                                <Badge className="text-xs bg-gray-100 text-gray-400 hover:bg-gray-100 border border-gray-200">
                                   Closed {format(new Date(t.foreClosedOn!), "MMM yyyy")}
                                 </Badge>
                               )}
@@ -475,7 +475,7 @@ export function TemplatesClient({
                                     ? `${fmt(t.amount)}/month${t.chitFund ? ` · pot ${fmt(t.chitFund.totalValue)}` : ""}`
                                     : `${fmt(t.amount)}/${t.frequency === "YEARLY" ? "year" : "month"}`}
                               {!isClosed && t.category === "CREDIT_CARD" && (t.statementDay || t.dueDateDay) && (
-                                <span className="ml-1.5 text-blue-600">
+                                <span className="ml-1.5 text-muted-foreground">
                                   {t.statementDay ? `closes ${t.statementDay}th` : ""}
                                   {t.dueDateDay ? ` · due ${t.dueDateDay}th` : ""}
                                 </span>
@@ -732,7 +732,7 @@ function TemplateDialog({
       {MONTHS.map((m, i) => (
         <button key={m} type="button" onClick={() => onChange(i + 1)}
           className={cn("px-2 py-0.5 rounded text-xs font-medium border transition-colors",
-            value === i + 1 ? "bg-zinc-900 text-white border-zinc-900" : "border-border text-muted-foreground hover:border-zinc-500"
+            value === i + 1 ? "bg-amber-500 text-white border-amber-500" : "border-border text-muted-foreground hover:border-gray-400"
           )}>
           {m}
         </button>
@@ -755,8 +755,8 @@ function TemplateDialog({
                   className={cn(
                     "flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors",
                     templateType === t
-                      ? t === "INCOME" ? "bg-emerald-600 text-white border-green-600" : "bg-zinc-900 text-white border-zinc-900"
-                      : "border-border text-muted-foreground hover:border-zinc-500"
+                      ? t === "INCOME" ? "bg-emerald-600 text-white border-emerald-600" : "bg-amber-500 text-white border-amber-500"
+                      : "border-border text-muted-foreground hover:border-gray-400"
                   )}>
                   {t === "INCOME" ? "Income" : "Expense"}
                 </button>
@@ -778,7 +778,7 @@ function TemplateDialog({
                   <button key={k} type="button" onClick={() => { setCategory(k); setCustomLabel(""); }}
                     className={cn(
                       "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
-                      category === k ? "bg-zinc-900 text-white border-zinc-900" : "border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"
+                      category === k ? "bg-amber-500 text-white border-amber-500" : "border-border text-muted-foreground hover:border-gray-400 hover:text-foreground"
                     )}>
                     {v}
                   </button>
@@ -787,7 +787,7 @@ function TemplateDialog({
                   <button type="button" onClick={() => setCategory("__custom__")}
                     className={cn(
                       "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
-                      isCustom ? "bg-zinc-900 text-white border-zinc-900" : "border-dashed border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"
+                      isCustom ? "bg-amber-500 text-white border-amber-500" : "border-dashed border-border text-muted-foreground hover:border-gray-400 hover:text-foreground"
                     )}>
                     + Custom
                   </button>
@@ -883,7 +883,7 @@ function TemplateDialog({
                   {MONTHS.map((m, i) => (
                     <button key={m} type="button" onClick={() => setChitStartMonth(i + 1)}
                       className={cn("px-2 py-0.5 rounded text-xs font-medium border transition-colors",
-                        chitStartMonth === i + 1 ? "bg-zinc-900 text-white border-zinc-900" : "border-border text-muted-foreground"
+                        chitStartMonth === i + 1 ? "bg-amber-500 text-white border-amber-500" : "border-border text-muted-foreground"
                       )}>
                       {m}
                     </button>
@@ -933,7 +933,7 @@ function TemplateDialog({
                 {(["MONTHLY", "YEARLY"] as const).map((f) => (
                   <button key={f} type="button" onClick={() => setFrequency(f)}
                     className={cn("flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors",
-                      frequency === f ? "bg-zinc-900 text-white border-zinc-900" : "border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"
+                      frequency === f ? "bg-amber-500 text-white border-amber-500" : "border-border text-muted-foreground hover:border-gray-400 hover:text-foreground"
                     )}>
                     {f === "MONTHLY" ? "Monthly" : "Yearly"}
                   </button>
@@ -948,7 +948,7 @@ function TemplateDialog({
                   {MONTHS.map((m, i) => (
                     <button key={m} type="button" onClick={() => setDueMonth(i + 1)}
                       className={cn("px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
-                        dueMonth === i + 1 ? "bg-zinc-900 text-white border-zinc-900" : "border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"
+                        dueMonth === i + 1 ? "bg-amber-500 text-white border-amber-500" : "border-border text-muted-foreground hover:border-gray-400 hover:text-foreground"
                       )}>
                       {m}
                     </button>
@@ -1019,7 +1019,7 @@ function TemplateDialog({
                           {(["indefinite", "date"] as const).map(v => (
                             <button key={v} type="button" onClick={() => setEndsType(v)}
                               className={cn("px-2.5 py-1 rounded text-xs font-medium border transition-colors",
-                                endsType === v ? "bg-zinc-900 text-white border-zinc-900" : "border-border text-muted-foreground hover:border-zinc-500"
+                                endsType === v ? "bg-amber-500 text-white border-amber-500" : "border-border text-muted-foreground hover:border-gray-400"
                               )}>
                               {v === "indefinite" ? "Never" : "Set month"}
                             </button>
@@ -1053,7 +1053,7 @@ function TemplateDialog({
                   {(["indefinite", "date"] as const).map(v => (
                     <button key={v} type="button" onClick={() => setEndsType(v)}
                       className={cn("px-2.5 py-1 rounded text-xs font-medium border transition-colors",
-                        endsType === v ? "bg-zinc-900 text-white border-zinc-900" : "border-border text-muted-foreground hover:border-zinc-500"
+                        endsType === v ? "bg-amber-500 text-white border-amber-500" : "border-border text-muted-foreground hover:border-gray-400"
                       )}>
                       {v === "indefinite" ? "Never" : "Set month"}
                     </button>

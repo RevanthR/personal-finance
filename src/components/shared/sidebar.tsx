@@ -37,27 +37,26 @@ export function Sidebar({ isAdmin }: SidebarProps) {
       {/* Desktop sidebar */}
       <aside
         className={cn(
-          "hidden md:flex flex-col border-r transition-all duration-200 shrink-0",
-          "bg-[#1a2840] text-slate-100 border-[#243350]",
+          "hidden md:flex flex-col border-r border-gray-100 bg-white transition-all duration-200 shrink-0",
           collapsed ? "w-16" : "w-56"
         )}
       >
-        <div className="flex items-center justify-between p-4 border-b border-[#243350]">
+        <div className="flex items-center justify-between p-4 pb-3">
           {!collapsed && (
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
+              <div className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center shrink-0">
                 <IndianRupee className="w-4 h-4 text-white" />
               </div>
-              <span className="font-bold text-lg tracking-tight">FinanceOS</span>
+              <span className="font-bold text-base tracking-tight text-gray-900">FinanceOS</span>
             </div>
           )}
           {collapsed && (
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center mx-auto">
+            <div className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center mx-auto">
               <IndianRupee className="w-4 h-4 text-white" />
             </div>
           )}
           {!collapsed && (
-            <button onClick={() => setCollapsed(true)} className="text-slate-400 hover:text-white transition-colors">
+            <button onClick={() => setCollapsed(true)} className="text-gray-400 hover:text-gray-600 transition-colors">
               <ChevronLeft className="w-4 h-4" />
             </button>
           )}
@@ -66,7 +65,7 @@ export function Sidebar({ isAdmin }: SidebarProps) {
         {collapsed && (
           <button
             onClick={() => setCollapsed(false)}
-            className="mx-auto mt-2 text-slate-400 hover:text-white p-2 transition-colors"
+            className="mx-auto mt-2 text-gray-400 hover:text-gray-600 p-2 transition-colors"
           >
             <Menu className="w-4 h-4" />
           </button>
@@ -82,11 +81,11 @@ export function Sidebar({ isAdmin }: SidebarProps) {
                 className={cn(
                   "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
                   active
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "text-slate-400 hover:bg-[#243350] hover:text-slate-100"
+                    ? "bg-gradient-to-r from-amber-500/[0.12] to-orange-500/[0.04] text-orange-700"
+                    : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"
                 )}
               >
-                <Icon className="w-4 h-4 shrink-0" />
+                <Icon className={cn("w-4 h-4 shrink-0", active ? "text-amber-600" : "")} />
                 {!collapsed && <span>{label}</span>}
               </Link>
             );
@@ -95,18 +94,18 @@ export function Sidebar({ isAdmin }: SidebarProps) {
           {isAdmin && (
             <>
               <div className={cn("px-3 pt-3 pb-1", collapsed && "hidden")}>
-                <p className="text-xs text-slate-500 uppercase tracking-wider">Admin</p>
+                <p className="text-xs text-gray-400 uppercase tracking-wider">Admin</p>
               </div>
               <Link
                 href="/admin"
                 className={cn(
                   "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
                   pathname.startsWith("/admin")
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "text-slate-400 hover:bg-[#243350] hover:text-slate-100"
+                    ? "bg-gradient-to-r from-amber-500/[0.12] to-orange-500/[0.04] text-orange-700"
+                    : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"
                 )}
               >
-                <ShieldCheck className="w-4 h-4 shrink-0" />
+                <ShieldCheck className={cn("w-4 h-4 shrink-0", pathname.startsWith("/admin") ? "text-amber-600" : "")} />
                 {!collapsed && <span>Admin Portal</span>}
               </Link>
             </>
@@ -115,8 +114,8 @@ export function Sidebar({ isAdmin }: SidebarProps) {
       </aside>
 
       {/* Mobile bottom nav — floating pill, lifted above iPhone home indicator */}
-      <nav className="md:hidden fixed left-4 right-4 z-50" style={{ bottom: "calc(1rem + env(safe-area-inset-bottom))" }}>
-        <div className="flex items-center justify-around bg-[#1a2840]/95 backdrop-blur-md rounded-2xl px-2 py-2 shadow-2xl border border-[#243350]">
+      <nav className="md:hidden fixed left-3 right-3 z-50" style={{ bottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}>
+        <div className="flex items-center justify-around bg-white/95 backdrop-blur-md rounded-2xl px-1 py-1.5 shadow-lg shadow-black/10 border border-gray-100">
           {navItems.map(({ href, label, mobileLabel, icon: Icon }) => {
             const active = pathname === href || pathname.startsWith(href + "/");
             return (
@@ -124,12 +123,14 @@ export function Sidebar({ isAdmin }: SidebarProps) {
                 key={href}
                 href={href}
                 className={cn(
-                  "flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-xs transition-colors",
-                  active ? "bg-blue-600 text-white" : "text-slate-400"
+                  "flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-xs transition-all",
+                  active
+                    ? "bg-gradient-to-b from-amber-500/[0.12] to-orange-500/[0.04] text-orange-700"
+                    : "text-gray-400"
                 )}
               >
-                <Icon className="w-5 h-5" />
-                <span className="text-xs font-medium">{mobileLabel ?? label.split(" ")[0]}</span>
+                <Icon className={cn("w-5 h-5", active ? "text-amber-600" : "")} />
+                <span className={cn("text-xs", active ? "font-semibold" : "font-medium")}>{mobileLabel ?? label.split(" ")[0]}</span>
               </Link>
             );
           })}

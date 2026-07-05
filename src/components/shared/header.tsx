@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Bell, LogOut, Settings, IndianRupee, Eye, EyeOff, BookOpen } from "lucide-react";
+import { LogOut, Settings, IndianRupee, Eye, EyeOff, BookOpen, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { useState } from "react";
@@ -36,69 +36,79 @@ export function Header({ user }: HeaderProps) {
 
   return (
     <>
-    <header className="border-b bg-white/90 backdrop-blur-sm flex flex-col justify-end px-4 md:px-6 shrink-0" style={{ paddingTop: "env(safe-area-inset-top)", minHeight: "calc(3.5rem + env(safe-area-inset-top))" }}>
+    <header className="border-b border-gray-100 bg-white/90 backdrop-blur-sm flex flex-col justify-end px-4 md:px-6 shrink-0" style={{ paddingTop: "env(safe-area-inset-top)", minHeight: "calc(3.5rem + env(safe-area-inset-top))" }}>
       <div className="h-14 flex items-center justify-between">
-      <div className="md:hidden flex items-center gap-2">
-        <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
-          <IndianRupee className="w-3.5 h-3.5 text-white" />
+        <div className="md:hidden flex items-center gap-2">
+          <div className="w-7 h-7 bg-amber-500 rounded-lg flex items-center justify-center shrink-0">
+            <IndianRupee className="w-3.5 h-3.5 text-white" />
+          </div>
+          <span className="font-bold text-foreground">FinanceOS</span>
         </div>
-        <span className="font-bold text-foreground">FinanceOS</span>
-      </div>
-      <div className="hidden md:block" />
+        <div className="hidden md:block" />
 
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => setGuideOpen(true)}
-          title="App guide"
-          className="text-slate-400 hover:text-slate-600 transition-colors"
-        >
-          <BookOpen className="w-5 h-5" />
-        </button>
-        <button
-          onClick={toggleHidden}
-          title={hidden ? "Show numbers" : "Hide numbers"}
-          className="text-slate-400 hover:text-slate-600 transition-colors"
-        >
-          {hidden ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-        </button>
-        <button className="text-slate-400 hover:text-slate-600">
-          <Bell className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Privacy toggle — stays in header bar */}
+          <button
+            onClick={toggleHidden}
+            title={hidden ? "Show numbers" : "Hide numbers"}
+            className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            {hidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </button>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-2 outline-none">
-              <Avatar className="w-8 h-8 cursor-pointer">
-                <AvatarImage src={user.image ?? undefined} alt={user.name ?? "User"} />
-                <AvatarFallback className="bg-zinc-900 text-white text-xs">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuLabel>
-              <p className="font-medium text-sm">{user.name}</p>
-              <p className="text-xs text-muted-foreground font-normal truncate">{user.email}</p>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link href="/settings" className="cursor-pointer">
-                <Settings className="w-4 h-4 mr-2" />
-                Settings
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-red-600 cursor-pointer"
-              onClick={() => signOut({ callbackUrl: "/login" })}
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              Sign out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-2 outline-none ml-1">
+                <Avatar className="w-8 h-8 cursor-pointer">
+                  <AvatarImage src={user.image ?? undefined} alt={user.name ?? "User"} />
+                  <AvatarFallback className="bg-primary text-white text-xs">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuLabel className="pb-2">
+                <p className="font-medium text-sm">{user.name}</p>
+                <p className="text-xs text-muted-foreground font-normal truncate">{user.email}</p>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+
+              {/* Guide */}
+              <DropdownMenuItem onSelect={() => setGuideOpen(true)} className="cursor-pointer">
+                <BookOpen className="w-4 h-4 mr-2 text-gray-400" />
+                App guide
+              </DropdownMenuItem>
+
+              {/* Go Pro — subtle amber accent */}
+              <DropdownMenuItem asChild>
+                <Link href="/pricing" className="cursor-pointer">
+                  <Sparkles className="w-4 h-4 mr-2 text-amber-500" />
+                  <span className="flex-1">Subscription</span>
+                  <span className="ml-2 text-xs font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">Pro</span>
+                </Link>
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+
+              <DropdownMenuItem asChild>
+                <Link href="/settings" className="cursor-pointer">
+                  <Settings className="w-4 h-4 mr-2 text-gray-400" />
+                  Settings
+                </Link>
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-red-600 cursor-pointer"
+                onClick={() => signOut({ callbackUrl: "/login" })}
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
     </header>
     <GuidePanel open={guideOpen} onClose={() => setGuideOpen(false)} />

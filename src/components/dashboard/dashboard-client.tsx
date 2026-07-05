@@ -236,18 +236,17 @@ function CCCardBlock({
 
       {/* Next cycle charges */}
       {nextBillTotal > 0 && (
-        <div className="border-t border-blue-100 bg-blue-50/60 px-3 py-2">
+        <div className="border-t border-amber-100 bg-amber-50/50 px-3 py-2">
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs font-semibold text-blue-600 uppercase tracking-wider">
+            <span className="text-xs font-semibold text-amber-700 uppercase tracking-wider">
               → {nextMonthName} bill
             </span>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-blue-700">{fmt(nextBillTotal)}</span>
-              {/* Show clear button when balance is stale (no transactions but amount > 0) */}
+              <span className="text-xs font-semibold text-amber-800 tracking-tight">{fmt(nextBillTotal)}</span>
               {postCloseTxs.length === 0 && (
                 <button
                   onClick={() => onClearStatement(entry.id)}
-                  className="text-xs font-medium text-blue-600 border border-blue-200 bg-white px-2.5 py-1.5 rounded-full hover:border-blue-400 hover:text-blue-800 transition-colors"
+                  className="text-xs font-medium text-amber-700 border border-amber-200 bg-white px-2.5 py-1.5 rounded-full hover:border-amber-400 transition-colors"
                 >
                   Clear
                 </button>
@@ -821,19 +820,19 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       <div className={cn("grid gap-2", hasCCCards ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2 sm:grid-cols-3")}>
         {/* Income */}
         {isProjected ? (
-          <MetricCard label="Est. Income" value={fmt(dispIncome)} icon={<Wallet className="w-3.5 h-3.5" />} color="text-emerald-600" sub="projected" gradient="linear-gradient(160deg, #ffffff 0%, #f7fffe 100%)" />
+          <MetricCard label="Est. Income" value={fmt(dispIncome)} icon={<Wallet className="w-3.5 h-3.5" />} color="text-emerald-600" sub="projected" gradient="linear-gradient(135deg, rgba(5,150,105,0.08) 0%, transparent 100%)" />
         ) : (
           <button onClick={openIncomeEdit} className="text-left">
-            <Card className="hover:border-zinc-400 transition-colors cursor-pointer h-full" style={{ background: "linear-gradient(160deg, #ffffff 0%, #f7fffe 100%)" }}>
+            <Card className="hover:border-zinc-300 transition-colors cursor-pointer h-full" style={{ background: "linear-gradient(135deg, rgba(5,150,105,0.08) 0%, transparent 100%)" }}>
               <CardContent className="px-2.5 py-2">
                 <div className="flex items-center justify-between mb-0.5">
-                  <p className="text-xs text-muted-foreground">Income</p>
+                  <p className="text-xs text-muted-foreground tracking-wide">Income</p>
                   <div className="flex items-center gap-1">
-                    <span className="text-emerald-600 opacity-70"><Wallet className="w-3.5 h-3.5" /></span>
+                    <span className="text-emerald-600 opacity-60"><Wallet className="w-3.5 h-3.5" /></span>
                     <Pencil className="w-2.5 h-2.5 text-muted-foreground" />
                   </div>
                 </div>
-                <p className="text-sm font-bold tabular-nums">{fmt(grandIncome)}</p>
+                <p className="text-sm font-bold tabular-nums tracking-tight">{fmt(grandIncome)}</p>
                 {adHocIncome > 0 && <p className="text-xs text-emerald-600 mt-0.5 leading-tight">+{fmt(adHocIncome)} one-time</p>}
               </CardContent>
             </Card>
@@ -847,7 +846,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
           icon={<TrendingDown className="w-3.5 h-3.5" />}
           color="text-red-500"
           sub={isProjected ? `${projEntries.filter(e => e.category !== "CREDIT_CARD").length} items` : nonCCPendingCount > 0 ? `${nonCCPendingCount} pending` : "all paid"}
-          gradient="linear-gradient(160deg, #ffffff 0%, #fff9f9 100%)"
+          gradient="linear-gradient(135deg, rgba(239,68,68,0.07) 0%, transparent 100%)"
         />
 
         {/* CC bill this month + next month upcoming — only when user has CC cards */}
@@ -858,7 +857,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             icon={<CreditCard className="w-3.5 h-3.5" />}
             color="text-purple-600"
             sub={isProjected ? "last month's bill" : dispCCBills > 0 ? "from last month" : "no CC bills"}
-            gradient="linear-gradient(160deg, #ffffff 0%, #fdfbff 100%)"
+            gradient="linear-gradient(135deg, rgba(234,88,12,0.07) 0%, transparent 100%)"
             upcoming={!isProjected ? {
               label: dispCCNextMonth > 0 ? "Next month" : "Next month",
               value: dispCCNextMonth > 0 ? fmt(dispCCNextMonth) : "—",
@@ -868,7 +867,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
 
         {/* Pending card: outstanding payments + cash balance / deficit */}
         <div className={!hasCCCards ? "col-span-2 sm:col-span-1" : undefined}>
-          <Card className="h-full" style={{ background: "linear-gradient(160deg, #ffffff 0%, #fffef5 100%)" }}>
+          <Card className="h-full" style={{ background: "linear-gradient(135deg, rgba(217,119,6,0.07) 0%, transparent 100%)" }}>
             <CardContent className="px-2.5 py-2">
               <div className="flex items-center justify-between mb-0.5">
                 <p className="text-xs text-muted-foreground">Pending</p>
@@ -975,7 +974,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                     ) : isCC ? (
                       <span className="text-xs text-muted-foreground">
                         {fmt(catTotal)} billed
-                        {catCarry > 0 && <span className="text-blue-600"> · ↗ {fmt(catCarry)} {nextMonthName}</span>}
+                        {catCarry > 0 && <span className="text-amber-600"> · ↗ {fmt(catCarry)} {nextMonthName}</span>}
                       </span>
                     ) : (
                       <span className="text-xs text-muted-foreground">
@@ -1278,15 +1277,15 @@ function MetricCard({ label, value, icon, color, sub, gradient, upcoming }: {
     <Card style={gradient ? { background: gradient } : undefined}>
       <CardContent className="px-2.5 py-2">
         <div className="flex items-center justify-between mb-0.5">
-          <p className="text-xs text-muted-foreground">{label}</p>
-          <span className={cn(color, "opacity-70")}>{icon}</span>
+          <p className="text-xs text-muted-foreground tracking-wide">{label}</p>
+          <span className={cn(color, "opacity-60")}>{icon}</span>
         </div>
-        <p className="text-sm font-bold leading-tight tabular-nums">{value}</p>
+        <p className="text-sm font-bold leading-tight tabular-nums tracking-tight">{value}</p>
         {sub && <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{sub}</p>}
         {upcoming && (
           <div className="mt-1.5 pt-1.5 border-t border-border/40">
             <p className="text-xs text-muted-foreground">{upcoming.label}</p>
-            <p className="text-xs font-semibold text-blue-600 tabular-nums">{upcoming.value}</p>
+            <p className="text-xs font-semibold text-amber-600 tabular-nums tracking-tight">{upcoming.value}</p>
           </div>
         )}
       </CardContent>
@@ -1322,26 +1321,27 @@ function FYSummaryCard({ recentMonths, fyIncome, fyExpenses, fyBalance, trendDat
 }) {
   const [expanded, setExpanded] = useState(false);
   return (
-    <Card className="bg-[#1a2840] text-white border-[#243350]">
+    <Card className="overflow-hidden border-gray-100">
+      <div className="h-0.5 bg-gradient-to-r from-amber-400 via-orange-400 to-rose-400" />
       <button
         type="button"
         onClick={() => setExpanded(e => !e)}
         className="w-full text-left"
       >
         <CardContent className="p-3">
-          <p className="text-xs text-blue-300 uppercase tracking-wider mb-2">Last {recentMonths.length} months</p>
+          <p className="text-xs text-gray-400 uppercase tracking-widest font-medium mb-2.5">Last {recentMonths.length} months</p>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <p className="text-xs text-blue-300">Income</p>
-              <p className="text-sm font-bold text-emerald-400">{fmt(fyIncome)}</p>
+              <p className="text-xs text-gray-400 mb-0.5">Income</p>
+              <p className="text-sm font-bold text-emerald-600 tracking-tight">{fmt(fyIncome)}</p>
             </div>
             <div>
-              <p className="text-xs text-blue-300">Expenses</p>
-              <p className="text-sm font-bold text-red-500">{fmt(fyExpenses)}</p>
+              <p className="text-xs text-gray-400 mb-0.5">Expenses</p>
+              <p className="text-sm font-bold text-red-500 tracking-tight">{fmt(fyExpenses)}</p>
             </div>
             <div>
-              <p className="text-xs text-blue-300">{fyBalance >= 0 ? "In hand" : "Deficit (Over Income)"}</p>
-              <p className={cn("text-sm font-bold", fyBalance >= 0 ? "text-emerald-400" : "text-red-500")}>
+              <p className="text-xs text-gray-400 mb-0.5">{fyBalance >= 0 ? "In hand" : "Deficit"}</p>
+              <p className={cn("text-sm font-bold tracking-tight", fyBalance >= 0 ? "text-emerald-600" : "text-red-500")}>
                 {fyBalance >= 0 ? "+" : "-"}{fmt(Math.abs(fyBalance))}
               </p>
             </div>
@@ -1349,18 +1349,18 @@ function FYSummaryCard({ recentMonths, fyIncome, fyExpenses, fyBalance, trendDat
         </CardContent>
       </button>
       {expanded && (
-        <div className="border-t border-[#243350] px-3 pb-3 pt-2 space-y-1.5">
-          <div className="grid grid-cols-4 gap-1 text-xs text-blue-400 uppercase tracking-wider mb-1 px-1">
+        <div className="border-t border-gray-100 px-3 pb-3 pt-2 space-y-1.5">
+          <div className="grid grid-cols-4 gap-1 text-xs text-gray-400 uppercase tracking-widest font-medium mb-1 px-1">
             <span>Month</span><span className="text-right">Income</span><span className="text-right">Expenses</span><span className="text-right">Net</span>
           </div>
           {trendData.map(m => {
             const net = m.Income - m.Expenses;
             return (
               <div key={m.name} className="grid grid-cols-4 gap-1 text-xs px-1">
-                <span className="text-slate-200 font-medium">{m.name}</span>
-                <span className="text-right text-emerald-400 tabular-nums">{fmt(m.Income)}</span>
-                <span className="text-right text-red-500 tabular-nums">{fmt(m.Expenses)}</span>
-                <span className={cn("text-right font-semibold tabular-nums", net >= 0 ? "text-emerald-400" : "text-red-500")}>
+                <span className="text-gray-700 font-medium">{m.name}</span>
+                <span className="text-right text-emerald-600 tabular-nums tracking-tight">{fmt(m.Income)}</span>
+                <span className="text-right text-red-500 tabular-nums tracking-tight">{fmt(m.Expenses)}</span>
+                <span className={cn("text-right font-semibold tabular-nums tracking-tight", net >= 0 ? "text-emerald-600" : "text-red-500")}>
                   {net >= 0 ? "+" : "-"}{fmt(Math.abs(net))}
                 </span>
               </div>

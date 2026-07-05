@@ -67,7 +67,7 @@ export function PricingClient({ planType, planExpiry, trialEndsAt, razorpayKeyId
           currency,
           name: "FinanceOS",
           description: `${plan.label} subscription`,
-          theme: { color: "#18181b" },
+          theme: { color: "#ea580c" },
           method: {
             upi: true,
             card: true,
@@ -131,13 +131,13 @@ export function PricingClient({ planType, planExpiry, trialEndsAt, razorpayKeyId
         </div>
       )}
       {trialActive && !active && (
-        <div className="flex items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
-          <Clock className="w-4 h-4 text-blue-600 shrink-0" />
+        <div className="flex items-center gap-3 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
+          <Clock className="w-4 h-4 text-amber-600 shrink-0" />
           <div className="text-sm">
-            <span className="font-medium text-blue-800">
+            <span className="font-medium text-amber-800">
               {daysLeft === 0 ? "Trial expires today" : `${daysLeft} day${daysLeft !== 1 ? "s" : ""} left in your free trial`}
             </span>
-            <p className="text-blue-600 text-xs mt-0.5">Subscribe below to keep uninterrupted access.</p>
+            <p className="text-amber-600 text-xs mt-0.5">Subscribe below to keep uninterrupted access.</p>
           </div>
         </div>
       )}
@@ -165,8 +165,8 @@ export function PricingClient({ planType, planExpiry, trialEndsAt, razorpayKeyId
               className={cn(
                 "relative rounded-xl border p-5 space-y-4 transition-opacity",
                 isCurrent ? "border-emerald-400 bg-emerald-50" :
-                isLower ? "border-zinc-100 bg-zinc-50 opacity-50" :
-                plan.highlight ? "border-zinc-900 bg-zinc-950 text-white" : "border-zinc-200 bg-white"
+                isLower ? "border-gray-100 bg-gray-50 opacity-50" :
+                plan.highlight ? "border-amber-400 bg-white ring-1 ring-amber-200" : "border-gray-200 bg-white"
               )}
             >
               {plan.highlight && !isCurrent && !isLower && (
@@ -183,24 +183,22 @@ export function PricingClient({ planType, planExpiry, trialEndsAt, razorpayKeyId
                 <p className={cn(
                   "text-xs font-medium uppercase tracking-widest",
                   isCurrent ? "text-emerald-700" :
-                  plan.highlight ? "text-zinc-400" : "text-muted-foreground"
+                  "text-muted-foreground"
                 )}>
                   {plan.label}
                 </p>
-                <p className="text-3xl font-bold mt-1">
+                <p className="text-3xl font-bold mt-1 tracking-tight">
                   ₹{plan.price}
                   <span className={cn(
                     "text-sm font-normal ml-1",
-                    isCurrent ? "text-emerald-600" :
-                    plan.highlight ? "text-zinc-400" : "text-muted-foreground"
+                    isCurrent ? "text-emerald-600" : "text-muted-foreground"
                   )}>
                     /{plan.label.toLowerCase()}
                   </span>
                 </p>
                 <p className={cn(
                   "text-xs mt-0.5",
-                  isCurrent ? "text-emerald-600" :
-                  plan.highlight ? "text-zinc-400" : "text-muted-foreground"
+                  isCurrent ? "text-emerald-600" : "text-muted-foreground"
                 )}>
                   {plan.perMonth}
                 </p>
@@ -211,7 +209,7 @@ export function PricingClient({ planType, planExpiry, trialEndsAt, razorpayKeyId
                   <CheckCircle2 className="w-3.5 h-3.5" /> Active
                 </div>
               ) : isLower ? (
-                <div className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-medium bg-zinc-100 text-zinc-400 cursor-not-allowed">
+                <div className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-medium bg-gray-100 text-gray-400 cursor-not-allowed">
                   Lower tier
                 </div>
               ) : (
@@ -221,8 +219,8 @@ export function PricingClient({ planType, planExpiry, trialEndsAt, razorpayKeyId
                   className={cn(
                     "w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-medium transition-all",
                     plan.highlight
-                      ? "bg-white text-zinc-900 hover:bg-zinc-100 disabled:opacity-50"
-                      : "bg-zinc-900 text-white hover:bg-zinc-800 disabled:opacity-50"
+                      ? "bg-primary text-white hover:bg-primary/90 disabled:opacity-50"
+                      : "bg-primary text-white hover:bg-primary/90 disabled:opacity-50"
                   )}
                 >
                   {loading === plan.id ? (
@@ -245,8 +243,8 @@ export function PricingClient({ planType, planExpiry, trialEndsAt, razorpayKeyId
       )}
 
       {/* Feature list */}
-      <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-4 space-y-2">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">What you get</p>
+      <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 space-y-2">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">What you get</p>
         {[
           "Dashboard with recurring income & expense tracking",
           "Full-year financial statistics",

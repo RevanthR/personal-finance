@@ -98,8 +98,8 @@ export function LiftChitDialog({ open, onOpenChange, chit, onLift }: LiftChitDia
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="rounded-lg bg-green-50 border border-green-200 p-4 space-y-1">
-              <p className="text-xs font-medium text-emerald-600 uppercase tracking-wide">Income to be recorded</p>
+            <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-4 space-y-1">
+              <p className="text-xs font-medium text-emerald-600 uppercase tracking-widest">Income to be recorded</p>
               <p className="text-2xl font-bold text-emerald-600">{fmt(parseFloat(liftedAmount) || 0)}</p>
               <p className="text-sm text-emerald-600">{monthName} {liftYear}</p>
             </div>
