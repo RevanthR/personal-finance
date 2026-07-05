@@ -21,7 +21,6 @@ const navItems = [
   { href: "/months", label: "Year View", mobileLabel: "Year", icon: Calendar },
   { href: "/receivables", label: "Accounts", icon: CreditCard },
   { href: "/templates", label: "Budgets", icon: SlidersHorizontal },
-  { href: "/pricing", label: "Subscription", mobileLabel: "Pro", icon: Sparkles },
 ];
 
 interface SidebarProps {
@@ -90,6 +89,30 @@ export function Sidebar({ isAdmin }: SidebarProps) {
               </Link>
             );
           })}
+
+          {/* Subscription — desktop only */}
+          {(() => {
+            const active = pathname === "/pricing";
+            return (
+              <Link
+                href="/pricing"
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
+                  active
+                    ? "bg-gradient-to-r from-amber-500/[0.12] to-orange-500/[0.04] text-orange-700"
+                    : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"
+                )}
+              >
+                <Sparkles className={cn("w-4 h-4 shrink-0", active ? "text-amber-600" : "")} />
+                {!collapsed && (
+                  <span className="flex-1 flex items-center justify-between">
+                    Subscription
+                    <span className="text-xs font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">Pro</span>
+                  </span>
+                )}
+              </Link>
+            );
+          })()}
 
           {isAdmin && (
             <>
