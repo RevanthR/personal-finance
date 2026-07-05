@@ -152,14 +152,14 @@ function CCSubcatBreakdown({ txItems, onDelete }: { txItems: AdHocItem[]; onDele
             <button
               type="button"
               onClick={() => setOpenSections(prev => ({ ...prev, [subcat]: !prev[subcat] }))}
-              className="w-full flex items-center justify-between py-1.5 hover:bg-muted/50 rounded px-1 transition-colors"
+              className="w-full flex items-center justify-between py-3 hover:bg-muted/50 rounded px-2 transition-colors"
             >
-              <div className="flex items-center gap-1.5">
-                <ChevronDown className={cn("w-3 h-3 text-muted-foreground transition-transform", open && "rotate-180")} />
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{subcat}</span>
-                <span className="text-[10px] text-muted-foreground/60">({txs.length})</span>
+              <div className="flex items-center gap-2">
+                <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", open && "rotate-180")} />
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{subcat}</span>
+                <span className="text-xs text-muted-foreground/60">({txs.length})</span>
               </div>
-              <span className="text-[10px] text-muted-foreground font-medium">{fmt(subtotal)}</span>
+              <span className="text-xs text-muted-foreground font-medium">{fmt(subtotal)}</span>
             </button>
             {open && (
               <div className="space-y-1 mt-1 mb-1">
@@ -250,7 +250,7 @@ function CCCardBlock({
               {postCloseTxs.length === 0 && (
                 <button
                   onClick={() => onClearStatement(entry.id)}
-                  className="text-[10px] text-blue-400 hover:text-blue-700 underline"
+                  className="text-xs font-medium text-blue-600 border border-blue-200 bg-white px-2.5 py-1.5 rounded-full hover:border-blue-400 hover:text-blue-800 transition-colors"
                 >
                   Clear
                 </button>
@@ -1451,8 +1451,8 @@ function TransactionRow({ item, onDelete }: { item: AdHocItem; onDelete: (id: st
       <span className={cn("text-sm font-semibold shrink-0", item.type === "INCOME" ? "text-green-600" : "text-red-600")}>
         {item.type === "INCOME" ? "+" : "-"}{fmt(item.amount)}
       </span>
-      <Button variant="ghost" size="sm" onClick={() => onDelete(item.id)} className="h-7 w-7 p-0 text-muted-foreground hover:text-red-600">
-        <Trash2 className="w-3.5 h-3.5" />
+      <Button variant="ghost" size="sm" onClick={() => onDelete(item.id)} className="h-10 w-10 p-0 text-muted-foreground hover:text-red-600 shrink-0">
+        <Trash2 className="w-4 h-4" />
       </Button>
     </div>
   );

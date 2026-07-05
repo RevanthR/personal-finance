@@ -104,7 +104,7 @@ export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogP
                 type="button"
                 onClick={() => { setType(t); setCategory(""); setCCSpendCat(""); }}
                 className={cn(
-                  "py-1.5 rounded-md text-sm font-semibold transition-all",
+                  "py-3 rounded-md text-sm font-semibold transition-all",
                   type === t
                     ? t === "INCOME"
                       ? "bg-green-700 text-white shadow-sm"
@@ -123,14 +123,14 @@ export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogP
               {type === "EXPENSE" ? "Category" : "Source"}{" "}
               <span className="text-muted-foreground">(optional)</span>
             </Label>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2">
               {(type === "EXPENSE" ? EXPENSE_CATEGORIES : INCOME_SOURCES).map(c => (
                 <button
                   key={c.value}
                   type="button"
                   onClick={() => { setCategory(category === c.value ? "" : c.value); setCCSpendCat(""); }}
                   className={cn(
-                    "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
+                    "px-3 py-2 rounded-full text-sm font-medium border transition-colors",
                     category === c.value
                       ? "bg-zinc-900 text-white border-zinc-900"
                       : "border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"
@@ -148,14 +148,14 @@ export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogP
               {ccCards.length >= 1 && (
                 <div>
                   <Label className="text-xs mb-2 block">Which card?</Label>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-2">
                     {ccCards.map(card => (
                       <button
                         key={card.templateId}
                         type="button"
                         onClick={() => setCCCard(card)}
                         className={cn(
-                          "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
+                          "px-3 py-2 rounded-full text-sm font-medium border transition-colors",
                           ccCard?.templateId === card.templateId
                             ? "bg-zinc-900 text-white border-zinc-900"
                             : "border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"
@@ -171,14 +171,14 @@ export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogP
                 <Label className="text-xs mb-2 block">
                   Spend category <span className="text-muted-foreground">(optional)</span>
                 </Label>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-2">
                   {CC_SPEND_CATEGORIES.map(cat => (
                     <button
                       key={cat}
                       type="button"
                       onClick={() => setCCSpendCat(c => c === cat ? "" : cat)}
                       className={cn(
-                        "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
+                        "px-3 py-2 rounded-full text-sm font-medium border transition-colors",
                         ccSpendCat === cat
                           ? "bg-zinc-900 text-white border-zinc-900"
                           : "border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"

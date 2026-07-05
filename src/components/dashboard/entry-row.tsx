@@ -179,22 +179,25 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
         isPaid ? "py-1.5 bg-muted/30 border-transparent opacity-50" : "py-2.5 bg-card border-border",
         isBillPending && !isPaid && "opacity-60"
       )}>
+        {/* 44px tap target wrapping the 20px visual circle */}
         <button
           onClick={isBillPending ? undefined : handleTickClick}
           disabled={isBillPending}
-          className={cn(
-            "shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all",
+          className="shrink-0 flex items-center justify-center w-11 h-11 -mx-3 rounded-full"
+        >
+          <div className={cn(
+            "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all pointer-events-none",
             isPaid
               ? "bg-zinc-900 border-zinc-900"
               : isBillPending
-                ? "border-zinc-300 bg-zinc-50 cursor-not-allowed"
+                ? "border-zinc-300 bg-zinc-50"
                 : isPartial
                   ? "border-amber-500 bg-amber-50"
-                  : "border-muted-foreground/50 hover:border-zinc-500"
-          )}
-        >
-          {isPaid && <Check className="w-3 h-3 text-white" />}
-          {isPartial && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
+                  : "border-muted-foreground/50"
+          )}>
+            {isPaid && <Check className="w-3 h-3 text-white" />}
+            {isPartial && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
+          </div>
         </button>
 
         <div className={cn("w-0.5 rounded-full shrink-0 transition-all duration-200", isPaid ? "h-4" : "h-7")} style={{ backgroundColor: color }} />
@@ -339,7 +342,7 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
               <button
                 onClick={() => setPayMode("full")}
                 className={cn(
-                  "flex-1 py-1.5 rounded-md text-sm font-medium transition-colors",
+                  "flex-1 py-3 rounded-md text-sm font-medium transition-colors",
                   payMode === "full" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground"
                 )}
               >
@@ -351,7 +354,7 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
                   setTimeout(() => partialRef.current?.focus(), 50);
                 }}
                 className={cn(
-                  "flex-1 py-1.5 rounded-md text-sm font-medium transition-colors",
+                  "flex-1 py-3 rounded-md text-sm font-medium transition-colors",
                   payMode === "partial" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground"
                 )}
               >
@@ -379,7 +382,7 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
                 </div>
                 <button
                   onClick={() => setPartialVal(String(outstanding))}
-                  className="w-full text-xs text-muted-foreground hover:text-foreground py-1.5 rounded-lg border border-dashed transition-colors"
+                  className="w-full text-sm text-muted-foreground hover:text-foreground py-3 rounded-lg border border-dashed transition-colors"
                 >
                   Pay remaining {fmt(outstanding)}
                 </button>
