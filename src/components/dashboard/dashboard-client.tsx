@@ -1340,7 +1340,7 @@ function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, 
           <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="text-sm font-semibold">Paid</span>
+              <span className="text-sm font-semibold">Settlement Summary</span>
               <span className="text-xs text-muted-foreground">{fullyPaidCount} of {nonCCEntries.length}</span>
               {partialEntries.length > 0 && (
                 <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">
