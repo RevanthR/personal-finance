@@ -327,7 +327,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   }, [incomeTemplates, adHocItems, viewMonth, viewYear]);
 
   const hasCCCards = ccTemplates.length > 0;
-  const adHocIncome   = useMemo(() => adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0), [adHocItems]);
+  const adHocIncome   = useMemo(() => adHocItems.filter(i => i.type === "INCOME" && !i.notes?.startsWith("income_override:")).reduce((s, i) => s + i.amount, 0), [adHocItems]);
   const adHocExpense  = useMemo(() => adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0), [adHocItems]);
   const grandIncome   = templateIncome + adHocIncome;
 

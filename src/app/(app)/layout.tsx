@@ -7,6 +7,7 @@ import { PrivacyProvider } from "@/contexts/privacy-context";
 import { LegalFooter } from "@/components/shared/legal-footer";
 import { WelcomeModal } from "@/components/coach/welcome-modal";
 import { PwaInstallBanner } from "@/components/shared/pwa-install-banner";
+import { PullToRefresh } from "@/components/shared/pull-to-refresh";
 import { TrialBanner } from "@/components/shared/trial-banner";
 import { isAccessAllowed, isTrialActive } from "@/lib/plans";
 import { Suspense } from "react";
@@ -31,6 +32,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <PrivacyProvider>
       <WelcomeModal />
       <PwaInstallBanner />
+      <PullToRefresh />
       <div className="flex flex-col h-screen overflow-hidden bg-zinc-50">
         {showTrialBanner && <TrialBanner trialEndsAt={user.trialEndsAt!} />}
         <div className="flex flex-1 min-h-0 overflow-hidden">
