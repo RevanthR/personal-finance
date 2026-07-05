@@ -43,7 +43,7 @@ function RankedList({ items, total }: { items: { name: string; value: number; co
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <span className="text-[10px] text-muted-foreground">{pct}%</span>
-                <span className="text-xs font-medium">{hidden ? "••••" : `₹${(item.value / 1000).toFixed(1)}k`}</span>
+                <span className="text-xs font-medium">{fmt(item.value)}</span>
               </div>
             </div>
             <div className="h-1 rounded-full bg-zinc-100 overflow-hidden">
@@ -156,7 +156,7 @@ export function YearOverviewClient({
       {tab === "overview" && (
       <div className="flex flex-col lg:flex-row gap-6 max-w-5xl lg:items-start">
     <div className="flex-1 min-w-0 space-y-5">
-      {tab === "overview" && <>
+      <>
 
       {/* Year-end projection */}
       <Card className={cn(
@@ -277,7 +277,7 @@ export function YearOverviewClient({
                   {m.balance >= 0 ? "+" : "−"}{fmt(Math.abs(m.balance))}
                 </p>
                 <p className="text-[9px] mt-0.5 text-muted-foreground">
-                  {fmt(m.expenses)} spent
+                  {m.balance >= 0 ? "saved" : "deficit"} · {fmt(m.expenses)} spent
                 </p>
               </div>
             );
@@ -320,7 +320,7 @@ export function YearOverviewClient({
           ))}
         </div>
       )}
-      </>}
+      </>
     </div>
 
     {/* ── Right: Current month insights ── */}

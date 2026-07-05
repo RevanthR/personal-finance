@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -254,7 +255,7 @@ export function TemplatesClient({
       />
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Configuration</h1>
+          <h1 className="text-2xl font-bold">Templates</h1>
           <p className="text-sm text-muted-foreground">
             {templates.filter((t) => t.isActive).length} active recurring items
           </p>
@@ -403,9 +404,9 @@ export function TemplatesClient({
               <span className="text-xs text-muted-foreground">
                 {ccTemplateCount} credit card{ccTemplateCount !== 1 ? "s" : ""} managed separately
               </span>
-              <a href="/receivables" className="text-xs font-medium text-primary hover:underline">
+              <Link href="/receivables" className="text-xs font-medium text-primary hover:underline">
                 Manage cards →
-              </a>
+              </Link>
             </div>
           )}
           {expenseTemplates.length === 0 && (

@@ -113,7 +113,7 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
         <div>
           <h1 className="text-2xl font-bold">Chit Funds</h1>
           <p className="text-sm text-muted-foreground">
-            {activeChits.length} active · {fmt(totalSavings)} saved up
+            {activeChits.length} active · {fmt(totalSavings)} accumulating
           </p>
         </div>
         <Button onClick={() => setShowAdd(true)}>
@@ -216,7 +216,7 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base">{chit.template.name}</CardTitle>
                     <div className="flex items-center gap-2">
-                      <Badge variant="destructive" className="text-xs">
+                      <Badge variant="outline" className="text-xs text-indigo-600 border-indigo-300">
                         <TrendingDown className="w-3 h-3 mr-1" />
                         Lifted
                       </Badge>

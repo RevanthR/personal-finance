@@ -342,6 +342,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   } = metrics;
 
   const balance = grandIncome - totalCommitted - chitInvestment - adHocExpense;
+  const inHandNow = grandIncome - totalPaid - chitInvestment - adHocExpense;
 
   const nonCCPaidAmount = useMemo(() =>
     entries.filter(e => e.template.category !== "CREDIT_CARD" && !isPreLiftChit(e))
@@ -462,12 +463,19 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       return entryYear < lift.liftYear || (entryYear === lift.liftYear && entryMonth < lift.liftMonth);
     }
 
-    const fyIncome   = recentMonths.reduce((s, m) => s + m.salaryIncome + m.freelanceIncome + m.otherIncome + m.adHocItems.filter(i => i.type === "INCOME" && !i.notes?.startsWith("income_override:")).reduce((a, i) => a + i.amount, 0), 0);
-    const fyExpenses = recentMonths.reduce((s, m) => s + m.entries.filter(e => !isChitInvestmentEntry(e.templateId, m.month, m.year)).reduce((a, e) => a + e.amount - (e.cashbackAmount ?? 0), 0) + m.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((a, i) => a + i.amount, 0), 0);
+    const monthIncome = (m: typeof recentMonths[0]) =>
+      m.salaryIncome + m.freelanceIncome + m.otherIncome
+      + m.adHocItems.filter(i => i.type === "INCOME" && !i.notes?.startsWith("income_override:")).reduce((a, i) => a + i.amount, 0);
+    const monthExpenses = (m: typeof recentMonths[0]) =>
+      m.entries.reduce((a, e) => a + e.amount - (e.cashbackAmount ?? 0), 0)
+      + m.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((a, i) => a + i.amount, 0);
+
+    const fyIncome   = recentMonths.reduce((s, m) => s + monthIncome(m), 0);
+    const fyExpenses = recentMonths.reduce((s, m) => s + monthExpenses(m), 0);
     const trendData  = [...recentMonths].reverse().map(m => ({
       name: format(new Date(m.year, m.month - 1), "MMM"),
-      Income: m.salaryIncome + m.freelanceIncome + m.otherIncome + m.adHocItems.filter(i => i.type === "INCOME" && !i.notes?.startsWith("income_override:")).reduce((a, i) => a + i.amount, 0),
-      Expenses: m.entries.filter(e => !isChitInvestmentEntry(e.templateId, m.month, m.year)).reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0),
+      Income: monthIncome(m),
+      Expenses: monthExpenses(m),
     }));
     return { fyIncome, fyExpenses, fyBalance: fyIncome - fyExpenses, trendData };
   }, [recentMonths, preLiftChitTemplateIds, liftedChitInfos]);
@@ -802,7 +810,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       </div>
 
       {/* Metric cards */}
-      <div className={cn("grid gap-2", hasCCCards ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3")}>
+      <div className={cn("grid gap-2", hasCCCards ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2 sm:grid-cols-3")}>
         {/* Income */}
         {isProjected ? (
           <MetricCard label="Est. Income" value={fmt(dispIncome)} icon={<Wallet className="w-3.5 h-3.5" />} color="text-green-600" sub="projected" gradient="linear-gradient(135deg, white 0%, #f0fdf4 100%)" />
@@ -850,15 +858,37 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
           />
         )}
 
-        {/* Net cash position */}
-        <MetricCard
-          label={dispBalance >= 0 ? "Net left" : "Deficit"}
-          value={fmt(Math.abs(dispBalance))}
-          icon={dispBalance >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
-          color={dispBalance >= 0 ? "text-green-600" : "text-red-600"}
-          sub={isProjected ? "projected" : dispBalance >= 0 ? "in your account" : "overspent income"}
-          gradient={dispBalance >= 0 ? "linear-gradient(135deg, white 0%, #f0fdf4 100%)" : "linear-gradient(135deg, white 0%, #fef2f2 100%)"}
-        />
+        {/* Pending card: outstanding payments + cash balance / deficit */}
+        <div className={!hasCCCards ? "col-span-2 sm:col-span-1" : undefined}>
+          <Card className="h-full" style={{ background: "linear-gradient(135deg, white 0%, #fffbeb 100%)" }}>
+            <CardContent className="px-2.5 py-2">
+              <div className="flex items-center justify-between mb-0.5">
+                <p className="text-[10px] text-muted-foreground">Pending</p>
+                <span className="text-amber-500 opacity-70"><AlertCircle className="w-3.5 h-3.5" /></span>
+              </div>
+              <p className="text-sm font-bold leading-tight tabular-nums">
+                {isProjected ? fmt(dispPending) : (pendingCount > 0 ? fmt(totalPending) : "—")}
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
+                {isProjected ? "projected" : pendingCount > 0 ? `${pendingCount} bills left` : "all settled"}
+              </p>
+              {!isProjected && (
+                <div className="mt-1.5 pt-1.5 border-t border-border/40 space-y-0.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] text-muted-foreground">In hand</span>
+                    <span className="text-[10px] font-semibold tabular-nums text-green-600">{fmt(Math.max(0, inHandNow))}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] text-muted-foreground">Deficit (Over Income)</span>
+                    <span className={cn("text-[10px] font-semibold tabular-nums", balance < 0 ? "text-red-500" : "text-muted-foreground")}>
+                      {balance < 0 ? fmt(Math.abs(balance)) : "—"}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Progress — recurring + CC bill this month */}
@@ -1025,7 +1055,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                     <p className="text-sm font-bold text-red-400">{fmt(fyExpenses)}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-slate-400">{fyBalance >= 0 ? "Leftover" : "Deficit"}</p>
+                    <p className="text-[10px] text-slate-400">{fyBalance >= 0 ? "In hand" : "Deficit (Over Income)"}</p>
                     <p className={cn("text-sm font-bold", fyBalance >= 0 ? "text-green-400" : "text-red-400")}>
                       {fyBalance >= 0 ? "+" : "-"}{fmt(Math.abs(fyBalance))}
                     </p>
@@ -1326,31 +1356,23 @@ function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, 
   const totalPaidOut = shown.reduce((s, e) => s + effectivePaid(e), 0);
   const partialEntries = entries.filter(e => !e.isPaid && e.paidAmount != null && e.paidAmount > 0 && e.template.category !== "CREDIT_CARD");
   const partialTotal = partialEntries.reduce((s, e) => s + (e.paidAmount ?? 0), 0);
-  const nonCCEntries = entries.filter(e => !isPreLiftChit(e) && e.template.category !== "CREDIT_CARD");
-  const fullyPaidCount = nonCCEntries.filter(e => e.isPaid).length;
 
   return (
     <div className="rounded-xl border bg-card overflow-hidden">
       <button
         type="button"
         onClick={() => setCollapsed(c => !c)}
-        className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/40 transition-colors"
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/40 transition-colors text-left"
       >
         <div className="flex items-center gap-2 min-w-0">
           <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm font-semibold">Settlement Summary</span>
-              <span className="text-xs text-muted-foreground">{fullyPaidCount} of {nonCCEntries.length}</span>
-              {partialEntries.length > 0 && (
-                <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">
-                  {partialEntries.length} partial payment{partialEntries.length !== 1 ? "s" : ""}
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground tabular-nums">
+            <p className="text-sm font-semibold leading-tight">Settlement Summary</p>
+            <p className="text-xs text-muted-foreground tabular-nums mt-0.5">
               {fmt(totalPaidOut)} of {fmt(totalCommitted)}
-              {partialTotal > 0 && <span className="text-amber-600 ml-1">· {fmt(partialTotal)} in partials</span>}
+              {partialEntries.length > 0 && (
+                <span className="text-amber-600 ml-1.5">· {partialEntries.length} partial</span>
+              )}
             </p>
           </div>
         </div>
@@ -1410,10 +1432,6 @@ function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, 
             </div>
           )}
 
-          <div className="flex items-center justify-between px-4 py-2.5 bg-green-50/60 border-t border-border/40">
-            <span className="text-xs font-semibold text-muted-foreground">Total paid out</span>
-            <span className="text-sm font-bold text-green-600 tabular-nums">{fmt(totalPaidOut)} of {fmt(totalCommitted)}</span>
-          </div>
           {chitInvested > 0 && (
             <div className="flex items-center justify-between px-4 py-2.5 bg-amber-50/60 border-t border-amber-100">
               <span className="text-xs font-semibold text-amber-700">Invested (chit)</span>
@@ -1422,7 +1440,7 @@ function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, 
           )}
           {grandIncome > 0 && (
             <div className="flex items-center justify-between px-4 py-2.5 bg-emerald-50/80 border-t border-emerald-100">
-              <span className="text-xs font-semibold text-emerald-700">Balance remaining</span>
+              <span className="text-xs font-semibold text-emerald-700">In hand</span>
               <span className={cn("text-sm font-bold tabular-nums", grandIncome - totalPaidOut - chitInvested - adHocExpense >= 0 ? "text-emerald-700" : "text-red-600")}>
                 {fmt(grandIncome - totalPaidOut - chitInvested - adHocExpense)}
               </span>

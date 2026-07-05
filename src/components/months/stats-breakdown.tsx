@@ -332,7 +332,7 @@ function ReliefTimeline({ data, fmt }: {
                   {ms.monthsFromNow > 0 && i === 0 && (
                     <div className="mt-2 pl-1">
                       <div className="h-1 rounded-full bg-zinc-100 overflow-hidden">
-                        <div className="h-full rounded-full bg-emerald-400 transition-all" style={{ width: `${Math.min(100, Math.round((1 - ms.monthsFromNow / 24) * 100))}%` }} />
+                        <div className="h-full rounded-full bg-emerald-400 transition-all" style={{ width: `${Math.min(100, Math.round((1 - ms.monthsFromNow / (data.chits.find(c => ms.items.some(x => x.name === c.name))?.durationMonths ?? 24)) * 100))}%` }} />
                       </div>
                     </div>
                   )}
@@ -434,13 +434,13 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
                   {data.bestMonth && (
                     <div className="flex items-center gap-1.5">
                       <TrendingUp className="w-3.5 h-3.5 text-green-500 shrink-0" />
-                      <p className="text-xs"><span className="text-muted-foreground">Best </span><span className="font-semibold">{data.bestMonth.label} {data.bestMonth.savingsRate}%</span></p>
+                      <p className="text-xs"><span className="text-muted-foreground">All-time best </span><span className="font-semibold">{data.bestMonth.label} {data.bestMonth.savingsRate}%</span></p>
                     </div>
                   )}
                   {data.worstMonth && (
                     <div className="flex items-center gap-1.5">
                       <TrendingDown className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                      <p className="text-xs"><span className="text-muted-foreground">Worst </span><span className="font-semibold">{data.worstMonth.label} {data.worstMonth.savingsRate}%</span></p>
+                      <p className="text-xs"><span className="text-muted-foreground">All-time worst </span><span className="font-semibold">{data.worstMonth.label} {data.worstMonth.savingsRate}%</span></p>
                     </div>
                   )}
                 </div>
@@ -554,7 +554,7 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
           {/* Relief timeline — when expenses will drop */}
           {(data.loans.length > 0 || data.chits.some(c => c.remainingMonths > 0)) && (
             <div>
-              <SectionTitle>When does it get lighter?</SectionTitle>
+              <SectionTitle>When does it get lighter</SectionTitle>
               <ReliefTimeline data={data} fmt={fmt} />
             </div>
           )}

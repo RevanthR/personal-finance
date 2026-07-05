@@ -350,7 +350,7 @@ export default async function MonthsPage() {
       recurringTotal += netAmt;
     }
     for (const a of m.adHocItems) {
-      if (a.type === "EXPENSE") adHocExpenseTotal += a.amount;
+      if (a.type === "EXPENSE" && a.category !== "CREDIT_CARD") adHocExpenseTotal += a.amount;
     }
   }
   const fyExpenses = recurringTotal + adHocExpenseTotal;
@@ -392,13 +392,12 @@ export default async function MonthsPage() {
       })),
     }));
 
-  // Spending character
+  // Spending character — use catMap so adhoc is included and Essential+Lifestyle = fyExpenses
   const ESSENTIAL_CATS = new Set(["LOAN", "HOUSE_MAINTENANCE", "SAVINGS"]);
   let essentialTotal = 0, lifestyleTotal = 0;
-  for (const [, t] of templateMap) {
-    const cat = t.customCategory ? "MISCELLANEOUS" : t.category;
-    if (ESSENTIAL_CATS.has(cat)) essentialTotal += t.total;
-    else lifestyleTotal += t.total;
+  for (const [key, d] of catMap) {
+    if (ESSENTIAL_CATS.has(key)) essentialTotal += d.total;
+    else lifestyleTotal += d.total;
   }
   // Committed overhead = sum of active FIXED expense templates
   const committedOverhead = expenseTemplates

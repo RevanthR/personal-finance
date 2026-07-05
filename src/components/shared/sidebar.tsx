@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
   Calendar,
-  TrendingUp,
+  CreditCard,
   SlidersHorizontal,
   ShieldCheck,
   ChevronLeft,
@@ -19,7 +19,7 @@ import { useState } from "react";
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/months", label: "Year View", mobileLabel: "Year", icon: Calendar },
-  { href: "/receivables", label: "Accounts", icon: TrendingUp },
+  { href: "/receivables", label: "Accounts", icon: CreditCard },
   { href: "/templates", label: "Budgets", icon: SlidersHorizontal },
   { href: "/pricing", label: "Subscription", mobileLabel: "Pro", icon: Sparkles },
 ];
