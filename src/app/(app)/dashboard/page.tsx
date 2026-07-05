@@ -207,25 +207,12 @@ async function DashboardData({
       pendingFromYear: t.pendingFromYear,
     }));
 
-  const preLiftChitTemplateIds = allTemplates
-    .filter(t => t.templateType !== "INCOME" && t.category === "CHIT_FUND" && t.chitFund && !t.chitFund.isLifted)
-    .map(t => t.id);
-
-  const liftedChitInfos = allTemplates
-    .filter(t => t.category === "CHIT_FUND" && t.chitFund?.isLifted && t.chitFund?.liftedOn)
-    .map(t => {
-      const d = new Date(t.chitFund!.liftedOn!);
-      return { templateId: t.id, liftMonth: d.getUTCMonth() + 1, liftYear: d.getUTCFullYear() };
-    });
-
   return (
     <DashboardClient
       currentMonth={currentMonth ? JSON.parse(JSON.stringify(currentMonth)) : null}
       recentMonths={JSON.parse(JSON.stringify(recentMonths))}
       ccTemplates={JSON.parse(JSON.stringify(ccTemplates))}
       incomeTemplates={JSON.parse(JSON.stringify(incomeTemplates))}
-      preLiftChitTemplateIds={preLiftChitTemplateIds}
-      liftedChitInfos={liftedChitInfos}
       todayMonth={todayMonth}
       todayYear={todayYear}
       userId={userId}

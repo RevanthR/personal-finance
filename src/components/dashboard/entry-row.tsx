@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { computeLoanAmortization, computeChitCurrentMonth } from "@/lib/loan-utils";
+import { computeLoanAmortization } from "@/lib/loan-utils";
 
 // Partial payment doesn't carry forward for these categories
 const NO_PARTIAL = new Set(["LOAN", "CHIT_FUND"]);
@@ -33,7 +33,6 @@ interface EntryRowProps {
       isFixed: boolean;
       dueDateDay: number | null;
       statementDay: number | null;
-      chitFund: { isLifted: boolean; accumulatedSavings: number; startDate: string | null; durationMonths: number | null } | null;
       loanInterestRate: number | null;
       loanRateType: string | null;
       loanOriginalPrincipal: number | null;
@@ -81,7 +80,6 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
   const isPartial = !isPaid && paidAmount != null && paidAmount > 0;
   const outstanding = netBill - (paidAmount ?? 0);
   const color = getCategoryColor(entry.template.category, entry.template.customCategory);
-  const isChitInvestment = entry.template.category === "CHIT_FUND" && !entry.template.chitFund?.isLifted;
   const canPartial = !NO_PARTIAL.has(entry.template.category);
   const isLoan = entry.template.category === "LOAN";
   const loanAmort = isLoan && entry.template.loanInterestRate != null ? computeLoanAmortization({
@@ -205,25 +203,9 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
         <div className="flex-1 min-w-0">
           <p className={cn("text-sm font-medium leading-tight", isPaid && "line-through text-muted-foreground")}>
             {entry.template.name}
-            {isChitInvestment && (
-              <span className="ml-1.5 text-[10px] font-normal px-1.5 py-0.5 rounded-full bg-green-50 text-green-700">saving</span>
-            )}
-            {entry.template.chitFund?.isLifted && (
-              <span className="ml-1.5 text-[10px] font-normal px-1.5 py-0.5 rounded-full bg-zinc-100 text-zinc-600">lifted</span>
-            )}
           </p>
           <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
             <span>{getCategoryDisplay(entry.template.category, entry.template.customCategory)}</span>
-            {entry.template.chitFund && !isPaid && (
-              <span className={cn("text-[10px]", entry.template.chitFund.isLifted ? "text-zinc-400" : "text-emerald-600")}>
-                {entry.template.chitFund.isLifted ? "lifted" : `${fmt(entry.template.chitFund.accumulatedSavings)} saved`}
-              </span>
-            )}
-            {entry.template.category === "CHIT_FUND" && entry.template.chitFund?.startDate && entry.template.chitFund?.durationMonths && (
-              <span className="text-[10px] text-muted-foreground/70">
-                month {computeChitCurrentMonth(entry.template.chitFund.startDate)} of {entry.template.chitFund.durationMonths}
-              </span>
-            )}
             {isLoan && loanAmort && loanAmort.monthsRemaining > 0 && (
               <span className="text-[10px] text-muted-foreground/70">
                 {loanAmort.monthsRemaining} mo left

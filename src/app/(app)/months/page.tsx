@@ -3,6 +3,7 @@ import { getActiveTemplates } from "@/lib/cached-queries";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { computeLoanAmortization, computeChitEndDate } from "@/lib/loan-utils";
+import { computeMonthIncome } from "@/lib/finance-utils";
 import { YearOverviewClient, type MonthData } from "@/components/months/year-overview-client";
 import { CATEGORY_LABELS, CATEGORY_COLORS, MONTHS } from "@/lib/utils";
 import type { AnalyticsData } from "@/components/months/stats-breakdown";
@@ -159,8 +160,7 @@ export default async function MonthsPage() {
   const currentFYMonths: MonthData[] = fyMonths.map(({ month, year }) => {
     const actual = allMonths.find(m => m.month === month && m.year === year && m.isPopulated);
     if (actual) {
-      const income = actual.salaryIncome + actual.freelanceIncome + actual.otherIncome
-        + actual.adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0);
+      const income = computeMonthIncome(actual.adHocItems, incomeTemplates, month, year);
       const isActualCurrentMonth = month === todayMonth && year === todayYear;
       const expenses = actual.entries
         .filter(e => !isActualCurrentMonth || !pendingCCBillIds.has(e.id))
@@ -237,8 +237,7 @@ export default async function MonthsPage() {
     const { fyStart: mFYStart, fyKey: mFY } = getFY(m.month, m.year);
     if (mFYStart === fyStart) continue; // skip current FY
     if (!pastFYMap[mFY]) pastFYMap[mFY] = { income: 0, expenses: 0, count: 0 };
-    const income = m.salaryIncome + m.freelanceIncome + m.otherIncome
-      + m.adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0);
+    const income = computeMonthIncome(m.adHocItems, incomeTemplates, m.month, m.year);
     const expenses = m.entries.reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
       + m.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0);
     pastFYMap[mFY].income += income;
@@ -262,8 +261,7 @@ export default async function MonthsPage() {
   let currentMonthInsights: InsightData = null;
   if (currentMonthFull?.isPopulated) {
     const cm = currentMonthFull;
-    const cmIncome = cm.salaryIncome + cm.freelanceIncome + cm.otherIncome
-      + cm.adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0);
+    const cmIncome = computeMonthIncome(cm.adHocItems, incomeTemplates, cm.month, cm.year);
     const cmExpenses = cm.entries
       .filter(e => !pendingCCBillIds.has(e.id))
       .reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
@@ -354,10 +352,7 @@ export default async function MonthsPage() {
     }
   }
   const fyExpenses = recurringTotal + adHocExpenseTotal;
-  const fyIncomeTotal = fyActual.reduce((s, m) => {
-    return s + m.salaryIncome + m.freelanceIncome + m.otherIncome
-      + m.adHocItems.filter(i => i.type === "INCOME").reduce((si, i) => si + i.amount, 0);
-  }, 0);
+  const fyIncomeTotal = fyActual.reduce((s, m) => s + computeMonthIncome(m.adHocItems, incomeTemplates, m.month, m.year), 0);
 
   // Group templates by category, add ad-hoc items per category
   const catMap = new Map<string, { total: number; items: TEntry[] }>();
@@ -407,8 +402,7 @@ export default async function MonthsPage() {
   // Monthly trends
   const monthlyTrends = fyActual.map(m => {
     const isCurrentM = m.month === todayMonth && m.year === todayYear;
-    const income = m.salaryIncome + m.freelanceIncome + m.otherIncome
-      + m.adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0);
+    const income = computeMonthIncome(m.adHocItems, incomeTemplates, m.month, m.year);
     const expenses = m.entries
       .filter(e => !isCurrentM || !pendingCCBillIds.has(e.id))
       .reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
@@ -419,10 +413,10 @@ export default async function MonthsPage() {
       expenses,
       balance: income - expenses,
       savingsRate: income > 0 ? Math.round(((income - expenses) / income) * 100) : 0,
-      salary: m.salaryIncome,
-      freelance: m.freelanceIncome,
-      other: m.otherIncome,
-      adHocIncome: m.adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0),
+      salary: income,
+      freelance: 0,
+      other: 0,
+      adHocIncome: 0,
     };
   });
 
@@ -507,7 +501,6 @@ export default async function MonthsPage() {
         name: t.name,
         monthlyAmount,
         totalValue: cf.totalValue,
-        accumulated: cf.accumulatedSavings,
         isLifted: cf.isLifted,
         endsMonth,
         endsYear,
@@ -528,8 +521,7 @@ export default async function MonthsPage() {
       eventMap.get(key)!.push({ name: l.name, type: "LOAN", monthlyRelief: l.monthlyAmount });
     }
   }
-  // Only lifted chits are true obligations (loan repayment after taking the payout).
-  // Unlifted chits are investments — the monthly payment goes into the pot, not a debt.
+  // Track when chit obligations end for the relief milestones panel.
   for (const c of chits) {
     if (c.isLifted && c.remainingMonths > 0) {
       const key = `${c.endsYear}-${String(c.endsMonth).padStart(2, "0")}`;
@@ -568,8 +560,7 @@ export default async function MonthsPage() {
   // All-time best/worst months
   const allTimeStats = analyticsMonths.map(m => {
     const isCurrentM = m.month === todayMonth && m.year === todayYear;
-    const income = m.salaryIncome + m.freelanceIncome + m.otherIncome
-      + m.adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0);
+    const income = computeMonthIncome(m.adHocItems, incomeTemplates, m.month, m.year);
     const expenses = m.entries
       .filter(e => !isCurrentM || !pendingCCBillIds.has(e.id))
       .reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
@@ -603,13 +594,12 @@ export default async function MonthsPage() {
   // Income stats
   const avgMonthlyIncome = monthlyTrends.length > 0
     ? Math.round(monthlyTrends.reduce((s, m) => s + m.income, 0) / monthlyTrends.length) : 0;
-  const totalFYFreelance = fyActual.reduce((s, m) => s + m.freelanceIncome, 0);
-  const freelancePct = fyIncomeTotal > 0 ? Math.round((totalFYFreelance / fyIncomeTotal) * 100) : 0;
+  const freelancePct = 0;
   const incomeSources = {
-    salary: fyActual.reduce((s, m) => s + m.salaryIncome, 0),
-    freelance: totalFYFreelance,
-    other: fyActual.reduce((s, m) => s + m.otherIncome, 0),
-    adHoc: fyActual.reduce((s, m) => s + m.adHocItems.filter(i => i.type === "INCOME").reduce((si, i) => si + i.amount, 0), 0),
+    salary: fyIncomeTotal,
+    freelance: 0,
+    other: 0,
+    adHoc: 0,
   };
 
   const analyticsData: AnalyticsData = {

@@ -67,7 +67,6 @@ export type AnalyticsData = {
     name: string;
     monthlyAmount: number;
     totalValue: number;
-    accumulated: number;
     isLifted: boolean;
     endsMonth: number;
     endsYear: number;
@@ -536,7 +535,7 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
                           <div className="h-full rounded-full bg-indigo-400 transition-all" style={{ width: `${progressPct}%` }} />
                         </div>
                         <div className="flex justify-between mt-1">
-                          <span className="text-[10px] text-muted-foreground">{fmt(c.accumulated)} saved</span>
+                          <span className="text-[10px] text-muted-foreground">month {elapsed} of {c.durationMonths}</span>
                           <span className="text-[10px] text-muted-foreground">{progressPct}%</span>
                         </div>
                       </div>

@@ -14,7 +14,6 @@ export interface EntryBase {
   template: {
     category: string;
     statementDay: number | null;
-    chitFund: { isLifted: boolean } | null;
   };
 }
 
@@ -24,7 +23,6 @@ export interface ProgressMetrics {
   totalPending: number;
   paidPercent: number;
   pendingCount: number;
-  chitInvestment: number;
   ccBillsThisMonth: number;
   recurringNonCC: number;
   ccNextMonth: number;
@@ -63,9 +61,52 @@ export function isBillPending(
   );
 }
 
-/** Unlifted chit fund payment counts as investment, not expense. */
-export function isPreLiftChit(e: EntryBase): boolean {
-  return e.template.category === "CHIT_FUND" && !e.template.chitFund?.isLifted;
+export interface IncomeTemplateForCalc {
+  id: string;
+  amount: number;
+  pendingAmount: number | null;
+  pendingFromMonth: number | null;
+  pendingFromYear: number | null;
+}
+
+export interface AdHocForIncome {
+  type: string;
+  amount: number;
+  notes: string | null;
+}
+
+/**
+ * Correct income for a month.
+ * income_override:<templateId> adhocs REPLACE the corresponding template's amount.
+ * Regular adhoc INCOME items are added on top.
+ * Uses current template amounts for non-overridden templates (with pendingAmount promotion).
+ */
+export function computeMonthIncome(
+  adHocItems: AdHocForIncome[],
+  incomeTemplates: IncomeTemplateForCalc[],
+  month: number,
+  year: number,
+): number {
+  const overrides = new Map<string, number>();
+  let nonOverrideAdhoc = 0;
+  for (const item of adHocItems) {
+    if (item.type !== "INCOME") continue;
+    if (item.notes?.startsWith("income_override:")) {
+      overrides.set(item.notes.slice("income_override:".length), item.amount);
+    } else {
+      nonOverrideAdhoc += item.amount;
+    }
+  }
+  const templateIncome = incomeTemplates.reduce((sum, t) => {
+    if (overrides.has(t.id)) return sum + overrides.get(t.id)!;
+    let amount = t.amount;
+    if (t.pendingAmount != null && t.pendingFromMonth != null && t.pendingFromYear != null) {
+      const kicks = year > t.pendingFromYear || (year === t.pendingFromYear && month >= t.pendingFromMonth);
+      if (kicks) amount = t.pendingAmount;
+    }
+    return sum + amount;
+  }, 0);
+  return templateIncome + nonOverrideAdhoc;
 }
 
 /** All progress and CC metrics in one pass over entries. */
@@ -77,20 +118,14 @@ export function computeMetrics(
   let totalCommitted = 0;
   let totalPaid = 0;
   let pendingCount = 0;
-  let chitInvestment = 0;
   let ccBillsThisMonth = 0;
   let ccNextMonth = 0;
 
   for (const e of entries) {
     const pending = isBillPending(e, isCurrentMonth, todayDay);
-    const preLift = isPreLiftChit(e);
     const net = netAmount(e);
     const paid = effectivePaid(e);
 
-    if (preLift) {
-      chitInvestment += net;
-      continue;
-    }
     if (pending) continue;
 
     totalCommitted += net;
@@ -99,7 +134,6 @@ export function computeMetrics(
 
     if (e.template.category === "CREDIT_CARD") {
       ccBillsThisMonth += net;
-      // Next month liability: post-close charges + rolling underpaid balance
       const rolling = !e.isPaid ? Math.max(0, (e.billedAmount ?? e.amount) - e.amount) : 0;
       ccNextMonth += (e.statementAmount ?? 0) + rolling;
     }
@@ -116,7 +150,6 @@ export function computeMetrics(
     totalPending: totalCommitted - totalPaid,
     paidPercent,
     pendingCount,
-    chitInvestment,
     ccBillsThisMonth,
     recurringNonCC,
     ccNextMonth,

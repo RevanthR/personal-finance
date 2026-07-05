@@ -4,7 +4,7 @@ import { useState, useMemo, useTransition } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { formatCurrency, formatMonthYear, getCategoryDisplay, getCategoryColor, MONTHS, pendingAmountKicks } from "@/lib/utils";
-import { netAmount as _net, effectivePaid as _effectivePaid, isBillPending as _isBillPending, isPreLiftChit as _isPreLiftChit, computeMetrics } from "@/lib/finance-utils";
+import { netAmount as _net, effectivePaid as _effectivePaid, isBillPending as _isBillPending, computeMetrics, computeMonthIncome } from "@/lib/finance-utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -62,8 +62,6 @@ interface DashboardClientProps {
   recentMonths: RecentMonthSummary[];
   ccTemplates: { id: string; name: string; statementDay: number | null; dueDateDay: number | null }[];
   incomeTemplates: IncomeTemplate[];
-  preLiftChitTemplateIds?: string[];
-  liftedChitInfos?: { templateId: string; liftMonth: number; liftYear: number }[];
   todayMonth: number;
   todayYear: number;
   userId: string;
@@ -93,7 +91,7 @@ type RecentMonthSummary = {
 type EntryWithTemplate = {
   id: string; amount: number; isPaid: boolean; paidOn: string | null; paidAmount: number | null; cashbackAmount: number | null; notes: string | null; templateId: string;
   statementAmount: number | null; billedAmount: number | null;
-  template: { id: string; name: string; category: string; customCategory: string | null; isFixed: boolean; dueDateDay: number | null; statementDay: number | null; chitFund: { isLifted: boolean; accumulatedSavings: number; startDate: string | null; durationMonths: number | null } | null; loanInterestRate: number | null; loanRateType: string | null; loanOriginalPrincipal: number | null; loanStartDate: string | null; loanOutstandingOverride: number | null };
+  template: { id: string; name: string; category: string; customCategory: string | null; isFixed: boolean; dueDateDay: number | null; statementDay: number | null; loanInterestRate: number | null; loanRateType: string | null; loanOriginalPrincipal: number | null; loanStartDate: string | null; loanOutstandingOverride: number | null };
 };
 
 type AdHocItem = {
@@ -115,7 +113,6 @@ const CC_SUBCATEGORIES = ["Food", "Coffee", "Groceries", "Fuel", "Shopping", "Tr
 // Thin wrappers so all local call-sites work unchanged
 function net(e: EntryWithTemplate)                                              { return _net(e); }
 function effectivePaid(e: EntryWithTemplate)                                    { return _effectivePaid(e); }
-function isPreLiftChit(e: EntryWithTemplate)                                    { return _isPreLiftChit(e); }
 function isBillPending(e: EntryWithTemplate, isCurrent: boolean, day: number)   { return _isBillPending(e, isCurrent, day); }
 
 function parseCCSubcat(notes: string | null): string {
@@ -264,7 +261,7 @@ function CCCardBlock({
   );
 }
 
-export function DashboardClient({ currentMonth: initialMonth, recentMonths: initialRecentMonths, ccTemplates, incomeTemplates, preLiftChitTemplateIds = [], liftedChitInfos = [], todayMonth, todayYear, targetMonth, targetYear, prevUrl, nextUrl, projectedIncome, projectedEntries }: DashboardClientProps) {
+export function DashboardClient({ currentMonth: initialMonth, recentMonths: initialRecentMonths, ccTemplates, incomeTemplates, todayMonth, todayYear, targetMonth, targetYear, prevUrl, nextUrl, projectedIncome, projectedEntries }: DashboardClientProps) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const viewMonth = targetMonth ?? todayMonth;
@@ -338,19 +335,19 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   );
   const {
     totalCommitted, totalPaid, totalPending, paidPercent, pendingCount,
-    chitInvestment, ccBillsThisMonth, recurringNonCC, ccNextMonth,
+    ccBillsThisMonth, recurringNonCC, ccNextMonth,
   } = metrics;
 
-  const balance = grandIncome - totalCommitted - chitInvestment - adHocExpense;
-  const inHandNow = grandIncome - totalPaid - chitInvestment - adHocExpense;
+  const balance   = grandIncome - totalCommitted - adHocExpense;
+  const inHandNow = grandIncome - totalPaid - adHocExpense;
 
   const nonCCPaidAmount = useMemo(() =>
-    entries.filter(e => e.template.category !== "CREDIT_CARD" && !isPreLiftChit(e))
+    entries.filter(e => e.template.category !== "CREDIT_CARD")
            .reduce((s, e) => s + effectivePaid(e), 0),
     [entries],
   );
   const nonCCPendingCount = useMemo(() =>
-    entries.filter(e => e.template.category !== "CREDIT_CARD" && !e.isPaid && !isPreLiftChit(e)).length,
+    entries.filter(e => e.template.category !== "CREDIT_CARD" && !e.isPaid).length,
     [entries],
   );
   const nonCCPaidPercent = recurringNonCC > 0 ? Math.round((nonCCPaidAmount / recurringNonCC) * 100) : 0;
@@ -474,23 +471,20 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   }, [entries, adHocItems, isProjected, projEntries]);
 
   const { fyIncome, fyExpenses, fyBalance, trendData } = useMemo(() => {
-    const preLiftSet = new Set(preLiftChitTemplateIds);
-    const liftMap = new Map(liftedChitInfos.map(c => [c.templateId, { liftMonth: c.liftMonth, liftYear: c.liftYear }]));
-
-    function isChitInvestmentEntry(templateId: string, entryMonth: number, entryYear: number): boolean {
-      if (preLiftSet.has(templateId)) return true;
-      const lift = liftMap.get(templateId);
-      if (!lift) return false;
-      return entryYear < lift.liftYear || (entryYear === lift.liftYear && entryMonth < lift.liftMonth);
-    }
-
+    const ccStatementDayById = new Map(ccTemplates.map(t => [t.id, t.statementDay]));
     const monthIncome = (m: typeof recentMonths[0]) =>
-      m.salaryIncome + m.freelanceIncome + m.otherIncome
-      + m.adHocItems.filter(i => i.type === "INCOME" && !i.notes?.startsWith("income_override:")).reduce((a, i) => a + i.amount, 0);
-    const monthExpenses = (m: typeof recentMonths[0]) =>
-      m.entries.filter(e => !isChitInvestmentEntry(e.templateId, m.month, m.year))
-               .reduce((a, e) => a + e.amount - (e.cashbackAmount ?? 0), 0)
+      computeMonthIncome(m.adHocItems, incomeTemplates, m.month, m.year);
+    const monthExpenses = (m: typeof recentMonths[0]) => {
+      const isCurrent = m.month === todayMonth && m.year === todayYear;
+      return m.entries.reduce((a, e) => {
+        if (isCurrent) {
+          const stDay = ccStatementDayById.get(e.templateId);
+          if (stDay != null && todayDay < stDay) return a;
+        }
+        return a + e.amount - (e.cashbackAmount ?? 0);
+      }, 0)
       + m.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((a, i) => a + i.amount, 0);
+    };
 
     const fyIncome   = recentMonths.reduce((s, m) => s + monthIncome(m), 0);
     const fyExpenses = recentMonths.reduce((s, m) => s + monthExpenses(m), 0);
@@ -500,7 +494,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       Expenses: monthExpenses(m),
     }));
     return { fyIncome, fyExpenses, fyBalance: fyIncome - fyExpenses, trendData };
-  }, [recentMonths, preLiftChitTemplateIds, liftedChitInfos]);
+  }, [recentMonths, incomeTemplates, ccTemplates, todayMonth, todayYear, todayDay]);
 
   const ccSubcatBreakdown = useMemo(() => {
     const totals: Record<string, number> = {};
@@ -520,15 +514,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       .filter(m => !(m.month === currentMonth?.month && m.year === currentMonth?.year))
       .sort((a, b) => b.year - a.year || b.month - a.month)[0];
     if (!prev) return { prevMonthName: null, expensesDelta: null };
-    const preLiftSet2 = new Set(preLiftChitTemplateIds);
-    const liftMap2 = new Map(liftedChitInfos.map(c => [c.templateId, { liftMonth: c.liftMonth, liftYear: c.liftYear }]));
     const prevExp = prev.entries
-      .filter(e => {
-        if (preLiftSet2.has(e.templateId)) return false;
-        const lift = liftMap2.get(e.templateId);
-        if (lift && (prev.year < lift.liftYear || (prev.year === lift.liftYear && prev.month < lift.liftMonth))) return false;
-        return true;
-      })
       .reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
       + prev.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0);
     return {
@@ -538,7 +524,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   }, [recentMonths, currentMonth, totalCommitted, adHocExpense]);
 
   const fixedAmount = useMemo(
-    () => entries.filter(e => e.template.isFixed && !isBillPending(e, isCurrentMonth, todayDay) && !isPreLiftChit(e)).reduce((s, e) => s + net(e), 0),
+    () => entries.filter(e => e.template.isFixed && !isBillPending(e, isCurrentMonth, todayDay)).reduce((s, e) => s + net(e), 0),
     [entries, isCurrentMonth, todayDay]
   );
   const variableAmount = totalCommitted - fixedAmount + adHocExpense;
@@ -1397,8 +1383,7 @@ function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, 
   const [collapsed, setCollapsed] = useState(true);
 
   // Include fully paid + partially paid entries (expenses only, not investments)
-  const shown = entries.filter(e => !isPreLiftChit(e) && (e.isPaid || (e.paidAmount != null && e.paidAmount > 0)));
-  const chitInvested = entries.filter(e => isPreLiftChit(e) && e.isPaid).reduce((s, e) => s + effectivePaid(e), 0);
+  const shown = entries.filter(e => e.isPaid || (e.paidAmount != null && e.paidAmount > 0));
   const cashItems = adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD");
   if (!shown.length && cashItems.length === 0) return null;
 
@@ -1499,20 +1484,6 @@ function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, 
             </div>
           )}
 
-          {chitInvested > 0 && (
-            <div className="flex items-center justify-between px-4 py-2.5 bg-amber-50/60 border-t border-amber-100">
-              <span className="text-xs font-semibold text-amber-700">Invested (chit)</span>
-              <span className="text-sm font-bold text-amber-700 tabular-nums">{fmt(chitInvested)}</span>
-            </div>
-          )}
-          {grandIncome > 0 && (
-            <div className="flex items-center justify-between px-4 py-2.5 bg-emerald-50/80 border-t border-emerald-100">
-              <span className="text-xs font-semibold text-emerald-700">In hand</span>
-              <span className={cn("text-sm font-bold tabular-nums", grandIncome - totalPaidOut - chitInvested - adHocExpense >= 0 ? "text-emerald-700" : "text-red-600")}>
-                {fmt(grandIncome - totalPaidOut - chitInvested - adHocExpense)}
-              </span>
-            </div>
-          )}
         </div>
       )}
     </div>

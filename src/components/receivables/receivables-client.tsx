@@ -8,16 +8,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { formatCurrency, cn } from "@/lib/utils";
+import { formatCurrency, cn, MONTHS } from "@/lib/utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { Plus, TrendingUp, TrendingDown, Wallet, Clock, CheckCircle2, Trash2, CreditCard, Pencil, AlertCircle } from "lucide-react";
-import { computeChitCurrentMonth } from "@/lib/loan-utils";
 import { PageCoach } from "@/components/coach/page-coach";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
 const AddChitDialog       = dynamic(() => import("@/components/chits/add-chit-dialog").then(m => m.AddChitDialog), { ssr: false });
 const LiftChitDialog      = dynamic(() => import("@/components/chits/lift-chit-dialog").then(m => m.LiftChitDialog), { ssr: false });
+const EditChitDialog      = dynamic(() => import("@/components/chits/edit-chit-dialog").then(m => m.EditChitDialog), { ssr: false });
 const AddReceivableDialog = dynamic(() => import("./add-receivable-dialog").then(m => m.AddReceivableDialog), { ssr: false });
 const MarkReceivedDialog  = dynamic(() => import("./mark-received-dialog").then(m => m.MarkReceivedDialog), { ssr: false });
 
@@ -41,7 +41,7 @@ type Chit = {
   monthlyUnliftedAmount: number; monthlyLiftedAmount: number | null;
   isLifted: boolean; liftedOn: string | null; liftedAmount: number | null;
   liftedUsedFor: string | null; accumulatedSavings: number; endDate: string | null;
-  template: { id: string; name: string; isActive: boolean };
+  template: { id: string; name: string; isActive: boolean; dueDateDay: number | null };
 };
 
 type Receivable = {
@@ -371,6 +371,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
   const [showAddChit, setShowAddChit]         = useState(false);
   const [showAddReceivable, setShowAddReceivable] = useState(false);
   const [liftingChit, setLiftingChit]         = useState<Chit | null>(null);
+  const [editingChit, setEditingChit]         = useState<Chit | null>(null);
   const [receivingItem, setReceivingItem]     = useState<Receivable | null>(null);
   const [deletingChitId, setDeletingChitId]   = useState<string | null>(null);
   const [deleteChitInProgress, setDeleteChitInProgress] = useState<string | null>(null);
@@ -438,13 +439,22 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
     setShowAddChit(false);
   }
 
-  async function handleLift(chitId: string, data: { liftedAmount: number; liftedUsedFor: string; monthlyLiftedAmount: number; liftMonth: number; liftYear: number }) {
+  async function handleLift(chitId: string, data: { liftedAmount: number; monthlyLiftedAmount: number; liftMonth: number; liftYear: number }) {
     const res = await fetch(`/api/chits/${chitId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ isLifted: true, ...data }) });
     if (!res.ok) { toast.error("Failed to lift chit"); return; }
     const updated = await res.json();
     setChits(prev => prev.map(c => c.id === chitId ? updated : c));
     toast.success("Chit lifted, income recorded");
     setLiftingChit(null);
+  }
+
+  async function handleEditChit(chitId: string, data: Record<string, unknown>) {
+    const res = await fetch(`/api/chits/${chitId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+    if (!res.ok) { toast.error("Failed to update chit"); return; }
+    const updated = await res.json();
+    setChits(prev => prev.map(c => c.id === chitId ? updated : c));
+    toast.success("Chit updated");
+    setEditingChit(null);
   }
 
   async function handleDeleteChit(chitId: string) {
@@ -566,50 +576,57 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Active</p>
               <div className="grid gap-3 sm:grid-cols-2">
                 {unliftedChits.map(chit => {
-                  const pct = Math.min(100, Math.round((chit.accumulatedSavings / chit.totalValue) * 100));
+                  const sd = new Date(chit.startDate);
+                  const smIdx = sd.getUTCMonth();
+                  const endIdx = (smIdx + chit.durationMonths - 1) % 12;
+                  const endYear = sd.getUTCFullYear() + Math.floor((smIdx + chit.durationMonths - 1) / 12);
+                  const endStr = `${MONTHS[endIdx]} ${endYear}`;
                   return (
                     <Card key={chit.id}>
                       <CardHeader className="pb-2 px-4 pt-4">
                         <div className="flex items-center justify-between gap-2">
                           <CardTitle className="text-sm font-semibold truncate">{chit.template.name}</CardTitle>
                           <Badge className="text-[11px] shrink-0 bg-amber-100 text-amber-700 border-0">
-                            <TrendingUp className="w-3 h-3 mr-1" />Chit
+                            <TrendingUp className="w-3 h-3 mr-1" />Active
                           </Badge>
                         </div>
                       </CardHeader>
                       <CardContent className="px-4 pb-4 space-y-3">
                         <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                           <div>
-                            <p className="text-[11px] text-muted-foreground">Total Value</p>
+                            <p className="text-[11px] text-muted-foreground">Pot value</p>
                             <p className="font-semibold">{fmt(chit.totalValue)}</p>
                           </div>
                           <div>
-                            <p className="text-[11px] text-muted-foreground">Accumulated</p>
-                            <p className="font-semibold text-amber-600">{fmt(chit.accumulatedSavings)} <span className="text-xs font-normal">({pct}%)</span></p>
-                          </div>
-                          <div>
                             <p className="text-[11px] text-muted-foreground">Monthly</p>
-                            <p className="font-semibold">{fmt(chit.monthlyUnliftedAmount)}</p>
-                          </div>
-                          <div>
-                            <p className="text-[11px] text-muted-foreground">Started</p>
                             <p className="font-semibold">
-                              {format(new Date(chit.startDate), "MMM yyyy")}
-                              {(() => {
-                                const cur = computeChitCurrentMonth(chit.startDate);
-                                return cur <= chit.durationMonths
-                                  ? <span className="ml-1 text-xs font-normal text-muted-foreground">(month {cur} of {chit.durationMonths})</span>
-                                  : null;
-                              })()}
+                              {fmt(chit.monthlyUnliftedAmount)}
+                              {chit.template.dueDateDay && (
+                                <span className="ml-1 text-xs font-normal text-muted-foreground">due {chit.template.dueDateDay}th</span>
+                              )}
                             </p>
                           </div>
+                          <div>
+                            <p className="text-[11px] text-muted-foreground">Period</p>
+                            <p className="font-semibold text-xs">
+                              {format(sd, "MMM yyyy")} → {endStr}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] text-muted-foreground">Duration</p>
+                            <p className="font-semibold">{chit.durationMonths} months</p>
+                          </div>
                         </div>
-                        <div className="w-full bg-muted rounded-full h-1.5">
-                          <div className="bg-amber-500 h-1.5 rounded-full" style={{ width: `${pct}%` }} />
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="sm" className="flex-1 h-8 text-xs"
+                            onClick={() => setEditingChit(chit)}>
+                            <Pencil className="w-3 h-3 mr-1" />Edit
+                          </Button>
+                          <Button size="sm" className="flex-1 h-8 text-xs bg-amber-600 hover:bg-amber-700"
+                            onClick={() => setLiftingChit(chit)}>
+                            Mark as Lifted
+                          </Button>
                         </div>
-                        <Button variant="outline" size="sm" className="w-full h-8 text-xs" onClick={() => setLiftingChit(chit)}>
-                          Mark as Lifted
-                        </Button>
                       </CardContent>
                     </Card>
                   );
@@ -629,7 +646,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                       <div className="flex items-center justify-between gap-2">
                         <CardTitle className="text-sm font-semibold truncate">{chit.template.name}</CardTitle>
                         <div className="flex items-center gap-2 shrink-0">
-                          <Badge variant="destructive" className="text-[11px]">
+                          <Badge variant="outline" className="text-[11px] text-indigo-600 border-indigo-300">
                             <TrendingDown className="w-3 h-3 mr-1" />Lifted
                           </Badge>
                           {deletingChitId === chit.id ? (
@@ -647,24 +664,30 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                         </div>
                       </div>
                     </CardHeader>
-                    <CardContent className="px-4 pb-4 space-y-2">
+                    <CardContent className="px-4 pb-4 space-y-3">
                       <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                         <div>
-                          <p className="text-[11px] text-muted-foreground">Amount Received</p>
-                          <p className="font-semibold">{fmt(chit.liftedAmount ?? 0)}</p>
+                          <p className="text-[11px] text-muted-foreground">Pot received</p>
+                          <p className="font-semibold text-green-600">{fmt(chit.liftedAmount ?? chit.totalValue)}</p>
                         </div>
                         <div>
-                          <p className="text-[11px] text-muted-foreground">Lifted On</p>
+                          <p className="text-[11px] text-muted-foreground">Lifted in</p>
                           <p className="font-semibold">{chit.liftedOn ? format(new Date(chit.liftedOn), "MMM yyyy") : "-"}</p>
                         </div>
                         <div>
-                          <p className="text-[11px] text-muted-foreground">Monthly Now</p>
-                          <p className="font-semibold">{fmt(chit.monthlyLiftedAmount ?? 0)}</p>
+                          <p className="text-[11px] text-muted-foreground">Monthly now</p>
+                          <p className="font-semibold">
+                            {fmt(chit.monthlyLiftedAmount ?? chit.monthlyUnliftedAmount)}
+                            {chit.template.dueDateDay && (
+                              <span className="ml-1 text-xs font-normal text-muted-foreground">due {chit.template.dueDateDay}th</span>
+                            )}
+                          </p>
                         </div>
                       </div>
-                      {chit.liftedUsedFor && (
-                        <p className="text-xs text-muted-foreground bg-muted rounded-md px-2 py-1.5">{chit.liftedUsedFor}</p>
-                      )}
+                      <Button variant="outline" size="sm" className="w-full h-8 text-xs"
+                        onClick={() => setEditingChit(chit)}>
+                        <Pencil className="w-3 h-3 mr-1" />Edit
+                      </Button>
                     </CardContent>
                   </Card>
                 ))}
@@ -801,6 +824,12 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
         <LiftChitDialog
           open={!!liftingChit} onOpenChange={o => !o && setLiftingChit(null)}
           chit={liftingChit} onLift={data => handleLift(liftingChit.id, data)}
+        />
+      )}
+      {editingChit && (
+        <EditChitDialog
+          open={!!editingChit} onOpenChange={o => !o && setEditingChit(null)}
+          chit={editingChit} onSave={handleEditChit}
         />
       )}
       {receivingItem && (

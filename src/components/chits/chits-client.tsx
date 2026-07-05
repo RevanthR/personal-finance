@@ -4,15 +4,21 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { formatCurrency } from "@/lib/utils";
 import { usePrivacy } from "@/contexts/privacy-context";
-import { Plus, TrendingUp, TrendingDown, Coins, Trash2 } from "lucide-react";
+import { Plus, TrendingUp, TrendingDown, Coins, Trash2, Pencil, Check, X } from "lucide-react";
 import { PageCoach } from "@/components/coach/page-coach";
 import { toast } from "sonner";
 import { AddChitDialog } from "./add-chit-dialog";
 import { LiftChitDialog } from "./lift-chit-dialog";
 import { format } from "date-fns";
+
+const MONTH_NAMES = [
+  "January","February","March","April","May","June",
+  "July","August","September","October","November","December",
+];
 
 type Chit = {
   id: string;
@@ -42,6 +48,10 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
   const [liftingChit, setLiftingChit] = useState<Chit | null>(null);
   const [deletingChitId, setDeletingChitId] = useState<string | null>(null);
   const [deleteInProgress, setDeleteInProgress] = useState<string | null>(null);
+  const [editingLiftId, setEditingLiftId] = useState<string | null>(null);
+  const [editLiftMonth, setEditLiftMonth] = useState("");
+  const [editLiftYear, setEditLiftYear] = useState("");
+  const [editLiftSaving, setEditLiftSaving] = useState(false);
 
   const activeChits = chits.filter((c) => !c.isLifted && c.template.isActive);
   const liftedChits = chits.filter((c) => c.isLifted);
@@ -84,8 +94,9 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
 
   async function handleLift(chitId: string, data: {
     liftedAmount: number;
-    liftedUsedFor: string;
     monthlyLiftedAmount: number;
+    liftMonth: number;
+    liftYear: number;
   }) {
     const res = await fetch(`/api/chits/${chitId}`, {
       method: "PATCH",
@@ -97,6 +108,28 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
     setChits((prev) => prev.map((c) => c.id === chitId ? updated : c));
     toast.success("Chit marked as lifted");
     setLiftingChit(null);
+  }
+
+  function startEditLift(chit: Chit) {
+    const d = chit.liftedOn ? new Date(chit.liftedOn) : new Date();
+    setEditLiftMonth(String(d.getUTCMonth() + 1));
+    setEditLiftYear(String(d.getUTCFullYear()));
+    setEditingLiftId(chit.id);
+  }
+
+  async function saveEditLift(chitId: string) {
+    setEditLiftSaving(true);
+    const res = await fetch(`/api/chits/${chitId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ liftMonth: parseInt(editLiftMonth), liftYear: parseInt(editLiftYear) }),
+    });
+    if (!res.ok) { toast.error("Failed to update lift date"); setEditLiftSaving(false); return; }
+    const updated = await res.json();
+    setChits((prev) => prev.map((c) => c.id === chitId ? updated : c));
+    toast.success("Lift date updated");
+    setEditingLiftId(null);
+    setEditLiftSaving(false);
   }
 
   return (
@@ -259,10 +292,52 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
                       <p className="font-semibold">{fmt(chit.liftedAmount ?? 0)}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground">Lifted On</p>
-                      <p className="font-semibold">
-                        {chit.liftedOn ? format(new Date(chit.liftedOn), "MMM yyyy") : "-"}
-                      </p>
+                      <p className="text-xs text-muted-foreground">Lifted In</p>
+                      {editingLiftId === chit.id ? (
+                        <div className="flex items-center gap-1 mt-1">
+                          <select
+                            value={editLiftMonth}
+                            onChange={(e) => setEditLiftMonth(e.target.value)}
+                            className="flex-1 rounded border border-input bg-background px-1 py-0.5 text-xs"
+                          >
+                            {MONTH_NAMES.map((m, i) => (
+                              <option key={i + 1} value={i + 1}>{m.slice(0, 3)}</option>
+                            ))}
+                          </select>
+                          <Input
+                            type="number"
+                            value={editLiftYear}
+                            onChange={(e) => setEditLiftYear(e.target.value)}
+                            min="2020" max="2040"
+                            className="w-16 h-6 text-xs px-1"
+                          />
+                          <button
+                            onClick={() => saveEditLift(chit.id)}
+                            disabled={editLiftSaving}
+                            className="p-0.5 text-green-600 hover:text-green-700"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => setEditingLiftId(null)}
+                            className="p-0.5 text-muted-foreground hover:text-foreground"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <p className="font-semibold">
+                            {chit.liftedOn ? format(new Date(chit.liftedOn), "MMM yyyy") : "-"}
+                          </p>
+                          <button
+                            onClick={() => startEditLift(chit)}
+                            className="p-0.5 text-muted-foreground hover:text-foreground"
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">Monthly (now)</p>
