@@ -1402,27 +1402,12 @@ function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, 
               </div>
             );
           })}
-          {/* Cash / UPI spend this month */}
+          {/* Cash / UPI spend this month — total only, items visible in main feed */}
           {cashItems.length > 0 && (
-            <div className="px-4 py-2.5 border-b border-border/50">
-              <div className="flex items-center gap-1.5 mb-2">
-                <IndianRupee className="w-3 h-3 text-orange-500 shrink-0" />
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex-1">Cash / UPI spend</span>
-                <span className="text-xs font-semibold tabular-nums">{fmt(adHocExpense)}</span>
-              </div>
-              <div className="space-y-1.5 pl-3">
-                {cashItems.map(item => (
-                  <div key={item.id} className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <span className="text-xs text-muted-foreground truncate block">{item.name}</span>
-                      {item.date && (
-                        <span className="text-[10px] text-muted-foreground/60">{format(new Date(item.date), "do MMM")}</span>
-                      )}
-                    </div>
-                    <span className="text-xs font-semibold tabular-nums shrink-0">{fmt(item.amount)}</span>
-                  </div>
-                ))}
-              </div>
+            <div className="flex items-center gap-1.5 px-4 py-2.5 border-b border-border/50">
+              <IndianRupee className="w-3 h-3 text-orange-500 shrink-0" />
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex-1">Cash / UPI spend</span>
+              <span className="text-xs font-semibold tabular-nums">{fmt(adHocExpense)}</span>
             </div>
           )}
 
