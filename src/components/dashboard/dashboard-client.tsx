@@ -379,9 +379,22 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
 
     const result: Record<string, GroupedItem[]> = {};
 
+    // Sort: pending first (by due date asc, then amount desc), paid last (by paidOn desc)
+    const sortEntries = (a: EntryWithTemplate, b: EntryWithTemplate) => {
+      if (a.isPaid !== b.isPaid) return a.isPaid ? 1 : -1;
+      if (!a.isPaid) {
+        const aDue = a.template.dueDateDay ?? 999;
+        const bDue = b.template.dueDateDay ?? 999;
+        if (aDue !== bDue) return aDue - bDue;
+        return net(b) - net(a);
+      }
+      if (a.paidOn && b.paidOn) return b.paidOn.localeCompare(a.paidOn);
+      return a.paidOn ? -1 : b.paidOn ? 1 : 0;
+    };
+
     // Template entries grouped by category
     for (const cat of CATEGORY_ORDER) {
-      const items = entries.filter(e => e.template.category === cat && !e.template.customCategory);
+      const items = entries.filter(e => e.template.category === cat && !e.template.customCategory).sort(sortEntries);
       if (items.length) result[cat] = items.map(d => ({ kind: "entry" as const, data: d }));
     }
     for (const e of entries) {
@@ -389,6 +402,14 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
         const key = e.template.customCategory;
         if (!result[key]) result[key] = [];
         result[key].push({ kind: "entry", data: e });
+      }
+    }
+    // Sort custom category groups too
+    for (const key of Object.keys(result)) {
+      if (!CATEGORY_ORDER.includes(key as typeof CATEGORY_ORDER[number])) {
+        result[key] = result[key].sort((a, b) =>
+          a.kind === "entry" && b.kind === "entry" ? sortEntries(a.data, b.data) : 0
+        );
       }
     }
 
