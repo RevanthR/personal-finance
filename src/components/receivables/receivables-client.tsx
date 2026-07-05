@@ -154,7 +154,7 @@ const NETWORK_ACCENT: Record<string, { bar: string; badge: string }> = {
   Amex:       { bar: "bg-emerald-600",badge: "bg-emerald-50 text-emerald-700 border-emerald-200" },
 };
 
-function CCCardTile({ card, fmt, currentMonthLabel, onEntryUpdate, onDelete, onMetaUpdate }: {
+function CCCardTile({ card, fmt, onEntryUpdate, onDelete, onMetaUpdate }: {
   card: CCCard;
   fmt: (v: number) => string;
   currentMonthLabel: string;
@@ -200,124 +200,155 @@ function CCCardTile({ card, fmt, currentMonthLabel, onEntryUpdate, onDelete, onM
 
   return (
     <div className={cn(
-      "relative rounded-xl border border-border bg-card overflow-hidden flex flex-col",
+      "rounded-xl border border-border bg-card overflow-hidden",
       entry?.isPaid && "opacity-60"
     )}>
       {/* Network colour bar */}
-      <div className={cn("h-1 w-full shrink-0", accent?.bar ?? "bg-zinc-200")} />
+      <div className={cn("h-1 w-full", accent?.bar ?? "bg-zinc-200")} />
 
-      <div className="flex flex-col gap-2 px-3 pt-2.5 pb-3 flex-1">
-        {/* Top row: name + delete */}
-        <div className="flex items-start justify-between gap-1">
+      <div className="px-4 pt-3 pb-4 space-y-3">
+
+        {/* Header: name + delete */}
+        <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-xs font-semibold leading-tight truncate">{card.template.name}</p>
-            {card.bank && <p className="text-[10px] text-muted-foreground truncate">{card.bank}</p>}
-          </div>
-          {confirmDelete ? (
-            <div className="flex items-center gap-1 shrink-0">
-              <button className="text-[10px] text-destructive font-medium" onClick={() => onDelete(card.id)}>Yes</button>
-              <button className="text-[10px] text-muted-foreground" onClick={() => setConfirmDelete(false)}>No</button>
-            </div>
-          ) : (
-            <button onClick={() => setConfirmDelete(true)} className="shrink-0 p-0.5 text-muted-foreground/40 hover:text-destructive transition-colors">
-              <Trash2 className="w-3 h-3" />
-            </button>
-          )}
-        </div>
-
-        {/* Amount */}
-        <div className="flex-1">
-          {settingBill ? (
-            <div className="flex gap-1">
-              <Input
-                type="number" min={0} step={1}
-                value={billInput} onChange={e => setBillInput(e.target.value)}
-                placeholder="amount" className="h-6 text-xs px-2 flex-1 min-w-0"
-                autoFocus onKeyDown={e => { if (e.key === "Enter") handleSetBill(); if (e.key === "Escape") setSettingBill(false); }}
-              />
-              <button className="text-[10px] font-medium text-primary shrink-0" onClick={handleSetBill} disabled={saving}>
-                {saving ? "…" : "Set"}
-              </button>
-              <button className="text-[10px] text-muted-foreground shrink-0" onClick={() => setSettingBill(false)}>✕</button>
-            </div>
-          ) : billed != null ? (
-            <div>
-              <p className="text-base font-bold tabular-nums leading-none">{fmt(billed)}</p>
-              {rolling > 0 && (
-                <p className="text-[10px] text-amber-600 mt-0.5">
-                  <AlertCircle className="w-2.5 h-2.5 inline mr-0.5" />{fmt(rolling)} rolling
-                </p>
-              )}
-            </div>
-          ) : (
-            <p className="text-[11px] text-muted-foreground/60 italic">no bill</p>
-          )}
-        </div>
-
-        {/* Footer: dates + network + action */}
-        {editingDates ? (
-          <div className="space-y-1.5">
-            <div className="grid grid-cols-2 gap-1">
-              <div>
-                <p className="text-[9px] text-muted-foreground mb-0.5">Closes (day)</p>
-                <Input type="number" min={1} max={31} value={stmtInput} onChange={e => setStmtInput(e.target.value)}
-                  placeholder="15" className="h-6 text-xs px-2" />
-              </div>
-              <div>
-                <p className="text-[9px] text-muted-foreground mb-0.5">Due (day)</p>
-                <Input type="number" min={1} max={31} value={dueInput} onChange={e => setDueInput(e.target.value)}
-                  placeholder="5" className="h-6 text-xs px-2" />
-              </div>
-            </div>
-            <div className="flex gap-1">
-              <button onClick={handleSaveDates} disabled={savingDates} className="text-[10px] font-semibold text-primary hover:underline">
-                {savingDates ? "…" : "Save"}
-              </button>
-              <button onClick={() => setEditingDates(false)} className="text-[10px] text-muted-foreground hover:underline">Cancel</button>
-            </div>
-          </div>
-        ) : (
-          <div className="flex items-end justify-between gap-1">
-            <div className="space-y-0.5">
-              <div className="flex items-center gap-1">
-                {(card.template.statementDay || card.template.dueDateDay) ? (
-                  <p className="text-[10px] text-muted-foreground leading-tight">
-                    {card.template.statementDay && `cls ${card.template.statementDay}`}
-                    {card.template.statementDay && card.template.dueDateDay && " · "}
-                    {card.template.dueDateDay && `due ${card.template.dueDateDay}`}
-                  </p>
-                ) : (
-                  <p className="text-[10px] text-muted-foreground/50 leading-tight italic">no dates</p>
-                )}
-                <button onClick={() => setEditingDates(true)} className="text-muted-foreground/40 hover:text-muted-foreground transition-colors">
-                  <Pencil className="w-2.5 h-2.5" />
-                </button>
-              </div>
+            <p className="text-sm font-semibold">{card.template.name}</p>
+            <div className="flex items-center gap-2 mt-0.5">
+              {card.bank && <p className="text-xs text-muted-foreground">{card.bank}</p>}
               {card.network && (
-                <span className={cn("inline-block text-[9px] font-medium px-1 py-0.5 rounded border", accent?.badge ?? "bg-zinc-50 text-zinc-600 border-zinc-200")}>
+                <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded border", accent?.badge ?? "bg-zinc-50 text-zinc-600 border-zinc-200")}>
                   {card.network}
                 </span>
               )}
             </div>
-            <div className="shrink-0 text-right">
-              {entry?.isPaid ? (
-                <span className="text-[10px] font-medium text-green-600">✓ Paid</span>
-              ) : billed != null ? (
-                <div className="flex flex-col items-end gap-0.5">
-                  <button onClick={() => onEntryUpdate(card.template.id, { isPaid: true })} className="text-[10px] font-semibold text-green-700 hover:text-green-800 leading-none">
-                    Mark paid
-                  </button>
-                  <button onClick={() => { setBillInput(String(billed)); setSettingBill(true); }} className="text-[10px] text-muted-foreground hover:text-foreground leading-none">
-                    Edit
-                  </button>
-                </div>
-              ) : (
-                <button onClick={() => { setBillInput(""); setSettingBill(true); }} className="text-[10px] font-semibold text-primary hover:underline leading-none">
-                  Set bill
-                </button>
-              )}
+          </div>
+          {confirmDelete ? (
+            <div className="flex items-center gap-2 shrink-0">
+              <button onClick={() => onDelete(card.id)}
+                className="text-xs font-semibold text-destructive border border-destructive/30 px-3 py-1.5 rounded-lg">
+                Delete
+              </button>
+              <button onClick={() => setConfirmDelete(false)}
+                className="text-xs text-muted-foreground border border-border px-3 py-1.5 rounded-lg">
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => setConfirmDelete(true)}
+              className="shrink-0 flex items-center justify-center w-9 h-9 rounded-lg text-muted-foreground/40 hover:text-destructive hover:bg-red-50 transition-colors">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+
+        {/* Bill amount area */}
+        {settingBill ? (
+          <div className="space-y-2">
+            <Input
+              type="number" min={0} step={1}
+              value={billInput} onChange={e => setBillInput(e.target.value)}
+              placeholder="Bill amount (₹)" className="h-11 text-base"
+              autoFocus onKeyDown={e => { if (e.key === "Enter") handleSetBill(); if (e.key === "Escape") setSettingBill(false); }}
+            />
+            <div className="flex gap-2">
+              <Button size="sm" onClick={handleSetBill} disabled={saving} className="flex-1 h-10">
+                {saving ? "Saving…" : "Set Bill"}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => { setSettingBill(false); setBillInput(""); }} className="flex-1 h-10">
+                Cancel
+              </Button>
             </div>
           </div>
+        ) : (
+          <div>
+            {billed != null ? (
+              <>
+                <p className="text-2xl font-bold tabular-nums">{fmt(billed)}</p>
+                {rolling > 0 && (
+                  <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5" />{fmt(rolling)} rolling to next month
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground/60 italic">No bill set yet</p>
+            )}
+          </div>
+        )}
+
+        {/* Dates edit */}
+        {editingDates ? (
+          <div className="space-y-2 pt-1 border-t border-border/50">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs">Closes on (day)</Label>
+                <Input type="number" min={1} max={31} value={stmtInput}
+                  onChange={e => setStmtInput(e.target.value)} placeholder="e.g. 15" className="mt-1 h-10" />
+              </div>
+              <div>
+                <Label className="text-xs">Payment due (day)</Label>
+                <Input type="number" min={1} max={31} value={dueInput}
+                  onChange={e => setDueInput(e.target.value)} placeholder="e.g. 5" className="mt-1 h-10" />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={handleSaveDates} disabled={savingDates} className="flex-1 h-10">
+                {savingDates ? "Saving…" : "Save"}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setEditingDates(false)} className="flex-1 h-10">
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setEditingDates(true)}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-left py-1"
+          >
+            <Pencil className="w-3.5 h-3.5 shrink-0" />
+            {(card.template.statementDay || card.template.dueDateDay) ? (
+              <span>
+                {card.template.statementDay && `Closes ${card.template.statementDay}th`}
+                {card.template.statementDay && card.template.dueDateDay && " · "}
+                {card.template.dueDateDay && `Due ${card.template.dueDateDay}th`}
+              </span>
+            ) : (
+              <span className="italic text-muted-foreground/50">Add statement & due dates</span>
+            )}
+          </button>
+        )}
+
+        {/* Action buttons */}
+        {!settingBill && !editingDates && (
+          entry?.isPaid ? (
+            <div className="flex items-center gap-1.5 text-sm font-medium text-green-600 pt-1 border-t border-border/50">
+              <CheckCircle2 className="w-4 h-4" /> Paid this month
+            </div>
+          ) : billed != null ? (
+            <div className="flex gap-2 pt-1 border-t border-border/50">
+              <Button
+                size="sm"
+                onClick={() => onEntryUpdate(card.template.id, { isPaid: true })}
+                className="flex-1 h-10 bg-green-600 hover:bg-green-700 text-white"
+              >
+                Mark paid
+              </Button>
+              <Button
+                size="sm" variant="outline"
+                onClick={() => { setBillInput(String(billed)); setSettingBill(true); }}
+                className="h-10 px-4"
+              >
+                Edit
+              </Button>
+            </div>
+          ) : (
+            <Button
+              size="sm" variant="outline"
+              onClick={() => { setBillInput(""); setSettingBill(true); }}
+              className="w-full h-10 pt-1 border-t-0"
+            >
+              Set bill amount
+            </Button>
+          )
         )}
       </div>
     </div>
@@ -491,7 +522,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
             key={t.key}
             onClick={() => setMainTab(t.key)}
             className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+              "flex items-center gap-1.5 px-3 py-2.5 rounded-md text-sm font-medium transition-colors",
               mainTab === t.key ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
             )}
           >
@@ -510,7 +541,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
               <p className="text-xs mt-1">Add your cards to track bills and carry-forwards.</p>
             </div>
           )}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {activeCards.map(card => (
               <CCCardTile
                 key={card.id}
@@ -659,7 +690,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                 key={t}
                 onClick={() => setRecvTab(t)}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+                  "flex items-center gap-1.5 px-3 py-2.5 rounded-md text-sm font-medium transition-colors",
                   recvTab === t ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
                 )}
               >
