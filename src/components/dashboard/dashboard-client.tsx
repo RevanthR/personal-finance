@@ -467,7 +467,8 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       m.salaryIncome + m.freelanceIncome + m.otherIncome
       + m.adHocItems.filter(i => i.type === "INCOME" && !i.notes?.startsWith("income_override:")).reduce((a, i) => a + i.amount, 0);
     const monthExpenses = (m: typeof recentMonths[0]) =>
-      m.entries.reduce((a, e) => a + e.amount - (e.cashbackAmount ?? 0), 0)
+      m.entries.filter(e => !isChitInvestmentEntry(e.templateId, m.month, m.year))
+               .reduce((a, e) => a + e.amount - (e.cashbackAmount ?? 0), 0)
       + m.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((a, i) => a + i.amount, 0);
 
     const fyIncome   = recentMonths.reduce((s, m) => s + monthIncome(m), 0);
