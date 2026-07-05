@@ -145,7 +145,7 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
     const netAmt = entry.amount - cb;
     if (num >= netAmt) {
       setOptimisticPaid(true);
-      setOptimisticPaidAmount(null);
+      setOptimisticPaidAmount(num > netAmt ? num : null);
     } else {
       setOptimisticPaidAmount(num > 0 ? num : null);
     }

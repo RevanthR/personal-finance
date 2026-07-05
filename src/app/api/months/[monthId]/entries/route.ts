@@ -34,14 +34,15 @@ export async function PATCH(
     if (paidAmount >= netAmount) {
       paymentData.isPaid = true;
       paymentData.paidOn = new Date();
-      paymentData.paidAmount = null;
+      // Preserve actual amount when user paid more than the template (overpayment)
+      paymentData.paidAmount = paidAmount > netAmount ? paidAmount : null;
     } else {
       paymentData.paidAmount = paidAmount > 0 ? paidAmount : null;
     }
   } else if (isPaid !== undefined) {
     paymentData.isPaid = isPaid;
     paymentData.paidOn = isPaid ? new Date() : null;
-    if (!isPaid) paymentData.paidAmount = null; // reset partial when un-paying
+    paymentData.paidAmount = null; // always clear: on pay → fall back to entry.amount; on un-pay → reset partial
   }
 
   const updated = await db.monthlyEntry.update({

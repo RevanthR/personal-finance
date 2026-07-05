@@ -113,7 +113,11 @@ const CC_SUBCATEGORIES = ["Food", "Coffee", "Groceries", "Fuel", "Shopping", "Tr
 
 function net(e: EntryWithTemplate) { return e.amount - (e.cashbackAmount ?? 0); }
 function effectivePaid(e: EntryWithTemplate): number {
-  if (e.isPaid) return e.paidAmount ?? net(e);
+  if (e.isPaid) {
+    const n = net(e);
+    const stored = e.paidAmount ?? n;
+    return stored >= n ? stored : n; // ignore stale partial if < entry amount
+  }
   return e.paidAmount ?? 0;
 }
 function isPreLiftChit(e: EntryWithTemplate) { return e.template.category === "CHIT_FUND" && !e.template.chitFund?.isLifted; }
@@ -233,9 +237,9 @@ function CCCardBlock({
       <div className="p-2">
         <EntryRow entry={entry} onUpdate={onUpdate} isBillPending={isBillPending} />
         {preCloseTxs.length > 0 && (
-          <div className="mt-1.5 ml-3 border-l-2 border-zinc-200 pl-3 space-y-1">
-            <p className="text-[10px] text-muted-foreground font-medium">Added to this bill</p>
-            {preCloseTxs.map(t => <TransactionRow key={t.id} item={t} onDelete={onDelete} />)}
+          <div className="mt-1.5 border-t border-border/40 pt-1.5">
+            <p className="text-[10px] text-muted-foreground font-medium px-1 mb-1">Added to this bill</p>
+            <CCSubcatBreakdown txItems={preCloseTxs} onDelete={onDelete} />
           </div>
         )}
       </div>
@@ -341,7 +345,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   const chitInvestment = useMemo(() => entries.filter(e => isPreLiftChit(e)).reduce((s, e) => s + net(e), 0), [entries]);
   const totalPending   = totalCommitted - totalPaid;
   const balance        = grandIncome - totalCommitted - chitInvestment - adHocExpense;
-  const paidPercent    = totalCommitted > 0 ? Math.round((totalPaid / totalCommitted) * 100) : 0;
+  const paidPercent    = totalCommitted > 0 ? Math.min(100, Math.round((totalPaid / totalCommitted) * 100)) : 0;
   const pendingCount   = useMemo(() => entries.filter(e => !e.isPaid && !isBillPending(e, isCurrentMonth, todayDay) && !isPreLiftChit(e)).length, [entries, isCurrentMonth, todayDay]);
 
   // ── New metric breakdown ───────────────────────────────────────────────────
@@ -950,14 +954,15 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             const entryItems    = items.filter(i => i.kind === "entry") as { kind: "entry"; data: EntryWithTemplate }[];
             const projectedItems = items.filter(i => i.kind === "projected") as { kind: "projected"; data: ProjectedEntry }[];
             const txItems = items.filter(i => i.kind === "transaction").map(i => i.data as AdHocItem);
+            const isCC     = groupKey === "CREDIT_CARD";
+            const txTotal  = txItems.reduce((s, t) => s + t.amount, 0);
             const catTotal = isProjected
               ? projectedItems.reduce((s, i) => s + i.data.amount, 0)
-              : entryItems.filter(i => !isBillPending(i.data, isCurrentMonth, todayDay)).reduce((s, i) => s + net(i.data), 0);
+              : entryItems.filter(i => !isBillPending(i.data, isCurrentMonth, todayDay)).reduce((s, i) => s + net(i.data), 0) + (isCC ? 0 : txTotal);
             const catPaid  = entryItems.reduce((s, i) => s + effectivePaid(i.data), 0);
             const catCarry = entryItems.reduce((s, i) => s + (i.data.statementAmount ?? 0), 0);
-            const allPaid  = !isProjected && entryItems.length > 0 && entryItems.every(i => i.data.isPaid);
+            const allPaid  = !isProjected && entryItems.length > 0 && entryItems.every(i => i.data.isPaid) && txItems.length === 0;
             const collapsed = isGroupCollapsed(groupKey, entryItems);
-            const isCC = groupKey === "CREDIT_CARD";
 
             return (
               <div key={groupKey} className="relative pl-3">
@@ -991,7 +996,9 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                           ? `${entryItems.length} paid · ${fmt(catTotal)}`
                           : isCC
                             ? `${fmt(catTotal)} billed`
-                            : `${fmt(catPaid)} / ${fmt(catTotal)}`}
+                            : entryItems.length === 0
+                              ? fmt(catTotal)
+                              : `${fmt(catPaid)} / ${fmt(catTotal)}`}
                       </span>
                     ) : isCC ? (
                       <span className="text-xs text-muted-foreground">
@@ -1000,7 +1007,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                       </span>
                     ) : (
                       <span className="text-xs text-muted-foreground">
-                        {fmt(catPaid)} / {fmt(catTotal)}
+                        {entryItems.length === 0 ? fmt(catTotal) : `${fmt(catPaid)} / ${fmt(catTotal)}`}
                       </span>
                     )}
                     <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/60 transition-transform duration-200", !collapsed && "rotate-180")} />
@@ -1317,7 +1324,14 @@ function ProjectedEntryRow({ entry }: { entry: ProjectedEntry }) {
 function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, fmt }: { entries: EntryWithTemplate[]; totalCommitted: number; grandIncome: number; adHocExpense: number; fmt: (v: number) => string }) {
   const [collapsed, setCollapsed] = useState(true);
   const netAmt = (e: EntryWithTemplate) => e.amount - (e.cashbackAmount ?? 0);
-  const paidAmt = (e: EntryWithTemplate): number => e.isPaid ? (e.paidAmount ?? netAmt(e)) : (e.paidAmount ?? 0);
+  const paidAmt = (e: EntryWithTemplate): number => {
+    if (e.isPaid) {
+      const n = netAmt(e);
+      const stored = e.paidAmount ?? n;
+      return stored >= n ? stored : n; // ignore stale partial amount if < entry amount
+    }
+    return e.paidAmount ?? 0;
+  };
   const isPreLift = (e: EntryWithTemplate) => e.template.category === "CHIT_FUND" && !e.template.chitFund?.isLifted;
 
   // Include fully paid + partially paid entries (expenses only, not investments)
