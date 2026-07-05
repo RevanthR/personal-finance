@@ -801,49 +801,24 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
         )}
       </div>
 
-      {/* FY Summary Strip */}
-      {recentMonths.length > 1 && (
-        <Card className="bg-slate-900 text-white border-slate-800">
-          <CardContent className="p-3">
-            <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-2">Last {recentMonths.length} months</p>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <p className="text-[10px] text-slate-400">Income</p>
-                <p className="text-sm font-bold text-green-400">{fmt(fyIncome)}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-400">Expenses</p>
-                <p className="text-sm font-bold text-red-400">{fmt(fyExpenses)}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-400">{fyBalance >= 0 ? "Leftover" : "Deficit"}</p>
-                <p className={cn("text-sm font-bold", fyBalance >= 0 ? "text-green-400" : "text-red-400")}>
-                  {fyBalance >= 0 ? "+" : "-"}{fmt(Math.abs(fyBalance))}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Metric cards */}
       <div className={cn("grid gap-2", hasCCCards ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3")}>
         {/* Income */}
         {isProjected ? (
-          <MetricCard label="Est. Income" value={fmt(dispIncome)} icon={<Wallet className="w-4 h-4" />} color="text-green-600" sub="projected" gradient="linear-gradient(135deg, white 0%, #f0fdf4 100%)" />
+          <MetricCard label="Est. Income" value={fmt(dispIncome)} icon={<Wallet className="w-3.5 h-3.5" />} color="text-green-600" sub="projected" gradient="linear-gradient(135deg, white 0%, #f0fdf4 100%)" />
         ) : (
           <button onClick={openIncomeEdit} className="text-left">
             <Card className="hover:border-zinc-400 transition-colors cursor-pointer h-full" style={{ background: "linear-gradient(135deg, white 0%, #f0fdf4 100%)" }}>
-              <CardContent className="p-3">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-xs text-muted-foreground">Income</p>
+              <CardContent className="px-2.5 py-2">
+                <div className="flex items-center justify-between mb-0.5">
+                  <p className="text-[10px] text-muted-foreground">Income</p>
                   <div className="flex items-center gap-1">
-                    <span className="text-green-600"><Wallet className="w-4 h-4" /></span>
+                    <span className="text-green-600 opacity-70"><Wallet className="w-3.5 h-3.5" /></span>
                     <Pencil className="w-2.5 h-2.5 text-muted-foreground" />
                   </div>
                 </div>
-                <p className="text-base font-bold">{fmt(grandIncome)}</p>
-                {adHocIncome > 0 && <p className="text-[10px] text-green-600 mt-0.5">+{fmt(adHocIncome)} one-time</p>}
+                <p className="text-sm font-bold tabular-nums">{fmt(grandIncome)}</p>
+                {adHocIncome > 0 && <p className="text-[10px] text-green-600 mt-0.5 leading-tight">+{fmt(adHocIncome)} one-time</p>}
               </CardContent>
             </Card>
           </button>
@@ -853,7 +828,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
         <MetricCard
           label="Recurring"
           value={fmt(dispRecurringNonCC)}
-          icon={<TrendingDown className="w-4 h-4" />}
+          icon={<TrendingDown className="w-3.5 h-3.5" />}
           color="text-red-600"
           sub={isProjected ? `${projEntries.filter(e => e.category !== "CREDIT_CARD").length} items` : nonCCPendingCount > 0 ? `${nonCCPendingCount} pending` : "all paid"}
           gradient="linear-gradient(135deg, white 0%, #fef2f2 100%)"
@@ -864,7 +839,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
           <MetricCard
             label="CC Bill"
             value={dispCCBills > 0 ? fmt(dispCCBills) : "—"}
-            icon={<CreditCard className="w-4 h-4" />}
+            icon={<CreditCard className="w-3.5 h-3.5" />}
             color="text-purple-600"
             sub={isProjected ? "last month's bill" : dispCCBills > 0 ? "from last month" : "no CC bills"}
             gradient="linear-gradient(135deg, white 0%, #faf5ff 100%)"
@@ -879,7 +854,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
         <MetricCard
           label={dispBalance >= 0 ? "Net left" : "Deficit"}
           value={fmt(Math.abs(dispBalance))}
-          icon={dispBalance >= 0 ? <TrendingUp className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+          icon={dispBalance >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
           color={dispBalance >= 0 ? "text-green-600" : "text-red-600"}
           sub={isProjected ? "projected" : dispBalance >= 0 ? "in your account" : "overspent income"}
           gradient={dispBalance >= 0 ? "linear-gradient(135deg, white 0%, #f0fdf4 100%)" : "linear-gradient(135deg, white 0%, #fef2f2 100%)"}
@@ -1035,6 +1010,30 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
 
         {/* Right column: Recharts loaded lazily so it doesn't block navigation */}
         <div className="space-y-4">
+          {/* FY summary — secondary context, sits above settlements */}
+          {recentMonths.length > 1 && (
+            <Card className="bg-slate-900 text-white border-slate-800">
+              <CardContent className="p-3">
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-2">Last {recentMonths.length} months</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <p className="text-[10px] text-slate-400">Income</p>
+                    <p className="text-sm font-bold text-green-400">{fmt(fyIncome)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-slate-400">Expenses</p>
+                    <p className="text-sm font-bold text-red-400">{fmt(fyExpenses)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-slate-400">{fyBalance >= 0 ? "Leftover" : "Deficit"}</p>
+                    <p className={cn("text-sm font-bold", fyBalance >= 0 ? "text-green-400" : "text-red-400")}>
+                      {fyBalance >= 0 ? "+" : "-"}{fmt(Math.abs(fyBalance))}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
           {!isProjected && <PaidSummaryPanel entries={entries} totalCommitted={totalCommitted} grandIncome={grandIncome} adHocExpense={adHocExpense} adHocItems={adHocItems} fmt={fmt} />}
           <DashboardCharts
             trendData={trendData}
@@ -1252,17 +1251,17 @@ function MetricCard({ label, value, icon, color, sub, gradient, upcoming }: {
 }) {
   return (
     <Card style={gradient ? { background: gradient } : undefined}>
-      <CardContent className="p-3">
-        <div className="flex items-center justify-between mb-1">
-          <p className="text-xs text-muted-foreground">{label}</p>
-          <span className={color}>{icon}</span>
+      <CardContent className="px-2.5 py-2">
+        <div className="flex items-center justify-between mb-0.5">
+          <p className="text-[10px] text-muted-foreground">{label}</p>
+          <span className={cn(color, "opacity-70")}>{icon}</span>
         </div>
-        <p className="text-base font-bold leading-tight">{value}</p>
-        {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
+        <p className="text-sm font-bold leading-tight tabular-nums">{value}</p>
+        {sub && <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{sub}</p>}
         {upcoming && (
-          <div className="mt-2 pt-2 border-t border-border/40">
+          <div className="mt-1.5 pt-1.5 border-t border-border/40">
             <p className="text-[10px] text-muted-foreground">{upcoming.label}</p>
-            <p className="text-xs font-semibold text-blue-600 tabular-nums mt-0.5">{upcoming.value}</p>
+            <p className="text-xs font-semibold text-blue-600 tabular-nums">{upcoming.value}</p>
           </div>
         )}
       </CardContent>
