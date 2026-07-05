@@ -827,7 +827,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       )}
 
       {/* Metric cards */}
-      <div className={cn("grid gap-2", hasCCCards ? "grid-cols-3 lg:grid-cols-6" : "grid-cols-2 lg:grid-cols-4")}>
+      <div className={cn("grid gap-2", hasCCCards ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3")}>
         {/* Income */}
         {isProjected ? (
           <MetricCard label="Est. Income" value={fmt(dispIncome)} icon={<Wallet className="w-4 h-4" />} color="text-green-600" sub="projected" gradient="linear-gradient(135deg, white 0%, #f0fdf4 100%)" />
@@ -859,37 +859,19 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
           gradient="linear-gradient(135deg, white 0%, #fef2f2 100%)"
         />
 
-        {/* CC bill being paid this month — only when user has CC cards */}
+        {/* CC bill this month + next month upcoming — only when user has CC cards */}
         {hasCCCards && (
           <MetricCard
-            label="CC due"
+            label="CC Bill"
             value={dispCCBills > 0 ? fmt(dispCCBills) : "—"}
             icon={<CreditCard className="w-4 h-4" />}
             color="text-purple-600"
             sub={isProjected ? "last month's bill" : dispCCBills > 0 ? "from last month" : "no CC bills"}
             gradient="linear-gradient(135deg, white 0%, #faf5ff 100%)"
-          />
-        )}
-
-        {/* Cash spend (ad-hoc from account) */}
-        <MetricCard
-          label="Cash spend"
-          value={isProjected ? "—" : adHocExpense > 0 ? fmt(adHocExpense) : "—"}
-          icon={<IndianRupee className="w-4 h-4" />}
-          color="text-orange-600"
-          sub={isProjected ? "not yet tracked" : adHocExpense > 0 ? `${adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").length} txn` : "nothing yet"}
-          gradient="linear-gradient(135deg, white 0%, #fff7ed 100%)"
-        />
-
-        {/* Next month CC liability — only when user has CC cards */}
-        {hasCCCards && (
-          <MetricCard
-            label="CC next"
-            value={dispCCNextMonth > 0 ? fmt(dispCCNextMonth) : "—"}
-            icon={<AlertCircle className="w-4 h-4" />}
-            color={dispCCNextMonth > 0 ? "text-blue-600" : "text-muted-foreground"}
-            sub={isProjected ? "unknown" : dispCCNextMonth > 0 ? "building up" : "nothing yet"}
-            gradient="linear-gradient(135deg, white 0%, #eff6ff 100%)"
+            upcoming={!isProjected ? {
+              label: dispCCNextMonth > 0 ? "Next month" : "Next month",
+              value: dispCCNextMonth > 0 ? fmt(dispCCNextMonth) : "—",
+            } : undefined}
           />
         )}
 
@@ -1053,7 +1035,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
 
         {/* Right column: Recharts loaded lazily so it doesn't block navigation */}
         <div className="space-y-4">
-          {!isProjected && <PaidSummaryPanel entries={entries} totalCommitted={totalCommitted} grandIncome={grandIncome} adHocExpense={adHocExpense} fmt={fmt} />}
+          {!isProjected && <PaidSummaryPanel entries={entries} totalCommitted={totalCommitted} grandIncome={grandIncome} adHocExpense={adHocExpense} adHocItems={adHocItems} fmt={fmt} />}
           <DashboardCharts
             trendData={trendData}
             savingsRate={dispSavings}
@@ -1263,7 +1245,11 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   );
 }
 
-function MetricCard({ label, value, icon, color, sub, gradient }: { label: string; value: string; icon: React.ReactNode; color: string; sub?: string; gradient?: string }) {
+function MetricCard({ label, value, icon, color, sub, gradient, upcoming }: {
+  label: string; value: string; icon: React.ReactNode; color: string;
+  sub?: string; gradient?: string;
+  upcoming?: { label: string; value: string };
+}) {
   return (
     <Card style={gradient ? { background: gradient } : undefined}>
       <CardContent className="p-3">
@@ -1273,6 +1259,12 @@ function MetricCard({ label, value, icon, color, sub, gradient }: { label: strin
         </div>
         <p className="text-base font-bold leading-tight">{value}</p>
         {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
+        {upcoming && (
+          <div className="mt-2 pt-2 border-t border-border/40">
+            <p className="text-[10px] text-muted-foreground">{upcoming.label}</p>
+            <p className="text-xs font-semibold text-blue-600 tabular-nums mt-0.5">{upcoming.value}</p>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -1298,13 +1290,21 @@ function ProjectedEntryRow({ entry }: { entry: ProjectedEntry }) {
   );
 }
 
-function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, fmt }: { entries: EntryWithTemplate[]; totalCommitted: number; grandIncome: number; adHocExpense: number; fmt: (v: number) => string }) {
+function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, adHocItems, fmt }: {
+  entries: EntryWithTemplate[];
+  totalCommitted: number;
+  grandIncome: number;
+  adHocExpense: number;
+  adHocItems: AdHocItem[];
+  fmt: (v: number) => string;
+}) {
   const [collapsed, setCollapsed] = useState(true);
 
   // Include fully paid + partially paid entries (expenses only, not investments)
   const shown = entries.filter(e => !isPreLiftChit(e) && (e.isPaid || (e.paidAmount != null && e.paidAmount > 0)));
   const chitInvested = entries.filter(e => isPreLiftChit(e) && e.isPaid).reduce((s, e) => s + effectivePaid(e), 0);
-  if (!shown.length) return null;
+  const cashItems = adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD");
+  if (!shown.length && cashItems.length === 0) return null;
 
   // Group by category, preserving CATEGORY_ORDER then custom categories
   const groups: { key: string; label: string; color: string; items: EntryWithTemplate[] }[] = [];
@@ -1402,6 +1402,30 @@ function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, 
               </div>
             );
           })}
+          {/* Cash / UPI spend this month */}
+          {cashItems.length > 0 && (
+            <div className="px-4 py-2.5 border-b border-border/50">
+              <div className="flex items-center gap-1.5 mb-2">
+                <IndianRupee className="w-3 h-3 text-orange-500 shrink-0" />
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex-1">Cash / UPI spend</span>
+                <span className="text-xs font-semibold tabular-nums">{fmt(adHocExpense)}</span>
+              </div>
+              <div className="space-y-1.5 pl-3">
+                {cashItems.map(item => (
+                  <div key={item.id} className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="text-xs text-muted-foreground truncate block">{item.name}</span>
+                      {item.date && (
+                        <span className="text-[10px] text-muted-foreground/60">{format(new Date(item.date), "do MMM")}</span>
+                      )}
+                    </div>
+                    <span className="text-xs font-semibold tabular-nums shrink-0">{fmt(item.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center justify-between px-4 py-2.5 bg-green-50/60 border-t border-border/40">
             <span className="text-xs font-semibold text-muted-foreground">Total paid out</span>
             <span className="text-sm font-bold text-green-600 tabular-nums">{fmt(totalPaidOut)} of {fmt(totalCommitted)}</span>
