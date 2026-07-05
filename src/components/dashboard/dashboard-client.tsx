@@ -1043,27 +1043,14 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
         <div className="space-y-4">
           {/* FY summary — secondary context, sits above settlements */}
           {recentMonths.length > 1 && (
-            <Card className="bg-slate-900 text-white border-slate-800">
-              <CardContent className="p-3">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-2">Last {recentMonths.length} months</p>
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <p className="text-[10px] text-slate-400">Income</p>
-                    <p className="text-sm font-bold text-green-400">{fmt(fyIncome)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-slate-400">Expenses</p>
-                    <p className="text-sm font-bold text-red-400">{fmt(fyExpenses)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-slate-400">{fyBalance >= 0 ? "In hand" : "Deficit (Over Income)"}</p>
-                    <p className={cn("text-sm font-bold", fyBalance >= 0 ? "text-green-400" : "text-red-400")}>
-                      {fyBalance >= 0 ? "+" : "-"}{fmt(Math.abs(fyBalance))}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <FYSummaryCard
+              recentMonths={recentMonths}
+              fyIncome={fyIncome}
+              fyExpenses={fyExpenses}
+              fyBalance={fyBalance}
+              trendData={trendData}
+              fmt={fmt}
+            />
           )}
           {!isProjected && <PaidSummaryPanel entries={entries} totalCommitted={totalCommitted} grandIncome={grandIncome} adHocExpense={adHocExpense} adHocItems={adHocItems} fmt={fmt} />}
           <DashboardCharts
@@ -1317,6 +1304,64 @@ function ProjectedEntryRow({ entry }: { entry: ProjectedEntry }) {
         {fmt(entry.amount)}
       </span>
     </div>
+  );
+}
+
+function FYSummaryCard({ recentMonths, fyIncome, fyExpenses, fyBalance, trendData, fmt }: {
+  recentMonths: RecentMonthSummary[];
+  fyIncome: number; fyExpenses: number; fyBalance: number;
+  trendData: { name: string; Income: number; Expenses: number }[];
+  fmt: (v: number) => string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <Card className="bg-slate-900 text-white border-slate-800">
+      <button
+        type="button"
+        onClick={() => setExpanded(e => !e)}
+        className="w-full text-left"
+      >
+        <CardContent className="p-3">
+          <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-2">Last {recentMonths.length} months</p>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <p className="text-[10px] text-slate-400">Income</p>
+              <p className="text-sm font-bold text-green-400">{fmt(fyIncome)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-400">Expenses</p>
+              <p className="text-sm font-bold text-red-400">{fmt(fyExpenses)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-400">{fyBalance >= 0 ? "In hand" : "Deficit (Over Income)"}</p>
+              <p className={cn("text-sm font-bold", fyBalance >= 0 ? "text-green-400" : "text-red-400")}>
+                {fyBalance >= 0 ? "+" : "-"}{fmt(Math.abs(fyBalance))}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </button>
+      {expanded && (
+        <div className="border-t border-slate-700 px-3 pb-3 pt-2 space-y-1.5">
+          <div className="grid grid-cols-4 gap-1 text-[9px] text-slate-500 uppercase tracking-wider mb-1 px-1">
+            <span>Month</span><span className="text-right">Income</span><span className="text-right">Expenses</span><span className="text-right">Net</span>
+          </div>
+          {trendData.map(m => {
+            const net = m.Income - m.Expenses;
+            return (
+              <div key={m.name} className="grid grid-cols-4 gap-1 text-[10px] px-1">
+                <span className="text-slate-300 font-medium">{m.name}</span>
+                <span className="text-right text-green-400 tabular-nums">{fmt(m.Income)}</span>
+                <span className="text-right text-red-400 tabular-nums">{fmt(m.Expenses)}</span>
+                <span className={cn("text-right font-semibold tabular-nums", net >= 0 ? "text-green-400" : "text-red-400")}>
+                  {net >= 0 ? "+" : "-"}{fmt(Math.abs(net))}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
   );
 }
 
