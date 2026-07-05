@@ -18,7 +18,7 @@ export function PwaInstallBanner() {
       )}
       style={{ bottom: "calc(env(safe-area-inset-bottom) + 5.5rem)" }}
     >
-      <div className="max-w-sm mx-auto md:max-w-md rounded-2xl bg-zinc-950 text-white shadow-2xl border border-zinc-800 p-4">
+      <div className="max-w-sm mx-auto md:max-w-md rounded-xl bg-zinc-950 text-white shadow-2xl border border-zinc-800 p-4">
         <div className="flex items-start gap-3">
           {/* App icon */}
           <div className="w-11 h-11 bg-white/10 rounded-xl flex items-center justify-center shrink-0">
@@ -77,10 +77,10 @@ export function PwaInstallBanner() {
               { n: "3", label: "Tap Add" },
             ].map(({ n, label }) => (
               <div key={n} className="flex items-center gap-1.5 flex-1">
-                <span className="w-4 h-4 rounded-full bg-white/10 text-[10px] font-bold flex items-center justify-center shrink-0">
+                <span className="w-4 h-4 rounded-full bg-white/10 text-xs font-bold flex items-center justify-center shrink-0">
                   {n}
                 </span>
-                <span className="text-[10px] text-zinc-400 leading-tight">{label}</span>
+                <span className="text-xs text-zinc-400 leading-tight">{label}</span>
               </div>
             ))}
           </div>

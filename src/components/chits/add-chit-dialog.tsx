@@ -94,7 +94,7 @@ export function AddChitDialog({ open, onOpenChange, onAdd }: AddChitDialogProps)
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <Label className="text-xs">Start month</Label>
-              {endLabel && <span className="text-[11px] text-muted-foreground">ends {endLabel}</span>}
+              {endLabel && <span className="text-xs text-muted-foreground">ends {endLabel}</span>}
             </div>
             <div className="flex flex-wrap gap-1 mb-2">
               {MONTHS.map((m, i) => (
@@ -124,7 +124,7 @@ export function AddChitDialog({ open, onOpenChange, onAdd }: AddChitDialogProps)
 
           <div>
             <Label className="text-xs">Monthly contribution after lifting (₹)</Label>
-            <p className="text-[10px] text-muted-foreground mb-1">Leave blank if same as before lifting</p>
+            <p className="text-xs text-muted-foreground mb-1">Leave blank if same as before lifting</p>
             <Input type="number" value={monthlyLifted} onChange={e => setMonthlyLifted(e.target.value)} placeholder="Optional" />
           </div>
 

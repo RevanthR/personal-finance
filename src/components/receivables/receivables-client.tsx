@@ -119,7 +119,7 @@ function AddCardDialog({ open, onOpenChange, onAdd }: {
             <div>
               <Label className="text-xs">Network</Label>
               <select value={network} onChange={e => setNetwork(e.target.value)}
-                className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                className="mt-1 w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                 <option value="">Select</option>
                 {NETWORKS.map(n => <option key={n} value={n}>{n}</option>)}
               </select>
@@ -149,7 +149,7 @@ function AddCardDialog({ open, onOpenChange, onAdd }: {
 
 const NETWORK_ACCENT: Record<string, { bar: string; badge: string }> = {
   Visa:       { bar: "bg-blue-600",   badge: "bg-blue-50 text-blue-700 border-blue-200" },
-  Mastercard: { bar: "bg-red-500",    badge: "bg-red-50 text-red-700 border-red-200" },
+  Mastercard: { bar: "bg-red-500",    badge: "bg-red-50 text-red-500 border-red-200" },
   Rupay:      { bar: "bg-orange-500", badge: "bg-orange-50 text-orange-700 border-orange-200" },
   Amex:       { bar: "bg-emerald-600",badge: "bg-emerald-50 text-emerald-700 border-emerald-200" },
 };
@@ -215,7 +215,7 @@ function CCCardTile({ card, fmt, onEntryUpdate, onDelete, onMetaUpdate }: {
             <div className="flex items-center gap-2 mt-0.5">
               {card.bank && <p className="text-xs text-muted-foreground">{card.bank}</p>}
               {card.network && (
-                <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded border", accent?.badge ?? "bg-zinc-50 text-zinc-600 border-zinc-200")}>
+                <span className={cn("text-xs font-medium px-1.5 py-0.5 rounded border", accent?.badge ?? "bg-zinc-50 text-zinc-600 border-zinc-200")}>
                   {card.network}
                 </span>
               )}
@@ -320,7 +320,7 @@ function CCCardTile({ card, fmt, onEntryUpdate, onDelete, onMetaUpdate }: {
         {/* Action buttons */}
         {!settingBill && !editingDates && (
           entry?.isPaid ? (
-            <div className="flex items-center gap-1.5 text-sm font-medium text-green-600 pt-1 border-t border-border/50">
+            <div className="flex items-center gap-1.5 text-sm font-medium text-emerald-600 pt-1 border-t border-border/50">
               <CheckCircle2 className="w-4 h-4" /> Paid this month
             </div>
           ) : billed != null ? (
@@ -328,7 +328,7 @@ function CCCardTile({ card, fmt, onEntryUpdate, onDelete, onMetaUpdate }: {
               <Button
                 size="sm"
                 onClick={() => onEntryUpdate(card.template.id, { isPaid: true })}
-                className="flex-1 h-10 bg-green-600 hover:bg-green-700 text-white"
+                className="flex-1 h-10 bg-emerald-600 hover:bg-emerald-700 text-white"
               >
                 Mark paid
               </Button>
@@ -586,7 +586,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                       <CardHeader className="pb-2 px-4 pt-4">
                         <div className="flex items-center justify-between gap-2">
                           <CardTitle className="text-sm font-semibold truncate">{chit.template.name}</CardTitle>
-                          <Badge className="text-[11px] shrink-0 bg-amber-100 text-amber-700 border-0">
+                          <Badge className="text-xs shrink-0 bg-amber-100 text-amber-700 border-0">
                             <TrendingUp className="w-3 h-3 mr-1" />Active
                           </Badge>
                         </div>
@@ -594,11 +594,11 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                       <CardContent className="px-4 pb-4 space-y-3">
                         <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                           <div>
-                            <p className="text-[11px] text-muted-foreground">Pot value</p>
+                            <p className="text-xs text-muted-foreground">Pot value</p>
                             <p className="font-semibold">{fmt(chit.totalValue)}</p>
                           </div>
                           <div>
-                            <p className="text-[11px] text-muted-foreground">Monthly</p>
+                            <p className="text-xs text-muted-foreground">Monthly</p>
                             <p className="font-semibold">
                               {fmt(chit.monthlyUnliftedAmount)}
                               {chit.template.dueDateDay && (
@@ -607,13 +607,13 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                             </p>
                           </div>
                           <div>
-                            <p className="text-[11px] text-muted-foreground">Period</p>
+                            <p className="text-xs text-muted-foreground">Period</p>
                             <p className="font-semibold text-xs">
                               {format(sd, "MMM yyyy")} → {endStr}
                             </p>
                           </div>
                           <div>
-                            <p className="text-[11px] text-muted-foreground">Duration</p>
+                            <p className="text-xs text-muted-foreground">Duration</p>
                             <p className="font-semibold">{chit.durationMonths} months</p>
                           </div>
                         </div>
@@ -646,7 +646,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                       <div className="flex items-center justify-between gap-2">
                         <CardTitle className="text-sm font-semibold truncate">{chit.template.name}</CardTitle>
                         <div className="flex items-center gap-2 shrink-0">
-                          <Badge variant="outline" className="text-[11px] text-indigo-600 border-indigo-300">
+                          <Badge variant="outline" className="text-xs text-indigo-600 border-indigo-300">
                             <TrendingDown className="w-3 h-3 mr-1" />Lifted
                           </Badge>
                           {deletingChitId === chit.id ? (
@@ -667,15 +667,15 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                     <CardContent className="px-4 pb-4 space-y-3">
                       <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                         <div>
-                          <p className="text-[11px] text-muted-foreground">Pot received</p>
-                          <p className="font-semibold text-green-600">{fmt(chit.liftedAmount ?? chit.totalValue)}</p>
+                          <p className="text-xs text-muted-foreground">Pot received</p>
+                          <p className="font-semibold text-emerald-600">{fmt(chit.liftedAmount ?? chit.totalValue)}</p>
                         </div>
                         <div>
-                          <p className="text-[11px] text-muted-foreground">Lifted in</p>
+                          <p className="text-xs text-muted-foreground">Lifted in</p>
                           <p className="font-semibold">{chit.liftedOn ? format(new Date(chit.liftedOn), "MMM yyyy") : "-"}</p>
                         </div>
                         <div>
-                          <p className="text-[11px] text-muted-foreground">Monthly now</p>
+                          <p className="text-xs text-muted-foreground">Monthly now</p>
                           <p className="font-semibold">
                             {fmt(chit.monthlyLiftedAmount ?? chit.monthlyUnliftedAmount)}
                             {chit.template.dueDateDay && (
@@ -731,7 +731,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                       <CardHeader className="pb-2 px-4 pt-4">
                         <div className="flex items-center justify-between gap-2">
                           <CardTitle className="text-sm font-semibold truncate">{r.description}</CardTitle>
-                          <Badge className={cn("text-[11px] shrink-0 border-0", RECV_COLORS[r.category])}>
+                          <Badge className={cn("text-xs shrink-0 border-0", RECV_COLORS[r.category])}>
                             {r.customCategory ?? RECV_LABELS[r.category]}
                           </Badge>
                         </div>
@@ -739,16 +739,16 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                       <CardContent className="px-4 pb-4 space-y-3">
                         <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                           <div>
-                            <p className="text-[11px] text-muted-foreground">Expected</p>
-                            <p className="font-semibold text-green-600">{fmt(r.expectedAmount)}</p>
+                            <p className="text-xs text-muted-foreground">Expected</p>
+                            <p className="font-semibold text-emerald-600">{fmt(r.expectedAmount)}</p>
                           </div>
                           <div>
-                            <p className="text-[11px] text-muted-foreground">Due By</p>
+                            <p className="text-xs text-muted-foreground">Due By</p>
                             <p className="font-semibold">{r.expectedDate ? format(new Date(r.expectedDate), "dd MMM yy") : "-"}</p>
                           </div>
                         </div>
                         <div className="flex gap-2">
-                          <Button size="sm" className="flex-1 h-8 text-xs bg-green-600 hover:bg-green-700" onClick={() => setReceivingItem(r)}>
+                          <Button size="sm" className="flex-1 h-8 text-xs bg-emerald-600 hover:bg-emerald-700" onClick={() => setReceivingItem(r)}>
                             <Wallet className="w-3.5 h-3.5 mr-1" />Mark Received
                           </Button>
                           <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteReceivable(r.id)}>
@@ -777,7 +777,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                       <CardHeader className="pb-2 px-4 pt-4">
                         <div className="flex items-center justify-between gap-2">
                           <CardTitle className="text-sm font-semibold truncate">{r.description}</CardTitle>
-                          <Badge className="text-[11px] bg-green-100 text-green-700 border-0 shrink-0">
+                          <Badge className="text-xs bg-emerald-100 text-emerald-600 border-0 shrink-0">
                             <CheckCircle2 className="w-3 h-3 mr-1" />Received
                           </Badge>
                         </div>
@@ -785,19 +785,19 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                       <CardContent className="px-4 pb-4">
                         <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                           <div>
-                            <p className="text-[11px] text-muted-foreground">Received</p>
-                            <p className="font-semibold text-green-600">{fmt(r.receivedAmount ?? r.expectedAmount)}</p>
+                            <p className="text-xs text-muted-foreground">Received</p>
+                            <p className="font-semibold text-emerald-600">{fmt(r.receivedAmount ?? r.expectedAmount)}</p>
                           </div>
                           <div>
-                            <p className="text-[11px] text-muted-foreground">On</p>
+                            <p className="text-xs text-muted-foreground">On</p>
                             <p className="font-semibold">{r.receivedDate ? format(new Date(r.receivedDate), "dd MMM yy") : "-"}</p>
                           </div>
                           <div>
-                            <p className="text-[11px] text-muted-foreground">Expected</p>
+                            <p className="text-xs text-muted-foreground">Expected</p>
                             <p className="font-semibold text-muted-foreground">{fmt(r.expectedAmount)}</p>
                           </div>
                           <div>
-                            <p className="text-[11px] text-muted-foreground">Category</p>
+                            <p className="text-xs text-muted-foreground">Category</p>
                             <p className="font-semibold">{r.customCategory ?? RECV_LABELS[r.category]}</p>
                           </div>
                         </div>

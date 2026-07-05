@@ -94,7 +94,7 @@ export function EditChitDialog({ open, onOpenChange, chit, onSave }: EditChitDia
           {chit.isLifted && (
             <div>
               <Label className="text-xs">Pot received (₹)</Label>
-              <p className="text-[10px] text-muted-foreground mb-1">Amount actually received when lifted</p>
+              <p className="text-xs text-muted-foreground mb-1">Amount actually received when lifted</p>
               <Input type="number" value={liftedAmt} onChange={e => setLiftedAmt(e.target.value)} />
             </div>
           )}
@@ -107,7 +107,7 @@ export function EditChitDialog({ open, onOpenChange, chit, onSave }: EditChitDia
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <Label className="text-xs">Start month</Label>
-              {el && <span className="text-[11px] text-muted-foreground">ends {el}</span>}
+              {el && <span className="text-xs text-muted-foreground">ends {el}</span>}
             </div>
             <div className="flex flex-wrap gap-1 mb-2">
               {MONTHS.map((m, i) => (
@@ -133,7 +133,7 @@ export function EditChitDialog({ open, onOpenChange, chit, onSave }: EditChitDia
 
           <div>
             <Label className="text-xs">Monthly payment after lifting (₹)</Label>
-            <p className="text-[10px] text-muted-foreground mb-1">Leave blank if same as before</p>
+            <p className="text-xs text-muted-foreground mb-1">Leave blank if same as before</p>
             <Input type="number" value={postAmt} onChange={e => setPostAmt(e.target.value)} placeholder="Optional" />
           </div>
 
@@ -147,7 +147,7 @@ export function EditChitDialog({ open, onOpenChange, chit, onSave }: EditChitDia
               <Label className="text-xs">Lifted in</Label>
               <div className="flex gap-2 mt-1">
                 <select value={liftMonth} onChange={e => setLiftMonth(e.target.value)}
-                  className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm">
+                  className="flex-1 h-10 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                   {MONTHS.map((m, i) => (
                     <option key={i + 1} value={i + 1}>{m}</option>
                   ))}

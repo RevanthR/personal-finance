@@ -74,7 +74,7 @@ export function LiftChitDialog({ open, onOpenChange, chit, onLift }: LiftChitDia
               <Label className="text-xs">Lifted in</Label>
               <div className="flex gap-2 mt-1">
                 <select value={liftMonth} onChange={e => setLiftMonth(e.target.value)}
-                  className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm">
+                  className="flex-1 h-10 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                   {MONTHS.map((m, i) => (
                     <option key={i + 1} value={i + 1}>{m}</option>
                   ))}
@@ -99,9 +99,9 @@ export function LiftChitDialog({ open, onOpenChange, chit, onLift }: LiftChitDia
         ) : (
           <div className="space-y-4">
             <div className="rounded-lg bg-green-50 border border-green-200 p-4 space-y-1">
-              <p className="text-xs font-medium text-green-700 uppercase tracking-wide">Income to be recorded</p>
-              <p className="text-2xl font-bold text-green-700">{fmt(parseFloat(liftedAmount) || 0)}</p>
-              <p className="text-sm text-green-600">{monthName} {liftYear}</p>
+              <p className="text-xs font-medium text-emerald-600 uppercase tracking-wide">Income to be recorded</p>
+              <p className="text-2xl font-bold text-emerald-600">{fmt(parseFloat(liftedAmount) || 0)}</p>
+              <p className="text-sm text-emerald-600">{monthName} {liftYear}</p>
             </div>
             <p className="text-xs text-muted-foreground">
               From next month, your monthly payment becomes {fmt(parseFloat(monthlyAmt) || 0)}.

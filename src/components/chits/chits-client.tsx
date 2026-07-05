@@ -167,7 +167,7 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
         <Card>
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground mb-1">Total Accumulated</p>
-            <p className="text-2xl font-bold text-green-600">{fmt(totalSavings)}</p>
+            <p className="text-2xl font-bold text-emerald-600">{fmt(totalSavings)}</p>
           </CardContent>
         </Card>
       </div>
@@ -215,7 +215,7 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
                     <div>
                       <div className="flex justify-between text-xs mb-1">
                         <span className="text-muted-foreground">Accumulated</span>
-                        <span className="font-medium text-green-600">{fmt(chit.accumulatedSavings)}</span>
+                        <span className="font-medium text-emerald-600">{fmt(chit.accumulatedSavings)}</span>
                       </div>
                       <Progress value={progressPercent} className="h-1.5" />
                     </div>
@@ -314,7 +314,7 @@ export function ChitsClient({ chits: initialChits }: ChitsClientProps) {
                           <button
                             onClick={() => saveEditLift(chit.id)}
                             disabled={editLiftSaving}
-                            className="p-0.5 text-green-600 hover:text-green-700"
+                            className="p-0.5 text-emerald-600 hover:text-emerald-600"
                           >
                             <Check className="w-3.5 h-3.5" />
                           </button>

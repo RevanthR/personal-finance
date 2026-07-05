@@ -95,7 +95,7 @@ export function PullToRefresh() {
         style={{ opacity: refreshing ? 1 : Math.max(0.25, progress) }}
       >
         <RefreshCw
-          className="w-4 h-4 text-green-600"
+          className="w-4 h-4 text-emerald-600"
           style={{
             transform: refreshing ? undefined : `rotate(${progress * 240}deg)`,
             animation: refreshing ? "spin 0.7s linear infinite" : undefined,

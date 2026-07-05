@@ -278,14 +278,14 @@ export function TemplatesClient({
             <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 space-y-1.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
-                  <TrendingUp className="w-3.5 h-3.5 text-green-600" />
-                  <span className="text-xs font-semibold text-green-800 uppercase tracking-wider">Recurring Income</span>
+                  <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">Recurring Income</span>
                 </div>
-                <span className="text-base font-bold text-green-700">{fmt(monthlyIncome)}<span className="text-xs font-normal text-green-600">/mo</span></span>
+                <span className="text-base font-bold text-emerald-600">{fmt(monthlyIncome)}<span className="text-xs font-normal text-emerald-600">/mo</span></span>
               </div>
               {pendingIncomeChanges.map(t => (
                 <div key={t.id} className="flex items-center justify-between text-xs">
-                  <span className="text-green-700">{t.name}</span>
+                  <span className="text-emerald-600">{t.name}</span>
                   <span className="text-amber-700 font-medium">
                     ↑ {fmt(t.pendingAmount!)} from {MONTHS[(t.pendingFromMonth! - 1)]} {t.pendingFromYear}
                   </span>
@@ -296,27 +296,27 @@ export function TemplatesClient({
 
           {incomeTemplates.length === 0 && recentIncome && (recentIncome.salary + recentIncome.freelance + recentIncome.other) > 0 ? (
             <div className="rounded-xl border border-dashed border-green-200 bg-green-50/40 p-4">
-              <p className="text-xs font-semibold text-green-800 mb-1">Import from your history</p>
-              <p className="text-[11px] text-green-700/70 mb-3">
+              <p className="text-xs font-semibold text-emerald-600 mb-1">Import from your history</p>
+              <p className="text-xs text-emerald-600/70 mb-3">
                 We found recurring income from your recent months. Create templates so future months auto-fill.
               </p>
               <div className="space-y-1 mb-3">
                 {recentIncome.salary > 0 && (
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-green-700">Salary</span>
-                    <span className="font-medium text-green-800 tabular-nums">{fmt(recentIncome.salary)}/mo</span>
+                    <span className="text-emerald-600">Salary</span>
+                    <span className="font-medium text-emerald-600 tabular-nums">{fmt(recentIncome.salary)}/mo</span>
                   </div>
                 )}
                 {recentIncome.freelance > 0 && (
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-green-700">Freelance</span>
-                    <span className="font-medium text-green-800 tabular-nums">{fmt(recentIncome.freelance)}/mo</span>
+                    <span className="text-emerald-600">Freelance</span>
+                    <span className="font-medium text-emerald-600 tabular-nums">{fmt(recentIncome.freelance)}/mo</span>
                   </div>
                 )}
                 {recentIncome.other > 0 && (
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-green-700">Other Income</span>
-                    <span className="font-medium text-green-800 tabular-nums">{fmt(recentIncome.other)}/mo</span>
+                    <span className="text-emerald-600">Other Income</span>
+                    <span className="font-medium text-emerald-600 tabular-nums">{fmt(recentIncome.other)}/mo</span>
                   </div>
                 )}
               </div>
@@ -325,7 +325,7 @@ export function TemplatesClient({
                 variant="outline"
                 onClick={handleImportIncome}
                 disabled={importLoading}
-                className="border-green-300 text-green-700 hover:bg-green-100 hover:text-green-800"
+                className="border-green-300 text-emerald-600 hover:bg-green-100 hover:text-emerald-600"
               >
                 {importLoading ? "Importing…" : "Import as templates"}
               </Button>
@@ -383,7 +383,7 @@ export function TemplatesClient({
                             <button onClick={() => setEditing(t)} className="text-muted-foreground hover:text-foreground">
                               <Pencil className="w-4 h-4" />
                             </button>
-                            <button onClick={() => deleteTemplate(t.id)} className="text-muted-foreground hover:text-red-600">
+                            <button onClick={() => deleteTemplate(t.id)} className="text-muted-foreground hover:text-red-500">
                               <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
@@ -475,7 +475,7 @@ export function TemplatesClient({
                                     ? `${fmt(t.amount)}/month${t.chitFund ? ` · pot ${fmt(t.chitFund.totalValue)}` : ""}`
                                     : `${fmt(t.amount)}/${t.frequency === "YEARLY" ? "year" : "month"}`}
                               {!isClosed && t.category === "CREDIT_CARD" && (t.statementDay || t.dueDateDay) && (
-                                <span className="ml-1.5 text-blue-500">
+                                <span className="ml-1.5 text-blue-600">
                                   {t.statementDay ? `closes ${t.statementDay}th` : ""}
                                   {t.dueDateDay ? ` · due ${t.dueDateDay}th` : ""}
                                 </span>
@@ -502,7 +502,7 @@ export function TemplatesClient({
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
                             {isClosed ? (
-                              <button onClick={() => deleteTemplate(t.id)} className="text-muted-foreground hover:text-red-600">
+                              <button onClick={() => deleteTemplate(t.id)} className="text-muted-foreground hover:text-red-500">
                                 <Trash2 className="w-4 h-4" />
                               </button>
                             ) : (
@@ -520,7 +520,7 @@ export function TemplatesClient({
                                 <button onClick={() => setEditing(t)} className="text-muted-foreground hover:text-foreground">
                                   <Pencil className="w-4 h-4" />
                                 </button>
-                                <button onClick={() => deleteTemplate(t.id)} className="text-muted-foreground hover:text-red-600">
+                                <button onClick={() => deleteTemplate(t.id)} className="text-muted-foreground hover:text-red-500">
                                   <Trash2 className="w-4 h-4" />
                                 </button>
                               </>
@@ -755,7 +755,7 @@ function TemplateDialog({
                   className={cn(
                     "flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors",
                     templateType === t
-                      ? t === "INCOME" ? "bg-green-600 text-white border-green-600" : "bg-zinc-900 text-white border-zinc-900"
+                      ? t === "INCOME" ? "bg-emerald-600 text-white border-green-600" : "bg-zinc-900 text-white border-zinc-900"
                       : "border-border text-muted-foreground hover:border-zinc-500"
                   )}>
                   {t === "INCOME" ? "Income" : "Expense"}
@@ -816,54 +816,54 @@ function TemplateDialog({
           {isLoan && (
             <div className="space-y-3 rounded-xl border border-red-100 bg-red-50/50 p-3">
               <div>
-                <p className="text-xs font-semibold text-red-700">Amortization details</p>
-                <p className="text-[10px] text-red-600/70 mt-0.5">Optional. Enables principal vs interest breakdown on the dashboard.</p>
+                <p className="text-xs font-semibold text-red-500">Amortization details</p>
+                <p className="text-xs text-red-500/70 mt-0.5">Optional. Enables principal vs interest breakdown on the dashboard.</p>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Original loan amount (₹)</label>
+                  <label className="text-xs text-muted-foreground uppercase tracking-wide">Original loan amount (₹)</label>
                   <Input type="number" value={loanPrincipal} onChange={e => setLoanPrincipal(e.target.value)}
                     placeholder="e.g. 20,00,000" className="mt-1 h-8 text-sm" />
                 </div>
                 <div>
-                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Interest rate (% p.a.)</label>
+                  <label className="text-xs text-muted-foreground uppercase tracking-wide">Interest rate (% p.a.)</label>
                   <Input type="number" step="0.01" value={loanRate} onChange={e => setLoanRate(e.target.value)}
                     placeholder="e.g. 8.5" className="mt-1 h-8 text-sm" />
                 </div>
               </div>
 
               <div>
-                <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Rate type</label>
+                <label className="text-xs text-muted-foreground uppercase tracking-wide">Rate type</label>
                 <div className="flex gap-2 mt-1">
                   {(["FIXED", "FLOATING"] as const).map(t => (
                     <button key={t} type="button" onClick={() => setLoanRateType(t)}
                       className={cn("flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors",
-                        loanRateType === t ? "bg-red-600 text-white border-red-600" : "bg-white border-border text-muted-foreground"
+                        loanRateType === t ? "bg-red-500 text-white border-red-600" : "bg-white border-border text-muted-foreground"
                       )}>
                       {t.charAt(0) + t.slice(1).toLowerCase()}
                     </button>
                   ))}
                 </div>
                 {loanRateType === "FLOATING" && (
-                  <p className="text-[10px] text-muted-foreground mt-1">Update the rate and outstanding balance whenever your bank revises it.</p>
+                  <p className="text-xs text-muted-foreground mt-1">Update the rate and outstanding balance whenever your bank revises it.</p>
                 )}
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Loan start date</label>
+                  <label className="text-xs text-muted-foreground uppercase tracking-wide">Loan start date</label>
                   <Input type="date" value={loanStartDate} onChange={e => setLoanStartDate(e.target.value)} className="mt-1 h-8 text-sm" />
                 </div>
                 <div>
-                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">
-                    Current balance (₹){loanRateType === "FLOATING" && <span className="text-red-600">*</span>}
+                  <label className="text-xs text-muted-foreground uppercase tracking-wide">
+                    Current balance (₹){loanRateType === "FLOATING" && <span className="text-red-500">*</span>}
                   </label>
                   <Input type="number" value={loanOutstanding} onChange={e => setLoanOutstanding(e.target.value)}
                     placeholder="From bank" className="mt-1 h-8 text-sm" />
                 </div>
               </div>
-              <p className="text-[10px] text-muted-foreground">Leave current balance blank to auto-compute from start date.</p>
+              <p className="text-xs text-muted-foreground">Leave current balance blank to auto-compute from start date.</p>
             </div>
           )}
 
@@ -876,8 +876,8 @@ function TemplateDialog({
 
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Start month</label>
-                  {chitEndLabel() && <span className="text-[11px] text-muted-foreground">ends {chitEndLabel()}</span>}
+                  <label className="text-xs text-muted-foreground uppercase tracking-wide">Start month</label>
+                  {chitEndLabel() && <span className="text-xs text-muted-foreground">ends {chitEndLabel()}</span>}
                 </div>
                 <div className="flex flex-wrap gap-1 mb-2">
                   {MONTHS.map((m, i) => (
@@ -896,20 +896,20 @@ function TemplateDialog({
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Duration (months)</label>
+                  <label className="text-xs text-muted-foreground uppercase tracking-wide">Duration (months)</label>
                   <Input type="number" value={chitDuration} onChange={e => setChitDuration(e.target.value)}
                     placeholder="e.g. 20" className="mt-1 h-8 text-sm" />
                 </div>
                 <div>
-                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Pot value (₹)</label>
+                  <label className="text-xs text-muted-foreground uppercase tracking-wide">Pot value (₹)</label>
                   <Input type="number" value={chitTotalValue} onChange={e => setChitTotalValue(e.target.value)}
                     placeholder="e.g. 300000" className="mt-1 h-8 text-sm" />
                 </div>
               </div>
 
               <div>
-                <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Monthly contribution after lifting (₹)</label>
-                <p className="text-[10px] text-muted-foreground mb-1">Leave blank if same as before lifting</p>
+                <label className="text-xs text-muted-foreground uppercase tracking-wide">Monthly contribution after lifting (₹)</label>
+                <p className="text-xs text-muted-foreground mb-1">Leave blank if same as before lifting</p>
                 <Input type="number" value={chitMonthlyLifted} onChange={e => setChitMonthlyLifted(e.target.value)}
                   placeholder="Optional" className="h-8 text-sm" />
               </div>
@@ -918,7 +918,7 @@ function TemplateDialog({
 
           {/* ── Payment settings ── */}
           <div className="space-y-3 rounded-xl border bg-muted/20 px-3 py-3">
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Payment settings</p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Payment settings</p>
 
             {!isIncome && (
               <div className="flex items-center justify-between">
@@ -971,7 +971,7 @@ function TemplateDialog({
                 <Input type="number" min="1" max="31" value={statementDay}
                   onChange={(e) => setStatementDay(e.target.value)} placeholder="e.g. 15" className="mt-1" />
                 {statementDay && (
-                  <p className="text-[11px] text-muted-foreground mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     Charges on/before {statementDay}th go into this month&apos;s bill; charges after go into next month&apos;s.
                   </p>
                 )}
@@ -1003,7 +1003,7 @@ function TemplateDialog({
                       placeholder="Year" className="w-24 mt-2" />
                   </div>
                   {pendingAmt && (
-                    <p className="text-[10px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       From {MONTHS[pendingMonth - 1]} {pendingYear},{" "}
                       {isLoan ? "EMI becomes" : "amount changes to"}{" "}
                       <span className="font-semibold text-foreground">{fmt(parseFloat(pendingAmt) || 0)}</span>/month
@@ -1032,7 +1032,7 @@ function TemplateDialog({
                           <Input type="number" value={endsOnYear}
                             onChange={e => setEndsOnYear(parseInt(e.target.value) || defaultEndYear)}
                             placeholder="Year" className="w-24" />
-                          <p className="text-[10px] text-muted-foreground">
+                          <p className="text-xs text-muted-foreground">
                             Stops appearing in projections after {MONTHS[endsOnMonth - 1]} {endsOnYear}
                           </p>
                         </div>
@@ -1066,7 +1066,7 @@ function TemplateDialog({
                   <Input type="number" value={endsOnYear}
                     onChange={e => setEndsOnYear(parseInt(e.target.value) || defaultEndYear)}
                     placeholder="Year" className="w-24" />
-                  <p className="text-[10px] text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     Stops appearing in projections after {MONTHS[endsOnMonth - 1]} {endsOnYear}
                   </p>
                 </div>

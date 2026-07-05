@@ -23,6 +23,17 @@
   --input:                  #e4e4e7;
   --ring:                   #09090b;
   --radius:                 0.5rem;
+
+  /* ── Semantic financial colors ───────────────────────────────────────────── */
+  --positive:               #059669;   /* emerald-600 — income, surplus, lifted */
+  --positive-bg:            #ecfdf5;   /* emerald-50 */
+  --positive-border:        #a7f3d0;   /* emerald-200 */
+  --negative:               #ef4444;   /* red-500 — expense, deficit, danger */
+  --negative-bg:            #fef2f2;   /* red-50 */
+  --negative-border:        #fecaca;   /* red-200 */
+  --warning:                #d97706;   /* amber-600 — pending, upcoming */
+  --warning-bg:             #fffbeb;   /* amber-50 */
+  --warning-border:         #fde68a;   /* amber-200 */
 }
 
 /* Dark mode intentionally disabled — hardcoded utility colors (blue-50, amber-50, etc.)

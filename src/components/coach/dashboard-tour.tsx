@@ -50,7 +50,7 @@ export function DashboardTour() {
         className="fixed inset-x-4 z-50 md:inset-auto md:left-1/2 md:-translate-x-1/2 md:w-96"
         style={{ bottom: "calc(5.5rem + env(safe-area-inset-bottom))" }}
       >
-        <div className="rounded-2xl bg-background border shadow-2xl p-5 animate-in slide-in-from-bottom-2 duration-200">
+        <div className="rounded-xl bg-background border shadow-2xl p-5 animate-in slide-in-from-bottom-2 duration-200">
           {/* Step dots + skip */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex gap-1">

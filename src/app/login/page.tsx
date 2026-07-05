@@ -60,7 +60,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           {/* iPhone */}
           <div className="rounded-2xl border bg-white p-4 space-y-3">
             <p className="text-xs font-semibold text-zinc-700 flex items-center gap-1.5">
-              <span className="w-5 h-5 rounded-md bg-zinc-900 text-white text-[10px] flex items-center justify-center font-bold shrink-0">
+              <span className="w-5 h-5 rounded-md bg-zinc-900 text-white text-xs flex items-center justify-center font-bold shrink-0">
               </span>
               iPhone / iPad (Safari)
             </p>
@@ -71,7 +71,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
                 { icon: Download, text: "Tap Add, the app icon appears on your home screen" },
               ].map(({ icon: Icon, text }, i) => (
                 <li key={i} className="flex items-start gap-2.5">
-                  <span className="w-4 h-4 rounded-full bg-zinc-100 text-zinc-500 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                  <span className="w-4 h-4 rounded-full bg-zinc-100 text-zinc-500 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
                     {i + 1}
                   </span>
                   <div className="flex items-start gap-1.5 flex-1">
@@ -86,7 +86,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           {/* Android */}
           <div className="rounded-2xl border bg-white p-4 space-y-3">
             <p className="text-xs font-semibold text-zinc-700 flex items-center gap-1.5">
-              <span className="w-5 h-5 rounded-md bg-green-600 text-white text-[10px] flex items-center justify-center font-bold shrink-0">
+              <span className="w-5 h-5 rounded-md bg-emerald-600 text-white text-xs flex items-center justify-center font-bold shrink-0">
                 A
               </span>
               Android (Chrome)
@@ -98,7 +98,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
                 { icon: PlusSquare, text: "Tap Install, FinanceOS is added to your home screen" },
               ].map(({ icon: Icon, text }, i) => (
                 <li key={i} className="flex items-start gap-2.5">
-                  <span className="w-4 h-4 rounded-full bg-zinc-100 text-zinc-500 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                  <span className="w-4 h-4 rounded-full bg-zinc-100 text-zinc-500 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
                     {i + 1}
                   </span>
                   <div className="flex items-start gap-1.5 flex-1">
@@ -110,7 +110,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             </ol>
           </div>
 
-          <p className="text-center text-[11px] text-zinc-400 px-2">
+          <p className="text-center text-xs text-zinc-400 px-2">
             Once installed, it works like a native app: no browser chrome, faster load, works offline.
           </p>
         </div>

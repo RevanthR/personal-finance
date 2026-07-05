@@ -10,7 +10,7 @@ export function LegalFooter() {
         <Link href="/contact" className="hover:text-foreground transition-colors">Contact Us</Link>
         <Link href="/pricing" className="hover:text-foreground transition-colors">Pricing</Link>
       </nav>
-      <p className="text-[11px] text-muted-foreground">© 2025 FinanceOS. All rights reserved.</p>
+      <p className="text-xs text-muted-foreground">© 2025 FinanceOS. All rights reserved.</p>
     </footer>
   );
 }

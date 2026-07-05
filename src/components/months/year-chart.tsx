@@ -76,7 +76,7 @@ function Legend({ color, label }: { color: string; label: string }) {
   return (
     <div className="flex items-center gap-1">
       <span className="w-3 h-2.5 rounded-sm inline-block shrink-0" style={{ background: color }} />
-      <span className="text-[9px] text-muted-foreground">{label}</span>
+      <span className="text-xs text-muted-foreground">{label}</span>
     </div>
   );
 }
@@ -88,7 +88,7 @@ function LegendLine({ label, solid }: { label: string; solid?: boolean }) {
         <line x1="0" y1="4" x2="16" y2="4" stroke="#6366f1" strokeWidth="2"
           strokeDasharray={solid ? undefined : "4 3"} />
       </svg>
-      <span className="text-[9px] text-muted-foreground">{label}</span>
+      <span className="text-xs text-muted-foreground">{label}</span>
     </div>
   );
 }

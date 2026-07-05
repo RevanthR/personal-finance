@@ -56,7 +56,7 @@ export function SetupMonthDialog({ open, onOpenChange, month, year, suggestedInc
               autoFocus
             />
             {(suggestedIncome ?? 0) > 0 && (
-              <p className="text-[11px] text-muted-foreground mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 Pre-filled from income templates · edit if your actual income differs
               </p>
             )}

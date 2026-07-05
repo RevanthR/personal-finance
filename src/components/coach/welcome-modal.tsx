@@ -29,8 +29,8 @@ export function WelcomeModal() {
           </div>
 
           {/* Header */}
-          <div className="bg-zinc-950 mx-4 md:mx-0 rounded-2xl px-5 pt-5 pb-5 text-white text-center mt-2 md:mt-0 md:rounded-none">
-            <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-3">
+          <div className="bg-zinc-950 mx-4 md:mx-0 rounded-xl px-5 pt-5 pb-5 text-white text-center mt-2 md:mt-0 md:rounded-none">
+            <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center mx-auto mb-3">
               <IndianRupee className="w-6 h-6 text-white" />
             </div>
             <p className="text-lg font-bold">Welcome to FinanceOS</p>

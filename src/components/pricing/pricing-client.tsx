@@ -163,19 +163,19 @@ export function PricingClient({ planType, planExpiry, trialEndsAt, razorpayKeyId
             <div
               key={plan.id}
               className={cn(
-                "relative rounded-2xl border p-5 space-y-4 transition-opacity",
+                "relative rounded-xl border p-5 space-y-4 transition-opacity",
                 isCurrent ? "border-emerald-400 bg-emerald-50" :
                 isLower ? "border-zinc-100 bg-zinc-50 opacity-50" :
                 plan.highlight ? "border-zinc-900 bg-zinc-950 text-white" : "border-zinc-200 bg-white"
               )}
             >
               {plan.highlight && !isCurrent && !isLower && (
-                <div className="absolute -top-2.5 left-4 flex items-center gap-1 bg-amber-400 text-zinc-900 text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                <div className="absolute -top-2.5 left-4 flex items-center gap-1 bg-amber-400 text-zinc-900 text-xs font-semibold px-2 py-0.5 rounded-full">
                   <Star className="w-2.5 h-2.5" /> Popular
                 </div>
               )}
               {isCurrent && (
-                <div className="absolute -top-2.5 left-4 flex items-center gap-1 bg-emerald-500 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                <div className="absolute -top-2.5 left-4 flex items-center gap-1 bg-emerald-500 text-white text-xs font-semibold px-2 py-0.5 rounded-full">
                   <CheckCircle2 className="w-2.5 h-2.5" /> Current plan
                 </div>
               )}

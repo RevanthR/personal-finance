@@ -203,7 +203,7 @@ function CCCardBlock({
           <span className="text-xs font-semibold">{entry.template.name}</span>
         </div>
         {statementDay && (
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             closes {statementDay}th
             {entry.template.dueDateDay ? (() => {
               const isNextMonth = entry.template.dueDateDay < statementDay;
@@ -216,7 +216,7 @@ function CCCardBlock({
       {/* Billed vs paying indicator — only when they differ */}
       {entry.billedAmount != null && entry.billedAmount > entry.amount && (
         <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-amber-100 bg-amber-50/60">
-          <span className="text-[10px] text-amber-700">
+          <span className="text-xs text-amber-700">
             Statement <span className="font-semibold">{fmt(entry.billedAmount)}</span>
             {" · "}Rolling <span className="font-semibold">{fmt(entry.billedAmount - entry.amount)}</span> to next month
           </span>
@@ -228,7 +228,7 @@ function CCCardBlock({
         <EntryRow entry={entry} onUpdate={onUpdate} isBillPending={isBillPending} />
         {preCloseTxs.length > 0 && (
           <div className="mt-1.5 border-t border-border/40 pt-1.5">
-            <p className="text-[10px] text-muted-foreground font-medium px-1 mb-1">Added to this bill</p>
+            <p className="text-xs text-muted-foreground font-medium px-1 mb-1">Added to this bill</p>
             <CCSubcatBreakdown txItems={preCloseTxs} onDelete={onDelete} />
           </div>
         )}
@@ -238,7 +238,7 @@ function CCCardBlock({
       {nextBillTotal > 0 && (
         <div className="border-t border-blue-100 bg-blue-50/60 px-3 py-2">
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[10px] font-semibold text-blue-600 uppercase tracking-wider">
+            <span className="text-xs font-semibold text-blue-600 uppercase tracking-wider">
               → {nextMonthName} bill
             </span>
             <div className="flex items-center gap-2">
@@ -756,7 +756,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       <DashboardTour />
       {/* Header */}
       <div className="space-y-2">
-        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">This Month</p>
+        <p className="text-xs text-muted-foreground uppercase tracking-wider">This Month</p>
 
         <div className="flex items-center gap-2">
           {/* Month navigation pill */}
@@ -775,7 +775,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
               <div className="flex-1 flex items-center justify-center gap-2 py-2">
                 <span className="text-base font-bold">{formatMonthYear(viewMonth, viewYear)}</span>
                 {isProjected && (
-                  <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full">
+                  <span className="text-xs font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full">
                     Projected
                   </span>
                 )}
@@ -796,7 +796,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
               <div className="flex items-center gap-2">
                 <span className="text-base font-bold">{formatMonthYear(viewMonth, viewYear)}</span>
                 {isProjected && (
-                  <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full">
+                  <span className="text-xs font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full">
                     Projected
                   </span>
                 )}
@@ -821,20 +821,20 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       <div className={cn("grid gap-2", hasCCCards ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2 sm:grid-cols-3")}>
         {/* Income */}
         {isProjected ? (
-          <MetricCard label="Est. Income" value={fmt(dispIncome)} icon={<Wallet className="w-3.5 h-3.5" />} color="text-green-600" sub="projected" gradient="linear-gradient(135deg, white 0%, #f0fdf4 100%)" />
+          <MetricCard label="Est. Income" value={fmt(dispIncome)} icon={<Wallet className="w-3.5 h-3.5" />} color="text-emerald-600" sub="projected" gradient="linear-gradient(135deg, white 0%, #f0fdf4 100%)" />
         ) : (
           <button onClick={openIncomeEdit} className="text-left">
             <Card className="hover:border-zinc-400 transition-colors cursor-pointer h-full" style={{ background: "linear-gradient(135deg, white 0%, #f0fdf4 100%)" }}>
               <CardContent className="px-2.5 py-2">
                 <div className="flex items-center justify-between mb-0.5">
-                  <p className="text-[10px] text-muted-foreground">Income</p>
+                  <p className="text-xs text-muted-foreground">Income</p>
                   <div className="flex items-center gap-1">
-                    <span className="text-green-600 opacity-70"><Wallet className="w-3.5 h-3.5" /></span>
+                    <span className="text-emerald-600 opacity-70"><Wallet className="w-3.5 h-3.5" /></span>
                     <Pencil className="w-2.5 h-2.5 text-muted-foreground" />
                   </div>
                 </div>
                 <p className="text-sm font-bold tabular-nums">{fmt(grandIncome)}</p>
-                {adHocIncome > 0 && <p className="text-[10px] text-green-600 mt-0.5 leading-tight">+{fmt(adHocIncome)} one-time</p>}
+                {adHocIncome > 0 && <p className="text-xs text-emerald-600 mt-0.5 leading-tight">+{fmt(adHocIncome)} one-time</p>}
               </CardContent>
             </Card>
           </button>
@@ -845,7 +845,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
           label="Recurring"
           value={fmt(dispRecurringNonCC)}
           icon={<TrendingDown className="w-3.5 h-3.5" />}
-          color="text-red-600"
+          color="text-red-500"
           sub={isProjected ? `${projEntries.filter(e => e.category !== "CREDIT_CARD").length} items` : nonCCPendingCount > 0 ? `${nonCCPendingCount} pending` : "all paid"}
           gradient="linear-gradient(135deg, white 0%, #fef2f2 100%)"
         />
@@ -871,24 +871,24 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
           <Card className="h-full" style={{ background: "linear-gradient(135deg, white 0%, #fffbeb 100%)" }}>
             <CardContent className="px-2.5 py-2">
               <div className="flex items-center justify-between mb-0.5">
-                <p className="text-[10px] text-muted-foreground">Pending</p>
+                <p className="text-xs text-muted-foreground">Pending</p>
                 <span className="text-amber-500 opacity-70"><AlertCircle className="w-3.5 h-3.5" /></span>
               </div>
               <p className="text-sm font-bold leading-tight tabular-nums">
                 {isProjected ? fmt(dispPending) : (pendingCount > 0 ? fmt(totalPending) : "—")}
               </p>
-              <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
+              <p className="text-xs text-muted-foreground mt-0.5 leading-tight">
                 {isProjected ? "projected" : pendingCount > 0 ? `${pendingCount} bills left` : "all settled"}
               </p>
               {!isProjected && (
                 <div className="mt-1.5 pt-1.5 border-t border-border/40 space-y-0.5">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] text-muted-foreground">In hand</span>
-                    <span className="text-[10px] font-semibold tabular-nums text-green-600">{fmt(Math.max(0, inHandNow))}</span>
+                    <span className="text-xs text-muted-foreground">In hand</span>
+                    <span className="text-xs font-semibold tabular-nums text-emerald-600">{fmt(Math.max(0, inHandNow))}</span>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] text-muted-foreground">Deficit (Over Income)</span>
-                    <span className={cn("text-[10px] font-semibold tabular-nums", balance < 0 ? "text-red-500" : "text-muted-foreground")}>
+                    <span className="text-xs text-muted-foreground">Deficit (Over Income)</span>
+                    <span className={cn("text-xs font-semibold tabular-nums", balance < 0 ? "text-red-500" : "text-muted-foreground")}>
                       {balance < 0 ? fmt(Math.abs(balance)) : "—"}
                     </span>
                   </div>
@@ -956,7 +956,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                       {catLabel}
                     </span>
                     {allPaid && collapsed && (
-                      <span className="text-[10px] text-green-600 font-medium ml-1">✓</span>
+                      <span className="text-xs text-emerald-600 font-medium ml-1">✓</span>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
@@ -975,7 +975,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                     ) : isCC ? (
                       <span className="text-xs text-muted-foreground">
                         {fmt(catTotal)} billed
-                        {catCarry > 0 && <span className="text-blue-500"> · ↗ {fmt(catCarry)} {nextMonthName}</span>}
+                        {catCarry > 0 && <span className="text-blue-600"> · ↗ {fmt(catCarry)} {nextMonthName}</span>}
                       </span>
                     ) : (
                       <span className="text-xs text-muted-foreground">
@@ -1021,7 +1021,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                       const orphaned = txItems.filter(t => !entryNames.has(parseCCCardName(t.notes) ?? ""));
                       return orphaned.length > 0 ? (
                         <div className="mt-2 rounded-xl border border-dashed border-border px-3 py-2">
-                          <p className="text-[10px] text-muted-foreground mb-1.5">Unmatched transactions</p>
+                          <p className="text-xs text-muted-foreground mb-1.5">Unmatched transactions</p>
                           <CCSubcatBreakdown txItems={orphaned} onDelete={handleAdHocDelete} />
                         </div>
                       ) : null;
@@ -1081,8 +1081,8 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             {/* Recurring income from templates */}
             <div className="rounded-xl bg-muted/30 border px-3 py-3 space-y-2">
               <div className="flex items-center justify-between">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Recurring</p>
-                <span className="text-xs font-semibold text-green-600">{fmt(templateIncome)}</span>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Recurring</p>
+                <span className="text-xs font-semibold text-emerald-600">{fmt(templateIncome)}</span>
               </div>
               {incomeTemplates.length === 0 ? (
                 <p className="text-xs text-muted-foreground">No recurring income configured.</p>
@@ -1118,7 +1118,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                               type="button"
                               disabled={incomeOverrideLoading || !editingIncomeAmount || parseFloat(editingIncomeAmount) <= 0}
                               onClick={() => { const v = parseFloat(editingIncomeAmount); if (v > 0) handleIncomeOverride(t, v); }}
-                              className="text-xs font-medium text-green-600 hover:text-green-700 disabled:opacity-40"
+                              className="text-xs font-medium text-emerald-600 hover:text-emerald-600 disabled:opacity-40"
                             >
                               Save
                             </button>
@@ -1138,7 +1138,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                                 <button
                                   type="button"
                                   onClick={() => handleIncomeOverrideReset(t.id)}
-                                  className="text-[11px] text-muted-foreground active:text-red-500 p-1 -mr-1"
+                                  className="text-xs text-muted-foreground active:text-red-500 p-1 -mr-1"
                                   title="Reset to template amount"
                                 >
                                   ↺
@@ -1147,7 +1147,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                               <button
                                 type="button"
                                 onClick={() => { setEditingIncomeTemplateId(t.id); setEditingIncomeAmount(String(effectiveAmt)); }}
-                                className={cn("text-sm font-medium tabular-nums px-1.5 py-0.5 rounded active:bg-muted transition-colors", override ? "text-amber-600" : "text-green-600")}
+                                className={cn("text-sm font-medium tabular-nums px-1.5 py-0.5 rounded active:bg-muted transition-colors", override ? "text-amber-600" : "text-emerald-600")}
                               >
                                 {fmt(effectiveAmt)}
                               </button>
@@ -1162,7 +1162,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
               <button
                 type="button"
                 onClick={() => { setShowIncomeEdit(false); router.push("/templates"); }}
-                className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 Manage in Budgets →
               </button>
@@ -1171,10 +1171,10 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             {/* One-time income items */}
             {adHocItems.filter(i => i.type === "INCOME" && !i.notes?.startsWith("income_override:")).length > 0 && (
               <div className="space-y-1.5">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">One-time income</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">One-time income</p>
                 {adHocItems.filter(i => i.type === "INCOME" && !i.notes?.startsWith("income_override:")).map(item => (
                   <div key={item.id} className="flex items-center gap-2.5 px-3 py-2 rounded-xl border bg-card">
-                    <div className="w-0.5 h-7 rounded-full bg-green-500 shrink-0" />
+                    <div className="w-0.5 h-7 rounded-full bg-emerald-600 shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{item.name}</p>
                       <p className="text-xs text-muted-foreground">
@@ -1182,8 +1182,8 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                         {item.notes && item.notes !== "carry_forward" ? ` · ${item.notes}` : ""}
                       </p>
                     </div>
-                    <span className="text-sm font-semibold text-green-600 shrink-0">+{fmt(item.amount)}</span>
-                    <Button variant="ghost" size="sm" onClick={() => handleAdHocDelete(item.id)} className="h-7 w-7 p-0 text-muted-foreground hover:text-red-600 shrink-0">
+                    <span className="text-sm font-semibold text-emerald-600 shrink-0">+{fmt(item.amount)}</span>
+                    <Button variant="ghost" size="sm" onClick={() => handleAdHocDelete(item.id)} className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500 shrink-0">
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
                   </div>
@@ -1236,7 +1236,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                   </Button>
                   <Button
                     size="sm"
-                    className="flex-1 bg-green-600 hover:bg-green-700"
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700"
                     disabled={!addIncomeAmount || addIncomeLoading}
                     onClick={handleAddOneTimeIncome}
                   >
@@ -1278,14 +1278,14 @@ function MetricCard({ label, value, icon, color, sub, gradient, upcoming }: {
     <Card style={gradient ? { background: gradient } : undefined}>
       <CardContent className="px-2.5 py-2">
         <div className="flex items-center justify-between mb-0.5">
-          <p className="text-[10px] text-muted-foreground">{label}</p>
+          <p className="text-xs text-muted-foreground">{label}</p>
           <span className={cn(color, "opacity-70")}>{icon}</span>
         </div>
         <p className="text-sm font-bold leading-tight tabular-nums">{value}</p>
-        {sub && <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{sub}</p>}
+        {sub && <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{sub}</p>}
         {upcoming && (
           <div className="mt-1.5 pt-1.5 border-t border-border/40">
-            <p className="text-[10px] text-muted-foreground">{upcoming.label}</p>
+            <p className="text-xs text-muted-foreground">{upcoming.label}</p>
             <p className="text-xs font-semibold text-blue-600 tabular-nums">{upcoming.value}</p>
           </div>
         )}
@@ -1302,7 +1302,7 @@ function ProjectedEntryRow({ entry }: { entry: ProjectedEntry }) {
       <div className="w-0.5 h-7 rounded-full shrink-0 bg-zinc-300" />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium">{entry.name}</p>
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           {entry.dueDateDay ? `due ${entry.dueDateDay}th` : "projected"}
           {entry.isFixed ? " · fixed" : ""}
         </p>
@@ -1329,19 +1329,19 @@ function FYSummaryCard({ recentMonths, fyIncome, fyExpenses, fyBalance, trendDat
         className="w-full text-left"
       >
         <CardContent className="p-3">
-          <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-2">Last {recentMonths.length} months</p>
+          <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Last {recentMonths.length} months</p>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <p className="text-[10px] text-slate-400">Income</p>
-              <p className="text-sm font-bold text-green-400">{fmt(fyIncome)}</p>
+              <p className="text-xs text-slate-400">Income</p>
+              <p className="text-sm font-bold text-emerald-400">{fmt(fyIncome)}</p>
             </div>
             <div>
-              <p className="text-[10px] text-slate-400">Expenses</p>
-              <p className="text-sm font-bold text-red-400">{fmt(fyExpenses)}</p>
+              <p className="text-xs text-slate-400">Expenses</p>
+              <p className="text-sm font-bold text-red-500">{fmt(fyExpenses)}</p>
             </div>
             <div>
-              <p className="text-[10px] text-slate-400">{fyBalance >= 0 ? "In hand" : "Deficit (Over Income)"}</p>
-              <p className={cn("text-sm font-bold", fyBalance >= 0 ? "text-green-400" : "text-red-400")}>
+              <p className="text-xs text-slate-400">{fyBalance >= 0 ? "In hand" : "Deficit (Over Income)"}</p>
+              <p className={cn("text-sm font-bold", fyBalance >= 0 ? "text-emerald-400" : "text-red-500")}>
                 {fyBalance >= 0 ? "+" : "-"}{fmt(Math.abs(fyBalance))}
               </p>
             </div>
@@ -1350,17 +1350,17 @@ function FYSummaryCard({ recentMonths, fyIncome, fyExpenses, fyBalance, trendDat
       </button>
       {expanded && (
         <div className="border-t border-slate-700 px-3 pb-3 pt-2 space-y-1.5">
-          <div className="grid grid-cols-4 gap-1 text-[9px] text-slate-500 uppercase tracking-wider mb-1 px-1">
+          <div className="grid grid-cols-4 gap-1 text-xs text-slate-500 uppercase tracking-wider mb-1 px-1">
             <span>Month</span><span className="text-right">Income</span><span className="text-right">Expenses</span><span className="text-right">Net</span>
           </div>
           {trendData.map(m => {
             const net = m.Income - m.Expenses;
             return (
-              <div key={m.name} className="grid grid-cols-4 gap-1 text-[10px] px-1">
+              <div key={m.name} className="grid grid-cols-4 gap-1 text-xs px-1">
                 <span className="text-slate-300 font-medium">{m.name}</span>
-                <span className="text-right text-green-400 tabular-nums">{fmt(m.Income)}</span>
-                <span className="text-right text-red-400 tabular-nums">{fmt(m.Expenses)}</span>
-                <span className={cn("text-right font-semibold tabular-nums", net >= 0 ? "text-green-400" : "text-red-400")}>
+                <span className="text-right text-emerald-400 tabular-nums">{fmt(m.Income)}</span>
+                <span className="text-right text-red-500 tabular-nums">{fmt(m.Expenses)}</span>
+                <span className={cn("text-right font-semibold tabular-nums", net >= 0 ? "text-emerald-400" : "text-red-500")}>
                   {net >= 0 ? "+" : "-"}{fmt(Math.abs(net))}
                 </span>
               </div>
@@ -1417,7 +1417,7 @@ function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, 
         className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/40 transition-colors text-left"
       >
         <div className="flex items-center gap-2 min-w-0">
-          <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
           <div className="min-w-0">
             <p className="text-sm font-semibold leading-tight">Settlement Summary</p>
             <p className="text-xs text-muted-foreground tabular-nums mt-0.5">
@@ -1439,7 +1439,7 @@ function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, 
               <div key={g.key} className="px-4 py-2.5 border-b border-border/50 last:border-b-0">
                 <div className="flex items-center gap-1.5 mb-2">
                   <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
-                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex-1">{g.label}</span>
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex-1">{g.label}</span>
                   <span className="text-xs font-semibold tabular-nums">{fmt(subtotal)}</span>
                 </div>
                 <div className="space-y-1.5 pl-3">
@@ -1451,18 +1451,18 @@ function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, 
                         <div className="flex items-center gap-1.5 min-w-0">
                           <span className="text-xs text-muted-foreground truncate">{e.template.name}</span>
                           {isPartial && (
-                            <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-1 py-0.5 rounded shrink-0">partial payment</span>
+                            <span className="text-xs font-semibold text-amber-600 bg-amber-50 px-1 py-0.5 rounded shrink-0">partial payment</span>
                           )}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           {e.cashbackAmount ? (
-                            <span className="text-[10px] text-green-600">-{fmt(e.cashbackAmount)} cb</span>
+                            <span className="text-xs text-emerald-600">-{fmt(e.cashbackAmount)} cb</span>
                           ) : null}
                           {isPartial && (
-                            <span className="text-[10px] text-muted-foreground">{fmt(remaining)} left</span>
+                            <span className="text-xs text-muted-foreground">{fmt(remaining)} left</span>
                           )}
                           {!isPartial && e.paidOn && (
-                            <span className="text-[10px] text-muted-foreground/70">{format(new Date(e.paidOn), "do MMM")}</span>
+                            <span className="text-xs text-muted-foreground/70">{format(new Date(e.paidOn), "do MMM")}</span>
                           )}
                           <span className={cn("text-xs font-semibold tabular-nums", isPartial && "text-amber-600")}>
                             {fmt(effectivePaid(e))}
@@ -1479,7 +1479,7 @@ function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, 
           {cashItems.length > 0 && (
             <div className="flex items-center gap-1.5 px-4 py-2.5 border-b border-border/50">
               <IndianRupee className="w-3 h-3 text-orange-500 shrink-0" />
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex-1">Cash / UPI spend</span>
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex-1">Cash / UPI spend</span>
               <span className="text-xs font-semibold tabular-nums">{fmt(adHocExpense)}</span>
             </div>
           )}
@@ -1499,12 +1499,12 @@ function TransactionRow({ item, onDelete }: { item: AdHocItem; onDelete: (id: st
       "flex items-center gap-3 px-3 py-2.5 rounded-xl border bg-card",
       isCarryForward && "border-amber-200 bg-amber-50/40"
     )}>
-      <div className={cn("w-0.5 h-7 rounded-full shrink-0", item.type === "INCOME" ? "bg-green-600" : "bg-red-600")} />
+      <div className={cn("w-0.5 h-7 rounded-full shrink-0", item.type === "INCOME" ? "bg-emerald-600" : "bg-red-500")} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           <p className="text-sm font-medium">{item.name}</p>
           {isCarryForward && (
-            <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-1 py-0.5 rounded">carried fwd</span>
+            <span className="text-xs font-semibold text-amber-700 bg-amber-100 px-1 py-0.5 rounded">carried fwd</span>
           )}
         </div>
         <p className="text-xs text-muted-foreground">
@@ -1512,10 +1512,10 @@ function TransactionRow({ item, onDelete }: { item: AdHocItem; onDelete: (id: st
           {item.notes && !isCarryForward ? ` · ${item.notes}` : ""}
         </p>
       </div>
-      <span className={cn("text-sm font-semibold shrink-0", item.type === "INCOME" ? "text-green-600" : "text-red-600")}>
+      <span className={cn("text-sm font-semibold shrink-0", item.type === "INCOME" ? "text-emerald-600" : "text-red-500")}>
         {item.type === "INCOME" ? "+" : "-"}{fmt(item.amount)}
       </span>
-      <Button variant="ghost" size="sm" onClick={() => onDelete(item.id)} className="h-10 w-10 p-0 text-muted-foreground hover:text-red-600 shrink-0">
+      <Button variant="ghost" size="sm" onClick={() => onDelete(item.id)} className="h-10 w-10 p-0 text-muted-foreground hover:text-red-500 shrink-0">
         <Trash2 className="w-4 h-4" />
       </Button>
     </div>

@@ -108,15 +108,15 @@ function Bar({ value, max, color }: { value: number; max: number; color: string 
 }
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">{children}</p>;
+  return <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{children}</p>;
 }
 
 function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
     <div className="rounded-xl border bg-card p-3">
-      <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">{label}</p>
+      <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">{label}</p>
       <p className={cn("text-lg font-bold tabular-nums", color ?? "text-foreground")}>{value}</p>
-      {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
+      {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
     </div>
   );
 }
@@ -141,7 +141,7 @@ function CategorySection({ data, totalExpenses, fmt }: {
             <div className="flex items-center gap-2 py-2 px-3 rounded-xl hover:bg-zinc-50 transition-colors group">
               <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
               <span className="text-sm font-medium flex-1 min-w-0 truncate">{cat.name}</span>
-              <span className="text-[10px] text-muted-foreground shrink-0">{cat.pct}%</span>
+              <span className="text-xs text-muted-foreground shrink-0">{cat.pct}%</span>
               <span className="text-sm font-semibold shrink-0 tabular-nums">{fmt(cat.total)}</span>
               {cat.items.length > 0 && (
                 expanded === cat.key
@@ -160,13 +160,13 @@ function CategorySection({ data, totalExpenses, fmt }: {
                 <div key={item.name} className="flex items-center justify-between py-1">
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-medium truncate">{item.name}</p>
-                    <p className="text-[10px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       {item.months} month{item.months !== 1 ? "s" : ""} · avg {fmt(Math.round(item.total / item.months))}/mo
                     </p>
                   </div>
                   <div className="text-right shrink-0 ml-3">
                     <p className="text-xs font-semibold tabular-nums">{fmt(item.total)}</p>
-                    <p className="text-[10px] text-muted-foreground">{pct(item.total, totalExpenses)}% of spend</p>
+                    <p className="text-xs text-muted-foreground">{pct(item.total, totalExpenses)}% of spend</p>
                   </div>
                 </div>
               ))}
@@ -187,10 +187,10 @@ function SavingsRateBar({ trends }: {
     <div className="grid grid-cols-4 sm:grid-cols-6 gap-x-2 gap-y-2.5">
       {trends.map(t => (
         <div key={t.label} className="text-center">
-          <p className="text-[10px] text-muted-foreground">{t.label}</p>
+          <p className="text-xs text-muted-foreground">{t.label}</p>
           <p className={cn(
             "text-xs font-bold tabular-nums",
-            t.savingsRate >= 20 ? "text-green-600" : t.savingsRate >= 0 ? "text-amber-600" : "text-red-600"
+            t.savingsRate >= 20 ? "text-emerald-600" : t.savingsRate >= 0 ? "text-amber-600" : "text-red-500"
           )}>
             {t.savingsRate}%
           </p>
@@ -222,15 +222,15 @@ function ReliefTimeline({ data, fmt }: {
       {/* Current committed header */}
       <div className="grid grid-cols-2 gap-2">
         <div className="rounded-xl border bg-red-50 border-red-100 p-3">
-          <p className="text-[10px] text-red-700 uppercase tracking-wider mb-0.5">Monthly committed</p>
-          <p className="text-lg font-bold text-red-700 tabular-nums">{fmt(currentMonthlyCommitted)}</p>
-          <p className="text-[10px] text-red-600">{loans.length} loan{loans.length !== 1 ? "s" : ""} · {chits.filter(c => c.remainingMonths > 0).length} chit{chits.filter(c => c.remainingMonths > 0).length !== 1 ? "s" : ""}</p>
+          <p className="text-xs text-red-500 uppercase tracking-wider mb-0.5">Monthly committed</p>
+          <p className="text-lg font-bold text-red-500 tabular-nums">{fmt(currentMonthlyCommitted)}</p>
+          <p className="text-xs text-red-500">{loans.length} loan{loans.length !== 1 ? "s" : ""} · {chits.filter(c => c.remainingMonths > 0).length} chit{chits.filter(c => c.remainingMonths > 0).length !== 1 ? "s" : ""}</p>
         </div>
         {lastMilestone && (
-          <div className="rounded-xl border bg-green-50 border-green-100 p-3">
-            <p className="text-[10px] text-green-700 uppercase tracking-wider mb-0.5">After all clear</p>
-            <p className="text-lg font-bold text-green-700 tabular-nums">{fmt(Math.max(0, lastMilestone.committedAfter))}</p>
-            <p className="text-[10px] text-green-600">by {lastMilestone.label}</p>
+          <div className="rounded-xl border bg-emerald-50 border-emerald-100 p-3">
+            <p className="text-xs text-emerald-600 uppercase tracking-wider mb-0.5">After all clear</p>
+            <p className="text-lg font-bold text-emerald-600 tabular-nums">{fmt(Math.max(0, lastMilestone.committedAfter))}</p>
+            <p className="text-xs text-emerald-600">by {lastMilestone.label}</p>
           </div>
         )}
       </div>
@@ -245,10 +245,10 @@ function ReliefTimeline({ data, fmt }: {
               <div key={l.name} className="rounded-xl border bg-card px-4 py-3 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="w-2 h-2 rounded-full bg-red-400 shrink-0" />
+                    <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
                     <p className="text-sm font-semibold truncate">{l.name}</p>
                     {l.rateType === "FLOATING" && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium shrink-0">floating</span>
+                      <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium shrink-0">floating</span>
                     )}
                   </div>
                   <span className="text-xs text-muted-foreground shrink-0 ml-2">
@@ -260,25 +260,25 @@ function ReliefTimeline({ data, fmt }: {
                   <>
                     <div className="grid grid-cols-2 gap-2">
                       <div className="rounded-lg bg-zinc-50 px-3 py-2">
-                        <p className="text-[10px] text-muted-foreground mb-0.5">Principal left</p>
+                        <p className="text-xs text-muted-foreground mb-0.5">Principal left</p>
                         <p className="text-sm font-bold tabular-nums">{fmt(a.outstandingPrincipal)}</p>
                       </div>
                       <div className="rounded-lg bg-red-50 px-3 py-2">
-                        <p className="text-[10px] text-red-600 mb-0.5">Interest left</p>
-                        <p className="text-sm font-bold text-red-600 tabular-nums">{fmt(a.totalInterestRemaining)}</p>
+                        <p className="text-xs text-red-500 mb-0.5">Interest left</p>
+                        <p className="text-sm font-bold text-red-500 tabular-nums">{fmt(a.totalInterestRemaining)}</p>
                       </div>
                     </div>
                     <div className="space-y-1">
-                      <div className="flex items-center justify-between text-[10px]">
+                      <div className="flex items-center justify-between text-xs">
                         <span className="text-emerald-600 font-medium">{fmt(a.principalThisMonth)} principal this month</span>
                         <span className="text-red-500 font-medium">{fmt(a.interestThisMonth)} interest</span>
                       </div>
                       <div className="h-1.5 rounded-full bg-zinc-100 overflow-hidden flex">
                         <div className="h-full bg-emerald-400" style={{ width: `${100 - iPct}%` }} />
-                        <div className="h-full bg-red-400 flex-1" />
+                        <div className="h-full bg-red-500 flex-1" />
                       </div>
                       {a.monthsRemaining > 0 && l.endsMonth && l.endsYear && (
-                        <p className="text-[10px] text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
                           {a.monthsRemaining} months left · clears {MONTHS[l.endsMonth - 1]} {l.endsYear}
                           <span className="text-emerald-600 ml-1">· saves {fmt(l.monthlyAmount)}/mo</span>
                         </p>
@@ -286,7 +286,7 @@ function ReliefTimeline({ data, fmt }: {
                     </div>
                   </>
                 ) : (
-                  <p className="text-[10px] text-muted-foreground/60 italic">
+                  <p className="text-xs text-muted-foreground/60 italic">
                     {l.endsMonth && l.endsYear
                       ? `Ends ${MONTHS[l.endsMonth - 1]} ${l.endsYear} · add interest rate in Templates for breakdown`
                       : "Add interest rate + outstanding in Templates to see principal/interest breakdown."}
@@ -312,7 +312,7 @@ function ReliefTimeline({ data, fmt }: {
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <p className="text-sm font-bold">{ms.label}</p>
-                        <span className="text-[10px] text-muted-foreground"><RelativeTime months={ms.monthsFromNow} /></span>
+                        <span className="text-xs text-muted-foreground"><RelativeTime months={ms.monthsFromNow} /></span>
                       </div>
                       <div className="mt-1 space-y-0.5">
                         {chitItems.map(item => (
@@ -324,8 +324,8 @@ function ReliefTimeline({ data, fmt }: {
                       </div>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="text-sm font-bold text-green-600">saves {fmt(ms.totalRelief)}/mo</p>
-                      <p className="text-[10px] text-muted-foreground">down to {fmt(Math.max(0, ms.committedAfter))}/mo</p>
+                      <p className="text-sm font-bold text-emerald-600">saves {fmt(ms.totalRelief)}/mo</p>
+                      <p className="text-xs text-muted-foreground">down to {fmt(Math.max(0, ms.committedAfter))}/mo</p>
                     </div>
                   </div>
                   {ms.monthsFromNow > 0 && i === 0 && (
@@ -361,7 +361,7 @@ function YoYSection({ current, prev, prevLabel, fmt }: {
 
   return (
     <div className="space-y-2">
-      <div className="grid grid-cols-4 text-[10px] text-muted-foreground px-1 mb-1">
+      <div className="grid grid-cols-4 text-xs text-muted-foreground px-1 mb-1">
         <span className="col-span-2">Category</span>
         <span className="text-right">{prevLabel}</span>
         <span className="text-right">This FY</span>
@@ -372,7 +372,7 @@ function YoYSection({ current, prev, prevLabel, fmt }: {
             <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: c.color }} />
             <span className="text-xs truncate">{c.name}</span>
             {c.delta !== null && (
-              <span className={cn("text-[9px] font-semibold px-1 py-0.5 rounded", c.delta > 10 ? "text-red-600 bg-red-50" : c.delta < -10 ? "text-green-600 bg-green-50" : "text-zinc-500 bg-zinc-100")}>
+              <span className={cn("text-xs font-semibold px-1 py-0.5 rounded", c.delta > 10 ? "text-red-500 bg-red-50" : c.delta < -10 ? "text-emerald-600 bg-emerald-50" : "text-zinc-500 bg-zinc-100")}>
                 {c.delta > 0 ? "+" : ""}{c.delta}%
               </span>
             )}
@@ -411,10 +411,10 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
 
       {/* Summary cards — always full width */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <StatCard label="FY Spend" value={fmt(data.fyExpenses)} sub={`${data.actualMonthCount} months`} color="text-red-600" />
+        <StatCard label="FY Spend" value={fmt(data.fyExpenses)} sub={`${data.actualMonthCount} months`} color="text-red-500" />
         <StatCard label="Avg / month" value={fmt(avgMonthlySpend)} />
-        <StatCard label="FY Income" value={fmt(data.fyIncome)} color="text-green-600" />
-        <StatCard label="Avg savings" value={`${avgSavingsRate}%`} color={avgSavingsRate >= 20 ? "text-green-600" : avgSavingsRate >= 10 ? "text-amber-600" : "text-red-600"} />
+        <StatCard label="FY Income" value={fmt(data.fyIncome)} color="text-emerald-600" />
+        <StatCard label="Avg savings" value={`${avgSavingsRate}%`} color={avgSavingsRate >= 20 ? "text-emerald-600" : avgSavingsRate >= 10 ? "text-amber-600" : "text-red-500"} />
       </div>
 
       {/* Monthly overview — full width, above the columns */}
@@ -425,14 +425,14 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
             <CardContent className="p-3 sm:p-4 space-y-3">
               <TrendChart data={data.monthlyTrends} />
               <div className="pt-1 border-t border-border">
-                <p className="text-[10px] text-muted-foreground mb-2">Savings rate by month</p>
+                <p className="text-xs text-muted-foreground mb-2">Savings rate by month</p>
                 <SavingsRateBar trends={data.monthlyTrends} />
               </div>
               {(data.bestMonth || data.worstMonth) && data.bestMonth?.label !== data.worstMonth?.label && (
                 <div className="flex gap-4 pt-1 border-t border-border">
                   {data.bestMonth && (
                     <div className="flex items-center gap-1.5">
-                      <TrendingUp className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                      <TrendingUp className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                       <p className="text-xs"><span className="text-muted-foreground">All-time best </span><span className="font-semibold">{data.bestMonth.label} {data.bestMonth.savingsRate}%</span></p>
                     </div>
                   )}
@@ -476,7 +476,7 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
                       <span className="text-xs font-semibold tabular-nums w-8 text-right shrink-0">{value}%</span>
                     </div>
                   ))}
-                  <p className="text-[10px] text-muted-foreground pt-0.5">
+                  <p className="text-xs text-muted-foreground pt-0.5">
                     Committed overhead <span className="font-semibold text-foreground">{fmt(data.committedOverhead)}/mo</span>
                     <span className="mx-1.5">·</span>
                     Essential = Loan, Maintenance, Savings
@@ -493,10 +493,10 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
               <Card>
                 <CardContent className="p-3 sm:p-4">
                   <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-3">
-                    <div><span className="text-[10px] text-muted-foreground">Salary </span><span className="text-xs font-semibold text-emerald-600">{fmt(data.incomeSources.salary)}</span></div>
-                    {data.incomeSources.freelance > 0 && <div><span className="text-[10px] text-muted-foreground">Freelance </span><span className="text-xs font-semibold text-cyan-600">{fmt(data.incomeSources.freelance)}</span><span className="text-[9px] text-muted-foreground ml-1">({data.freelancePct}%)</span></div>}
-                    {data.incomeSources.other > 0 && <div><span className="text-[10px] text-muted-foreground">Other </span><span className="text-xs font-semibold">{fmt(data.incomeSources.other)}</span></div>}
-                    {data.incomeSources.adHoc > 0 && <div><span className="text-[10px] text-muted-foreground">One-off </span><span className="text-xs font-semibold text-violet-600">{fmt(data.incomeSources.adHoc)}</span></div>}
+                    <div><span className="text-xs text-muted-foreground">Salary </span><span className="text-xs font-semibold text-emerald-600">{fmt(data.incomeSources.salary)}</span></div>
+                    {data.incomeSources.freelance > 0 && <div><span className="text-xs text-muted-foreground">Freelance </span><span className="text-xs font-semibold text-cyan-600">{fmt(data.incomeSources.freelance)}</span><span className="text-xs text-muted-foreground ml-1">({data.freelancePct}%)</span></div>}
+                    {data.incomeSources.other > 0 && <div><span className="text-xs text-muted-foreground">Other </span><span className="text-xs font-semibold">{fmt(data.incomeSources.other)}</span></div>}
+                    {data.incomeSources.adHoc > 0 && <div><span className="text-xs text-muted-foreground">One-off </span><span className="text-xs font-semibold text-violet-600">{fmt(data.incomeSources.adHoc)}</span></div>}
                   </div>
                   <IncomeChart data={data.monthlyTrends} />
                 </CardContent>
@@ -522,11 +522,11 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
                           </div>
                           <div className="text-right shrink-0">
                             {c.remainingMonths === 0 ? (
-                              <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">Done</span>
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-600 font-medium">Done</span>
                             ) : (
                               <>
                                 <p className="text-xs font-semibold">ends {MONTHS[c.endsMonth - 1]} {c.endsYear}</p>
-                                <p className="text-[10px] text-muted-foreground">{c.remainingMonths} mo left</p>
+                                <p className="text-xs text-muted-foreground">{c.remainingMonths} mo left</p>
                               </>
                             )}
                           </div>
@@ -535,8 +535,8 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
                           <div className="h-full rounded-full bg-indigo-400 transition-all" style={{ width: `${progressPct}%` }} />
                         </div>
                         <div className="flex justify-between mt-1">
-                          <span className="text-[10px] text-muted-foreground">month {elapsed} of {c.durationMonths}</span>
-                          <span className="text-[10px] text-muted-foreground">{progressPct}%</span>
+                          <span className="text-xs text-muted-foreground">month {elapsed} of {c.durationMonths}</span>
+                          <span className="text-xs text-muted-foreground">{progressPct}%</span>
                         </div>
                       </div>
                     );
@@ -573,7 +573,7 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
                           <div className="flex justify-between mb-0.5">
                             <span className="text-xs">{item.name}</span>
                             <div className="flex gap-2">
-                              <span className="text-[10px] text-muted-foreground">{pct(item.amount, total)}%</span>
+                              <span className="text-xs text-muted-foreground">{pct(item.amount, total)}%</span>
                               <span className="text-xs font-semibold tabular-nums">{fmt(item.amount)}</span>
                             </div>
                           </div>

@@ -126,7 +126,7 @@ export function Sidebar({ isAdmin }: SidebarProps) {
                 )}
               >
                 <Icon className="w-5 h-5" />
-                <span className="text-[10px] font-medium">{mobileLabel ?? label.split(" ")[0]}</span>
+                <span className="text-xs font-medium">{mobileLabel ?? label.split(" ")[0]}</span>
               </Link>
             );
           })}

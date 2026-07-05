@@ -19,7 +19,7 @@ export function PageCoach({ coachKey, icon: Icon, iconClass, bgClass, title, des
   if (!show) return null;
 
   return (
-    <div className={cn("flex items-start gap-3 rounded-2xl border px-4 py-3 mb-4", bgClass)}>
+    <div className={cn("flex items-start gap-3 rounded-xl border px-4 py-3 mb-4", bgClass)}>
       <div className="w-7 h-7 rounded-lg bg-white/60 flex items-center justify-center shrink-0 mt-0.5">
         <Icon className={cn("w-3.5 h-3.5", iconClass)} />
       </div>

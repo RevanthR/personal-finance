@@ -35,10 +35,10 @@ function PlanBadge({ planType, planExpiry, trialEndsAt }: { planType: string; pl
     const isExpiringSoon = daysLeft <= 3;
     return (
       <div className="flex flex-col items-end gap-0.5">
-        <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${isExpiringSoon ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
+        <span className={`inline-flex items-center text-xs font-semibold px-1.5 py-0.5 rounded-full ${isExpiringSoon ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-600"}`}>
           {planType}
         </span>
-        <span className="text-[10px] text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           {isExpiringSoon ? `${daysLeft}d left` : `till ${format(expiry!, "dd MMM")}`}
         </span>
       </div>
@@ -49,10 +49,10 @@ function PlanBadge({ planType, planExpiry, trialEndsAt }: { planType: string; pl
     const daysLeft = Math.ceil((trial!.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
     return (
       <div className="flex flex-col items-end gap-0.5">
-        <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
+        <span className="inline-flex items-center text-xs font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
           TRIAL
         </span>
-        <span className="text-[10px] text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           {daysLeft === 0 ? "expires today" : `${daysLeft}d left`}
         </span>
       </div>
@@ -60,7 +60,7 @@ function PlanBadge({ planType, planExpiry, trialEndsAt }: { planType: string; pl
   }
 
   return (
-    <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600">
+    <span className="inline-flex items-center text-xs font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-500">
       EXPIRED
     </span>
   );

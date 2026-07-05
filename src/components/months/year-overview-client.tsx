@@ -42,7 +42,7 @@ function RankedList({ items, total }: { items: { name: string; value: number; co
                 <span className="text-xs text-foreground truncate">{item.name}</span>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <span className="text-[10px] text-muted-foreground">{pct}%</span>
+                <span className="text-xs text-muted-foreground">{pct}%</span>
                 <span className="text-xs font-medium">{fmt(item.value)}</span>
               </div>
             </div>
@@ -169,27 +169,27 @@ export function YearOverviewClient({
           </p>
           <p className={cn(
             "text-3xl font-bold tracking-tight",
-            yearEndBalance >= 0 ? "text-green-700" : "text-red-700"
+            yearEndBalance >= 0 ? "text-emerald-600" : "text-red-500"
           )}>
             {yearEndBalance >= 0 ? "+" : "−"}{fmt(Math.abs(yearEndBalance))}
           </p>
           <div className="flex gap-5 mt-2.5 text-xs">
             <div>
               <span className="text-muted-foreground">Income  </span>
-              <span className="text-green-700 font-semibold">{fmt(totalIncome)}</span>
+              <span className="text-emerald-600 font-semibold">{fmt(totalIncome)}</span>
             </div>
             <div>
               <span className="text-muted-foreground">Expenses  </span>
-              <span className="text-red-700 font-semibold">{fmt(totalExpenses)}</span>
+              <span className="text-red-500 font-semibold">{fmt(totalExpenses)}</span>
             </div>
           </div>
           {projCount > 0 && incomeTemplateCount > 0 && (
-            <p className="text-[10px] text-muted-foreground mt-2">
+            <p className="text-xs text-muted-foreground mt-2">
               Projection from {incomeTemplateCount} income template{incomeTemplateCount !== 1 ? "s" : ""}
             </p>
           )}
           {projCount > 0 && incomeTemplateCount === 0 && (
-            <p className="text-[10px] text-muted-foreground mt-2">Projection at current run rate</p>
+            <p className="text-xs text-muted-foreground mt-2">Projection at current run rate</p>
           )}
         </CardContent>
       </Card>
@@ -211,7 +211,7 @@ export function YearOverviewClient({
               <div className={cn(
                 "rounded-xl p-2.5 border select-none",
                 m.isCurrent
-                  ? "bg-green-50 border-green-400 ring-1 ring-green-300"
+                  ? "bg-emerald-50 border-emerald-400 ring-1 ring-emerald-300"
                   : m.isPopulated
                     ? "bg-card border-border hover:border-zinc-400 transition-colors cursor-pointer"
                     : "bg-zinc-50 border-dashed border-zinc-200 hover:border-zinc-400 transition-colors cursor-pointer"
@@ -220,29 +220,29 @@ export function YearOverviewClient({
                 <div className="flex items-center justify-between mb-2">
                   <span className={cn(
                     "text-xs font-bold",
-                    m.isCurrent ? "text-green-800" : "text-foreground"
+                    m.isCurrent ? "text-emerald-600" : "text-foreground"
                   )}>
                     {MONTHS[m.month - 1]}
                   </span>
                   <div className="flex items-center gap-0.5 flex-wrap justify-end">
                     {m.hasIncomeChange && (
-                      <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded">↑</span>
+                      <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded">↑</span>
                     )}
                     {(m.endingTemplateNames?.length ?? 0) > 0 && (
                       <span
                         title={m.endingTemplateNames?.join(", ")}
-                        className="text-[8px] font-bold text-rose-600 bg-rose-50 px-1 py-0.5 rounded"
+                        className="text-xs font-bold text-rose-600 bg-rose-50 px-1 py-0.5 rounded"
                       >
                         ↓{m.endingTemplateNames!.length}
                       </span>
                     )}
                     {!m.isPopulated && (
-                      <span className="text-[8px] font-medium text-muted-foreground bg-zinc-200 px-1 py-0.5 rounded">est</span>
+                      <span className="text-xs font-medium text-muted-foreground bg-zinc-200 px-1 py-0.5 rounded">est</span>
                     )}
                     {m.isPopulated && !m.isCurrent && m.paid !== null && m.total !== null && (
                       <span className={cn(
-                        "text-[8px] font-medium px-1 py-0.5 rounded",
-                        m.paid === m.total ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+                        "text-xs font-medium px-1 py-0.5 rounded",
+                        m.paid === m.total ? "bg-emerald-100 text-emerald-600" : "bg-amber-100 text-amber-700"
                       )}>
                         {m.paid}/{m.total}
                       </span>
@@ -253,9 +253,9 @@ export function YearOverviewClient({
                 {/* Mini income/expense bars */}
                 <div className="space-y-1 mb-2">
                   <div className="flex items-center gap-1.5">
-                    <div className="w-1 h-1 rounded-full bg-green-500 shrink-0" />
+                    <div className="w-1 h-1 rounded-full bg-emerald-600 shrink-0" />
                     <div className="flex-1 h-1 rounded-full bg-zinc-200 overflow-hidden">
-                      <div className="h-full rounded-full bg-green-500" style={{ width: `${incPct}%` }} />
+                      <div className="h-full rounded-full bg-emerald-600" style={{ width: `${incPct}%` }} />
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5">
@@ -272,11 +272,11 @@ export function YearOverviewClient({
                 {/* Balance */}
                 <p className={cn(
                   "text-xs font-bold",
-                  m.balance >= 0 ? "text-green-600" : "text-red-600"
+                  m.balance >= 0 ? "text-emerald-600" : "text-red-500"
                 )}>
                   {m.balance >= 0 ? "+" : "−"}{fmt(Math.abs(m.balance))}
                 </p>
-                <p className="text-[9px] mt-0.5 text-muted-foreground">
+                <p className="text-xs mt-0.5 text-muted-foreground">
                   {m.balance >= 0 ? "saved" : "deficit"} · {fmt(m.expenses)} spent
                 </p>
               </div>
@@ -305,16 +305,16 @@ export function YearOverviewClient({
             <div key={fy.fy} className="flex items-center justify-between px-3 py-2.5 rounded-xl border bg-card">
               <div>
                 <p className="text-sm font-medium">{fy.fy}</p>
-                <p className="text-[10px] text-muted-foreground">{fy.count} months</p>
+                <p className="text-xs text-muted-foreground">{fy.count} months</p>
               </div>
               <div className="text-right">
                 <p className={cn(
                   "text-sm font-bold",
-                  fy.balance >= 0 ? "text-green-600" : "text-red-600"
+                  fy.balance >= 0 ? "text-emerald-600" : "text-red-500"
                 )}>
                   {fy.balance >= 0 ? "+" : "−"}{fmt(Math.abs(fy.balance))}
                 </p>
-                <p className="text-[10px] text-muted-foreground">{fmt(fy.income)} in</p>
+                <p className="text-xs text-muted-foreground">{fmt(fy.income)} in</p>
               </div>
             </div>
           ))}
@@ -337,20 +337,20 @@ export function YearOverviewClient({
               <span className="text-xs text-muted-foreground">Savings rate</span>
               <span className={cn(
                 "text-sm font-bold",
-                currentMonthInsights.savingsRate >= 20 ? "text-green-600"
+                currentMonthInsights.savingsRate >= 20 ? "text-emerald-600"
                   : currentMonthInsights.savingsRate >= 0 ? "text-amber-600"
-                  : "text-red-600"
+                  : "text-red-500"
               )}>
                 {currentMonthInsights.savingsRate}%
               </span>
             </div>
             <div className="h-1.5 rounded-full bg-zinc-100 overflow-hidden">
               <div
-                className={cn("h-full rounded-full transition-all", currentMonthInsights.savingsRate >= 20 ? "bg-green-500" : currentMonthInsights.savingsRate >= 0 ? "bg-amber-500" : "bg-red-500")}
+                className={cn("h-full rounded-full transition-all", currentMonthInsights.savingsRate >= 20 ? "bg-emerald-600" : currentMonthInsights.savingsRate >= 0 ? "bg-amber-500" : "bg-red-500")}
                 style={{ width: `${Math.max(0, Math.min(100, currentMonthInsights.savingsRate))}%` }}
               />
             </div>
-            <div className="flex justify-between text-[10px] text-muted-foreground">
+            <div className="flex justify-between text-xs text-muted-foreground">
               <span>In: {fmt(currentMonthInsights.totalIncome)}</span>
               <span>Out: {fmt(currentMonthInsights.totalExpenses)}</span>
             </div>
@@ -393,7 +393,7 @@ export function YearOverviewClient({
                   <div key={p.name} className="flex items-center justify-between">
                     <div className="min-w-0">
                       <p className="text-xs truncate">{p.name}</p>
-                      <p className={cn("text-[10px]", p.overdue ? "text-red-500" : "text-muted-foreground")}>
+                      <p className={cn("text-xs", p.overdue ? "text-red-500" : "text-muted-foreground")}>
                         {p.overdue ? "overdue" : `due ${ordinal(p.dueDay)}`}
                       </p>
                     </div>

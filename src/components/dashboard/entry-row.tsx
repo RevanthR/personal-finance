@@ -53,7 +53,6 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
   const [editingAmount, setEditingAmount] = useState(false);
   const [amountVal, setAmountVal] = useState(String(entry.amount));
 
-  // Payment dialog state
   const [showDialog, setShowDialog] = useState(false);
   const [payMode, setPayMode] = useState<"full" | "partial">("full");
   const [partialVal, setPartialVal] = useState("");
@@ -61,7 +60,6 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
   const partialRef = useRef<HTMLInputElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
 
-  // Loan payment success state — snapshot of amortization at time of payment
   const [loanPaidSnapshot, setLoanPaidSnapshot] = useState<{
     emi: number;
     principalThisMonth: number;
@@ -102,7 +100,6 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
       setOptimisticPaid(true);
       setOptimisticPaidAmount(null);
       onUpdate(entry.id, { isPaid: true });
-      // Show loan payment breakdown if amortization data is available
       if (isLoan && loanAmort) {
         setLoanPaidSnapshot({
           emi: entry.amount,
@@ -207,17 +204,17 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
           <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
             <span>{getCategoryDisplay(entry.template.category, entry.template.customCategory)}</span>
             {isLoan && loanAmort && loanAmort.monthsRemaining > 0 && (
-              <span className="text-[10px] text-muted-foreground/70">
+              <span className="text-muted-foreground/70">
                 {loanAmort.monthsRemaining} mo left
               </span>
             )}
             {isBillPending && entry.template.statementDay && (
-              <span className="text-[10px] text-zinc-400 italic">
+              <span className="text-muted-foreground/60 italic">
                 Statement closes {entry.template.statementDay}th
               </span>
             )}
             {!isBillPending && entry.template.category === "CREDIT_CARD" && entry.template.statementDay && !isPaid && (
-              <span className="text-[10px] text-blue-500">
+              <span className="text-blue-600">
                 closes {entry.template.statementDay}th
                 {entry.template.dueDateDay ? ` · due ${entry.template.dueDateDay}th` : ""}
               </span>
@@ -228,17 +225,17 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
               </span>
             )}
             {isPaid && entry.paidOn && (
-              <span className="text-green-600">{format(new Date(entry.paidOn), "dd MMM")}</span>
+              <span className="text-emerald-600">{format(new Date(entry.paidOn), "dd MMM")}</span>
             )}
             {isLoan && entry.template.loanInterestRate && (
-              <span className="text-[10px] text-muted-foreground/70">{entry.template.loanInterestRate}%</span>
+              <span className="text-muted-foreground/70">{entry.template.loanInterestRate}%</span>
             )}
           </p>
           {loanAmort && !isPaid && (
-            <p className="text-[10px] mt-0.5 flex items-center gap-1">
+            <p className="text-xs mt-0.5 flex items-center gap-1">
               <span className="text-emerald-600">{fmt(loanAmort.principalThisMonth)} principal</span>
               <span className="text-muted-foreground">·</span>
-              <span className="text-red-400">{fmt(loanAmort.interestThisMonth)} interest</span>
+              <span className="text-red-500">{fmt(loanAmort.interestThisMonth)} interest</span>
             </p>
           )}
         </div>
@@ -247,7 +244,7 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
           {isPartial && !editingAmount ? (
             <>
               <p className="text-xs text-amber-600 font-semibold">{fmt(paidAmount!)} paid</p>
-              <p className="text-[10px] text-muted-foreground">{fmt(outstanding)} left</p>
+              <p className="text-xs text-muted-foreground">{fmt(outstanding)} left</p>
             </>
           ) : editingAmount ? (
             <input
@@ -262,7 +259,7 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
           ) : cashback > 0 && !isPaid ? (
             <>
               <p className="text-sm font-semibold">{fmt(netBill)}</p>
-              <p className="text-[10px] text-green-600">-{fmt(cashback)} cashback</p>
+              <p className="text-xs text-emerald-600">-{fmt(cashback)} cashback</p>
             </>
           ) : (
             <span
@@ -286,22 +283,20 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
           </DialogHeader>
 
           <div className="space-y-4 py-1">
-            {/* Bill summary */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Bill amount</span>
                 <span className="font-semibold">{fmt(entry.amount)}</span>
               </div>
-              {/* Cashback field — only for CC entries */}
               {isCC && (
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm text-green-700">Cashback</span>
+                  <span className="text-sm text-emerald-600">Cashback</span>
                   <Input
                     type="number"
                     value={cashbackVal}
                     onChange={e => setCashbackVal(e.target.value)}
                     placeholder="0"
-                    className="h-7 w-28 text-right text-sm text-green-700 border-green-200 focus:border-green-400"
+                    className="h-7 w-28 text-right text-sm text-emerald-600 border-emerald-200 focus:border-emerald-400"
                   />
                 </div>
               )}
@@ -319,7 +314,6 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
               )}
             </div>
 
-            {/* Mode toggle */}
             <div className="flex gap-2 bg-zinc-100 rounded-lg p-1">
               <button
                 onClick={() => setPayMode("full")}
@@ -386,7 +380,7 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
         <DialogContent className="max-w-xs">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <span className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
+              <span className="w-5 h-5 rounded-full bg-emerald-600 flex items-center justify-center shrink-0">
                 <Check className="w-3 h-3 text-white" />
               </span>
               Loan payment recorded
@@ -396,9 +390,8 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
             <div className="space-y-3 pt-1">
               <p className="text-sm font-medium">{entry.template.name}</p>
 
-              {/* EMI split */}
               <div className="rounded-xl bg-zinc-50 p-3 space-y-2">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">This month's payment</p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">This month&apos;s payment</p>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">EMI paid</span>
                   <span className="font-semibold tabular-nums">{fmt(loanPaidSnapshot.emi)}</span>
@@ -414,9 +407,8 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
                 </div>
               </div>
 
-              {/* Remaining balance */}
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 space-y-1.5">
-                <p className="text-[10px] text-emerald-700 uppercase tracking-wide">After this payment</p>
+                <p className="text-xs text-emerald-700 uppercase tracking-wide">After this payment</p>
                 <div className="flex justify-between items-baseline">
                   <span className="text-sm text-emerald-800">Outstanding balance</span>
                   <span className="text-base font-bold text-emerald-700 tabular-nums">{fmt(loanPaidSnapshot.outstandingAfter)}</span>
@@ -426,7 +418,7 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
                   <span className="tabular-nums">{fmt(loanPaidSnapshot.totalInterestRemaining)}</span>
                 </div>
                 {loanPaidSnapshot.monthsRemaining > 0 && (
-                  <p className="text-[10px] text-emerald-600">{loanPaidSnapshot.monthsRemaining} month{loanPaidSnapshot.monthsRemaining !== 1 ? "s" : ""} to go</p>
+                  <p className="text-xs text-emerald-600">{loanPaidSnapshot.monthsRemaining} month{loanPaidSnapshot.monthsRemaining !== 1 ? "s" : ""} to go</p>
                 )}
               </div>
             </div>

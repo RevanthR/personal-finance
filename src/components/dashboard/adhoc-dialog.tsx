@@ -107,7 +107,7 @@ export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogP
                   "py-3 rounded-md text-sm font-semibold transition-all",
                   type === t
                     ? t === "INCOME"
-                      ? "bg-green-700 text-white shadow-sm"
+                      ? "bg-emerald-700 text-white shadow-sm"
                       : "bg-white text-zinc-900 shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 )}

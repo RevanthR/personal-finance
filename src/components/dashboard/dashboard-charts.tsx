@@ -37,7 +37,7 @@ export function DashboardCharts({
       {/* Spending Health */}
       <Card>
         <CardHeader className="pb-2 pt-3 px-4">
-          <CardTitle className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+          <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
             Spending Health
           </CardTitle>
         </CardHeader>
@@ -84,8 +84,8 @@ export function DashboardCharts({
                 <div className="h-full flex-1" style={{ backgroundColor: "#f59e0b", opacity: 0.35 }} />
               </div>
               <div className="flex justify-between mt-0.5">
-                <span className="text-[9px] text-muted-foreground/60">Fixed {fmt(fixedAmount)}</span>
-                <span className="text-[9px] text-muted-foreground/60">Variable {fmt(variableAmount)}</span>
+                <span className="text-xs text-muted-foreground/60">Fixed {fmt(fixedAmount)}</span>
+                <span className="text-xs text-muted-foreground/60">Variable {fmt(variableAmount)}</span>
               </div>
             </div>
           )}
@@ -96,7 +96,7 @@ export function DashboardCharts({
       {trendData.length > 1 && (
         <Card>
           <CardHeader className="pb-2 pt-3 px-4">
-            <CardTitle className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               6-Month Trend
             </CardTitle>
           </CardHeader>

@@ -77,7 +77,7 @@ export function MarkReceivedDialog({ open, onOpenChange, receivable, onConfirm }
               <select
                 value={receivedMonth}
                 onChange={(e) => setReceivedMonth(e.target.value)}
-                className="w-full mt-1 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                className="w-full mt-1 h-10 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 required
               >
                 {MONTHS.map((m, i) => (
