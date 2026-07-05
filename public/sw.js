@@ -1,12 +1,13 @@
 // Service Worker for FinanceOS PWA
-const STATIC_CACHE = "financeos-static-v1"; // content-hashed assets — safe to keep across SW updates
-const PAGE_CACHE = "financeos-pages-v1";
+const STATIC_CACHE = "financeos-static-v3";
+const PAGE_CACHE   = "financeos-pages-v3";
+const OFFLINE_URL  = "/offline.html";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(STATIC_CACHE).then((cache) =>
-      cache.addAll(["/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png"])
+      cache.addAll([OFFLINE_URL, "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png"])
     )
   );
 });
@@ -41,8 +42,9 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Page HTML — network-first so data is always fresh; fall back to cache if offline/slow
-  event.respondWith(networkFirstWithFallback(PAGE_CACHE, request));
+  // Page HTML — stale-while-revalidate: serve cached shell instantly,
+  // fetch fresh version in background. Repeat opens are instant even on cold server.
+  event.respondWith(staleWhileRevalidate(PAGE_CACHE, request));
 });
 
 async function cacheFirst(cacheName, request) {
@@ -54,16 +56,23 @@ async function cacheFirst(cacheName, request) {
   return response;
 }
 
-async function networkFirstWithFallback(cacheName, request) {
+async function staleWhileRevalidate(cacheName, request) {
   const cache = await caches.open(cacheName);
-  try {
-    const response = await fetch(request);
+  const cached = await cache.match(request);
+
+  // Always kick off a background fetch to keep cache fresh
+  const fetchPromise = fetch(request).then((response) => {
     if (response.ok) cache.put(request, response.clone());
     return response;
-  } catch {
-    const cached = await cache.match(request);
-    return cached ?? Response.error();
-  }
+  }).catch(() => null);
+
+  // Return cached version immediately if available (instant open),
+  // otherwise wait for network; fall back to offline page on total failure
+  if (cached) return cached;
+  const response = await fetchPromise;
+  if (response) return response;
+  const offlineCache = await caches.open(STATIC_CACHE);
+  return (await offlineCache.match(OFFLINE_URL)) ?? Response.error();
 }
 
 // Push notifications

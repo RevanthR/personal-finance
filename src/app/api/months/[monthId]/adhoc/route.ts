@@ -12,15 +12,19 @@ async function recomputeStatementAmount(
   cardName: string | null,
   statementDay: number | null,
 ): Promise<{ id: string; amount: number; statementAmount: number | null }> {
-  const allCCItems = await db.adHocItem.findMany({
-    where: { monthId, type: "EXPENSE", category: "CREDIT_CARD" },
-    select: { notes: true, amount: true, date: true },
+  // Scope the query to this card's items only (notes start with "CardName · …")
+  const cardItems = await db.adHocItem.findMany({
+    where: {
+      monthId,
+      type: "EXPENSE",
+      category: "CREDIT_CARD",
+      ...(cardName ? { notes: { startsWith: `${cardName} ·` } } : {}),
+    },
+    select: { amount: true, date: true },
   });
 
-  const postCloseTotal = allCCItems
+  const postCloseTotal = cardItems
     .filter(i => {
-      const iCard = i.notes?.split(" · ")[0] ?? null;
-      if (cardName && iCard !== cardName) return false;
       const day = new Date(i.date).getDate();
       return statementDay === null || day > statementDay;
     })

@@ -4,6 +4,7 @@ import { useState, useMemo, useTransition } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { formatCurrency, formatMonthYear, getCategoryDisplay, getCategoryColor, MONTHS, pendingAmountKicks } from "@/lib/utils";
+import { netAmount as _net, effectivePaid as _effectivePaid, isBillPending as _isBillPending, isPreLiftChit as _isPreLiftChit, computeMetrics } from "@/lib/finance-utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -111,19 +112,11 @@ const INCOME_SOURCES = [
 
 const CC_SUBCATEGORIES = ["Food", "Coffee", "Groceries", "Fuel", "Shopping", "Travel", "Health", "Bills", "Entertainment", "Other"];
 
-function net(e: EntryWithTemplate) { return e.amount - (e.cashbackAmount ?? 0); }
-function effectivePaid(e: EntryWithTemplate): number {
-  if (e.isPaid) {
-    const n = net(e);
-    const stored = e.paidAmount ?? n;
-    return stored >= n ? stored : n; // ignore stale partial if < entry amount
-  }
-  return e.paidAmount ?? 0;
-}
-function isPreLiftChit(e: EntryWithTemplate) { return e.template.category === "CHIT_FUND" && !e.template.chitFund?.isLifted; }
-function isBillPending(e: EntryWithTemplate, isCurrentMonth: boolean, todayDay: number) {
-  return isCurrentMonth && e.template.category === "CREDIT_CARD" && e.template.statementDay != null && todayDay < e.template.statementDay;
-}
+// Thin wrappers so all local call-sites work unchanged
+function net(e: EntryWithTemplate)                                              { return _net(e); }
+function effectivePaid(e: EntryWithTemplate)                                    { return _effectivePaid(e); }
+function isPreLiftChit(e: EntryWithTemplate)                                    { return _isPreLiftChit(e); }
+function isBillPending(e: EntryWithTemplate, isCurrent: boolean, day: number)   { return _isBillPending(e, isCurrent, day); }
 
 function parseCCSubcat(notes: string | null): string {
   if (!notes) return "Other";
@@ -334,46 +327,30 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   }, [incomeTemplates, adHocItems, viewMonth, viewYear]);
 
   const hasCCCards = ccTemplates.length > 0;
-  const adHocIncome      = useMemo(() => adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0), [adHocItems]);
-  // Post-close CC charges live in statementAmount (next month's bill); pre-close go into entry.amount (Recurring)
-  const ccStatementTotal = useMemo(() => entries.filter(e => e.template.category === "CREDIT_CARD").reduce((s, e) => s + (e.statementAmount ?? 0), 0), [entries]);
-  const adHocExpense     = useMemo(() => adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0), [adHocItems]);
-  const totalIncome = templateIncome;
-  const grandIncome = totalIncome + adHocIncome;
-  const totalCommitted = useMemo(() => entries.filter(e => !isBillPending(e, isCurrentMonth, todayDay) && !isPreLiftChit(e)).reduce((s, e) => s + net(e), 0), [entries, isCurrentMonth, todayDay]);
-  const totalPaid      = useMemo(() => entries.filter(e => !isBillPending(e, isCurrentMonth, todayDay) && !isPreLiftChit(e)).reduce((s, e) => s + effectivePaid(e), 0), [entries, isCurrentMonth, todayDay]);
-  const chitInvestment = useMemo(() => entries.filter(e => isPreLiftChit(e)).reduce((s, e) => s + net(e), 0), [entries]);
-  const totalPending   = totalCommitted - totalPaid;
-  const balance        = grandIncome - totalCommitted - chitInvestment - adHocExpense;
-  const paidPercent    = totalCommitted > 0 ? Math.min(100, Math.round((totalPaid / totalCommitted) * 100)) : 0;
-  const pendingCount   = useMemo(() => entries.filter(e => !e.isPaid && !isBillPending(e, isCurrentMonth, todayDay) && !isPreLiftChit(e)).length, [entries, isCurrentMonth, todayDay]);
+  const adHocIncome   = useMemo(() => adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0), [adHocItems]);
+  const adHocExpense  = useMemo(() => adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0), [adHocItems]);
+  const grandIncome   = templateIncome + adHocIncome;
 
-  // ── New metric breakdown ───────────────────────────────────────────────────
-  // CC bill payments this month (obligation from last month's statement)
-  const ccBillsThisMonth = useMemo(() =>
-    entries.filter(e => e.template.category === "CREDIT_CARD" && !isBillPending(e, isCurrentMonth, todayDay))
-           .reduce((s, e) => s + net(e), 0),
-    [entries, isCurrentMonth, todayDay]
+  // Single-pass metric computation via shared finance-utils
+  const metrics = useMemo(
+    () => computeMetrics(entries, isCurrentMonth, todayDay),
+    [entries, isCurrentMonth, todayDay],
   );
-  // Fixed recurring obligations paid from account (everything except CC)
-  const recurringNonCC = totalCommitted - ccBillsThisMonth;
-  // Next month's CC liability: post-close charges (statementAmount) + rolling underpaid bills
-  const ccNextMonth = useMemo(() =>
-    entries.filter(e => e.template.category === "CREDIT_CARD").reduce((s, e) => {
-      const rolling = !e.isPaid ? Math.max(0, (e.billedAmount ?? e.amount) - e.amount) : 0;
-      return s + (e.statementAmount ?? 0) + rolling;
-    }, 0),
-    [entries]
-  );
-  // Non-CC pending count and paid percent for progress bar
-  const nonCCPaidAmount  = useMemo(() =>
+  const {
+    totalCommitted, totalPaid, totalPending, paidPercent, pendingCount,
+    chitInvestment, ccBillsThisMonth, recurringNonCC, ccNextMonth,
+  } = metrics;
+
+  const balance = grandIncome - totalCommitted - chitInvestment - adHocExpense;
+
+  const nonCCPaidAmount = useMemo(() =>
     entries.filter(e => e.template.category !== "CREDIT_CARD" && !isPreLiftChit(e))
            .reduce((s, e) => s + effectivePaid(e), 0),
-    [entries]
+    [entries],
   );
   const nonCCPendingCount = useMemo(() =>
     entries.filter(e => e.template.category !== "CREDIT_CARD" && !e.isPaid && !isPreLiftChit(e)).length,
-    [entries]
+    [entries],
   );
   const nonCCPaidPercent = recurringNonCC > 0 ? Math.round((nonCCPaidAmount / recurringNonCC) * 100) : 0;
   const nextMonthName  = MONTHS[todayMonth % 12]; // todayMonth is 1-12; % 12 maps Dec→Jan correctly
@@ -1323,20 +1300,10 @@ function ProjectedEntryRow({ entry }: { entry: ProjectedEntry }) {
 
 function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, fmt }: { entries: EntryWithTemplate[]; totalCommitted: number; grandIncome: number; adHocExpense: number; fmt: (v: number) => string }) {
   const [collapsed, setCollapsed] = useState(true);
-  const netAmt = (e: EntryWithTemplate) => e.amount - (e.cashbackAmount ?? 0);
-  const paidAmt = (e: EntryWithTemplate): number => {
-    if (e.isPaid) {
-      const n = netAmt(e);
-      const stored = e.paidAmount ?? n;
-      return stored >= n ? stored : n; // ignore stale partial amount if < entry amount
-    }
-    return e.paidAmount ?? 0;
-  };
-  const isPreLift = (e: EntryWithTemplate) => e.template.category === "CHIT_FUND" && !e.template.chitFund?.isLifted;
 
   // Include fully paid + partially paid entries (expenses only, not investments)
-  const shown = entries.filter(e => !isPreLift(e) && (e.isPaid || (e.paidAmount != null && e.paidAmount > 0)));
-  const chitInvested = entries.filter(e => isPreLift(e) && e.isPaid).reduce((s, e) => s + paidAmt(e), 0);
+  const shown = entries.filter(e => !isPreLiftChit(e) && (e.isPaid || (e.paidAmount != null && e.paidAmount > 0)));
+  const chitInvested = entries.filter(e => isPreLiftChit(e) && e.isPaid).reduce((s, e) => s + effectivePaid(e), 0);
   if (!shown.length) return null;
 
   // Group by category, preserving CATEGORY_ORDER then custom categories
@@ -1357,10 +1324,10 @@ function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, 
     }
   }
 
-  const totalPaidOut = shown.reduce((s, e) => s + paidAmt(e), 0);
+  const totalPaidOut = shown.reduce((s, e) => s + effectivePaid(e), 0);
   const partialEntries = entries.filter(e => !e.isPaid && e.paidAmount != null && e.paidAmount > 0 && e.template.category !== "CREDIT_CARD");
   const partialTotal = partialEntries.reduce((s, e) => s + (e.paidAmount ?? 0), 0);
-  const nonCCEntries = entries.filter(e => !isPreLift(e) && e.template.category !== "CREDIT_CARD");
+  const nonCCEntries = entries.filter(e => !isPreLiftChit(e) && e.template.category !== "CREDIT_CARD");
   const fullyPaidCount = nonCCEntries.filter(e => e.isPaid).length;
 
   return (
@@ -1394,7 +1361,7 @@ function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, 
       {!collapsed && (
         <div className="border-t border-border">
           {groups.map(g => {
-            const subtotal = g.items.reduce((s, e) => s + paidAmt(e), 0);
+            const subtotal = g.items.reduce((s, e) => s + effectivePaid(e), 0);
             return (
               <div key={g.key} className="px-4 py-2.5 border-b border-border/50 last:border-b-0">
                 <div className="flex items-center gap-1.5 mb-2">
@@ -1405,7 +1372,7 @@ function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, 
                 <div className="space-y-1.5 pl-3">
                   {g.items.map(e => {
                     const isPartial = !e.isPaid && e.paidAmount != null && e.paidAmount > 0;
-                    const remaining = netAmt(e) - (e.paidAmount ?? 0);
+                    const remaining = net(e) - (e.paidAmount ?? 0);
                     return (
                       <div key={e.id} className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5 min-w-0">
@@ -1425,7 +1392,7 @@ function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, 
                             <span className="text-[10px] text-muted-foreground/70">{format(new Date(e.paidOn), "do MMM")}</span>
                           )}
                           <span className={cn("text-xs font-semibold tabular-nums", isPartial && "text-amber-600")}>
-                            {fmt(paidAmt(e))}
+                            {fmt(effectivePaid(e))}
                           </span>
                         </div>
                       </div>

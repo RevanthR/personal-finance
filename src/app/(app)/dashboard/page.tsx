@@ -1,9 +1,11 @@
+import { Suspense } from "react";
 import { getSession } from "@/lib/get-session";
 import { getActiveTemplates } from "@/lib/cached-queries";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { getCurrentMonthYear } from "@/lib/utils";
+import DashboardLoading from "./loading";
 
 function isTemplateActiveInMonth(
   t: { endsOnYear: number | null; endsOnMonth: number | null },
@@ -20,6 +22,7 @@ function monthNav(m: number, y: number, todayM: number, todayY: number) {
   return isToday ? "/dashboard" : `/dashboard?month=${m}&year=${y}`;
 }
 
+// ── Outer shell: resolves session immediately, streams loading skeleton ───────
 export default async function DashboardPage({
   searchParams,
 }: {
@@ -27,7 +30,6 @@ export default async function DashboardPage({
 }) {
   const session = await getSession();
   if (!session?.user?.id) redirect("/login");
-  const userId = session.user.id;
 
   const { month: todayMonth, year: todayYear } = getCurrentMonthYear();
   const params = await searchParams;
@@ -35,16 +37,42 @@ export default async function DashboardPage({
   const targetMonth = params.month ? Math.min(12, Math.max(1, parseInt(params.month))) : todayMonth;
   const targetYear  = params.year  ? Math.max(2020, parseInt(params.year))            : todayYear;
 
-  const isFuture = targetYear > todayYear || (targetYear === todayYear && targetMonth > todayMonth);
-
-  // Prev/next URLs
   const prevM = targetMonth === 1  ? 12 : targetMonth - 1;
   const prevY = targetMonth === 1  ? targetYear - 1 : targetYear;
   const nextM = targetMonth === 12 ? 1  : targetMonth + 1;
   const nextY = targetMonth === 12 ? targetYear + 1 : targetYear;
   const prevUrl = monthNav(prevM, prevY, todayMonth, todayYear);
   const nextUrl = monthNav(nextM, nextY, todayMonth, todayYear);
+  const isFuture = targetYear > todayYear || (targetYear === todayYear && targetMonth > todayMonth);
 
+  // The Suspense boundary means the loading skeleton streams to the browser
+  // immediately — DB queries run inside DashboardData without blocking the shell.
+  return (
+    <Suspense fallback={<DashboardLoading />}>
+      <DashboardData
+        userId={session.user.id}
+        targetMonth={targetMonth}
+        targetYear={targetYear}
+        todayMonth={todayMonth}
+        todayYear={todayYear}
+        prevUrl={prevUrl}
+        nextUrl={nextUrl}
+        isFuture={isFuture}
+      />
+    </Suspense>
+  );
+}
+
+// ── Inner data component: all DB queries live here ────────────────────────────
+async function DashboardData({
+  userId, targetMonth, targetYear, todayMonth, todayYear, prevUrl, nextUrl, isFuture,
+}: {
+  userId: string;
+  targetMonth: number; targetYear: number;
+  todayMonth: number;  todayYear: number;
+  prevUrl: string; nextUrl: string;
+  isFuture: boolean;
+}) {
   // ── Future month → projected view ─────────────────────────────────────────
   if (isFuture) {
     const isImmediateNext =
@@ -69,7 +97,6 @@ export default async function DashboardPage({
       }),
     ]);
 
-    // CC statement amounts: what's already accumulated for next month's bill
     const ccStatements = new Map<string, number>();
     for (const e of currentMonthRecord?.entries ?? []) {
       if (e.statementAmount != null && e.statementAmount > 0) {
@@ -86,12 +113,10 @@ export default async function DashboardPage({
       return sum + (kicks ? t.pendingAmount! : t.amount);
     }, 0);
 
-    // AdHocItems already in this month's record (e.g. received receivables)
     const adHocIncomeInMonth = futureMonthRecord?.adHocItems
       .filter(i => i.type === "INCOME")
       .reduce((s, i) => s + i.amount, 0) ?? 0;
 
-    // Pending receivables whose expected date falls in this projected month
     const receivableIncome = pendingReceivables
       .filter(r => {
         const d = new Date(r.expectedDate!);
@@ -119,7 +144,6 @@ export default async function DashboardPage({
         dueDateDay: t.dueDateDay,
       }));
 
-    // Use the same DashboardClient layout with projected data — consistent UX
     return (
       <DashboardClient
         currentMonth={null}
@@ -183,12 +207,10 @@ export default async function DashboardPage({
       pendingFromYear: t.pendingFromYear,
     }));
 
-  // Pre-lift chit template IDs — their payments count as investment, not expense
   const preLiftChitTemplateIds = allTemplates
     .filter(t => t.templateType !== "INCOME" && t.category === "CHIT_FUND" && t.chitFund && !t.chitFund.isLifted)
     .map(t => t.id);
 
-  // Lifted chit info — needed to correctly classify historical pre-lift payments in FY strip
   const liftedChitInfos = allTemplates
     .filter(t => t.category === "CHIT_FUND" && t.chitFund?.isLifted && t.chitFund?.liftedOn)
     .map(t => {
