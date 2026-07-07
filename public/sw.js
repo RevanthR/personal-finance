@@ -1,6 +1,6 @@
 // Service Worker for FinanceOS PWA
-const STATIC_CACHE = "financeos-static-v3";
-const PAGE_CACHE   = "financeos-pages-v3";
+const STATIC_CACHE = "financeos-static-v4";
+const PAGE_CACHE   = "financeos-pages-v4";
 const OFFLINE_URL  = "/offline.html";
 
 self.addEventListener("install", (event) => {
@@ -42,9 +42,10 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Page HTML — stale-while-revalidate: serve cached shell instantly,
-  // fetch fresh version in background. Repeat opens are instant even on cold server.
-  event.respondWith(staleWhileRevalidate(PAGE_CACHE, request));
+  // Page HTML / RSC navigation payloads — network-first: these embed live
+  // DB data rendered server-side, so a stale cache hit shows outdated
+  // financial data after edits. Only fall back to cache when truly offline.
+  event.respondWith(networkFirst(PAGE_CACHE, request));
 });
 
 async function cacheFirst(cacheName, request) {
@@ -56,23 +57,18 @@ async function cacheFirst(cacheName, request) {
   return response;
 }
 
-async function staleWhileRevalidate(cacheName, request) {
+async function networkFirst(cacheName, request) {
   const cache = await caches.open(cacheName);
-  const cached = await cache.match(request);
-
-  // Always kick off a background fetch to keep cache fresh
-  const fetchPromise = fetch(request).then((response) => {
+  try {
+    const response = await fetch(request);
     if (response.ok) cache.put(request, response.clone());
     return response;
-  }).catch(() => null);
-
-  // Return cached version immediately if available (instant open),
-  // otherwise wait for network; fall back to offline page on total failure
-  if (cached) return cached;
-  const response = await fetchPromise;
-  if (response) return response;
-  const offlineCache = await caches.open(STATIC_CACHE);
-  return (await offlineCache.match(OFFLINE_URL)) ?? Response.error();
+  } catch {
+    const cached = await cache.match(request);
+    if (cached) return cached;
+    const offlineCache = await caches.open(STATIC_CACHE);
+    return (await offlineCache.match(OFFLINE_URL)) ?? Response.error();
+  }
 }
 
 // Push notifications
