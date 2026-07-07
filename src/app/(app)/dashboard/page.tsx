@@ -172,7 +172,7 @@ async function DashboardData({
           include: { template: { include: { chitFund: true } } },
           orderBy: { template: { sortOrder: "asc" } },
         },
-        adHocItems: { orderBy: { date: "desc" } },
+        adHocItems: { orderBy: [{ date: "desc" }, { createdAt: "desc" }] },
       },
     }),
     db.month.findMany({

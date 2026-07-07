@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo, useTransition } from "react";
+import { useState, useMemo, useTransition, type CSSProperties } from "react";
+import { flushSync } from "react-dom";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { formatCurrency, formatMonthYear, getCategoryDisplay, getCategoryColor, MONTHS, pendingAmountKicks } from "@/lib/utils";
@@ -110,6 +111,21 @@ const INCOME_SOURCES = [
 
 const CC_SUBCATEGORIES = ["Food", "Coffee", "Groceries", "Fuel", "Shopping", "Travel", "Health", "Bills", "Entertainment", "Other"];
 
+// Smoothly animates category cards sliding to their new position (e.g. a
+// fully-settled category sinking down) using the native View Transitions
+// API. flushSync forces the DOM to reach its "after" state synchronously
+// inside the transition so the browser can diff and animate it. No-ops
+// (plain update) on browsers that don't support it.
+function withReorderTransition(update: () => void) {
+  if (typeof document !== "undefined" && "startViewTransition" in document) {
+    (document as Document & { startViewTransition: (cb: () => void) => void }).startViewTransition(() => {
+      flushSync(update);
+    });
+  } else {
+    update();
+  }
+}
+
 // Thin wrappers so all local call-sites work unchanged
 function net(e: EntryWithTemplate)                                              { return _net(e); }
 function effectivePaid(e: EntryWithTemplate)                                    { return _effectivePaid(e); }
@@ -128,7 +144,7 @@ function parseCCCardName(notes: string | null): string | null {
   return notes.split(" · ")[0] ?? null;
 }
 
-function CCSubcatBreakdown({ txItems, onDelete }: { txItems: AdHocItem[]; onDelete: (id: string) => void }) {
+function CCSubcatBreakdown({ txItems, onDelete, removingIds }: { txItems: AdHocItem[]; onDelete: (id: string) => void; removingIds: Set<string> }) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
@@ -160,7 +176,7 @@ function CCSubcatBreakdown({ txItems, onDelete }: { txItems: AdHocItem[]; onDele
             </button>
             {open && (
               <div className="space-y-1 mt-1 mb-1">
-                {txs.map(t => <TransactionRow key={t.id} item={t} onDelete={onDelete} />)}
+                {txs.map(t => <TransactionRow key={t.id} item={t} onDelete={onDelete} isRemoving={removingIds.has(t.id)} />)}
               </div>
             )}
           </div>
@@ -171,7 +187,7 @@ function CCSubcatBreakdown({ txItems, onDelete }: { txItems: AdHocItem[]; onDele
 }
 
 function CCCardBlock({
-  entry, txItems, nextMonthName, isBillPending, onUpdate, onDelete, onClearStatement,
+  entry, txItems, nextMonthName, isBillPending, onUpdate, onDelete, onClearStatement, removingIds, collapsed, onToggle,
 }: {
   entry: EntryWithTemplate;
   txItems: AdHocItem[];
@@ -180,11 +196,15 @@ function CCCardBlock({
   onUpdate: (id: string, updates: { isPaid?: boolean; amount?: number; notes?: string; paidAmount?: number; cashbackAmount?: number }) => Promise<void>;
   onDelete: (id: string) => void;
   onClearStatement: (entryId: string) => Promise<void>;
+  removingIds: Set<string>;
+  collapsed: boolean;
+  onToggle: () => void;
 }) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const statementDay = entry.template.statementDay;
   const nextBillTotal = entry.statementAmount ?? 0;
+  const billedTotal = entry.billedAmount ?? entry.amount;
 
   // Pre-close txs bumped entry.amount; post-close go to next bill
   const preCloseTxs = statementDay
@@ -196,65 +216,92 @@ function CCCardBlock({
 
   return (
     <div className="rounded-xl border border-border overflow-hidden">
-      {/* Card header */}
-      <div className="flex items-center justify-between px-3 py-2 bg-muted/40 border-b border-border">
+      {/* Card header — click to expand/collapse the whole card */}
+      <button
+        type="button"
+        onClick={onToggle}
+        className={cn(
+          "w-full flex items-center justify-between px-3 py-2 bg-muted/40 hover:bg-muted/60 transition-colors",
+          !collapsed && "border-b border-border"
+        )}
+      >
         <div className="flex items-center gap-2">
           <CreditCard className="w-3.5 h-3.5 text-muted-foreground" />
           <span className="text-xs font-semibold">{entry.template.name}</span>
         </div>
-        {statementDay && (
-          <span className="text-xs text-muted-foreground">
-            closes {statementDay}th
-            {entry.template.dueDateDay ? (() => {
-              const isNextMonth = entry.template.dueDateDay < statementDay;
-              return ` · due ${entry.template.dueDateDay}th${isNextMonth ? ` ${nextMonthName}` : ""}`;
-            })() : ""}
-          </span>
-        )}
-      </div>
-
-      {/* Billed vs paying indicator — only when they differ */}
-      {entry.billedAmount != null && entry.billedAmount > entry.amount && (
-        <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-amber-100 bg-amber-50/60">
-          <span className="text-xs text-amber-700">
-            Statement <span className="font-semibold">{fmt(entry.billedAmount)}</span>
-            {" · "}Rolling <span className="font-semibold">{fmt(entry.billedAmount - entry.amount)}</span> to next month
-          </span>
-        </div>
-      )}
-
-      {/* Current bill */}
-      <div className="p-2">
-        <EntryRow entry={entry} onUpdate={onUpdate} isBillPending={isBillPending} />
-        {preCloseTxs.length > 0 && (
-          <div className="mt-1.5 border-t border-border/40 pt-1.5">
-            <p className="text-xs text-muted-foreground font-medium px-1 mb-1">Added to this bill</p>
-            <CCSubcatBreakdown txItems={preCloseTxs} onDelete={onDelete} />
-          </div>
-        )}
-      </div>
-
-      {/* Next cycle charges */}
-      {nextBillTotal > 0 && (
-        <div className="border-t border-amber-100 bg-amber-50/50 px-3 py-2">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs font-semibold text-amber-700 uppercase tracking-wider">
-              → {nextMonthName} bill
+        <div className="flex items-center gap-2">
+          {statementDay && (
+            <span className="text-xs text-muted-foreground">
+              closes {statementDay}th
+              {entry.template.dueDateDay ? (() => {
+                const isNextMonth = entry.template.dueDateDay < statementDay;
+                return ` · due ${entry.template.dueDateDay}th${isNextMonth ? ` ${nextMonthName}` : ""}`;
+              })() : ""}
             </span>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-amber-800 tracking-tight">{fmt(nextBillTotal)}</span>
-              {postCloseTxs.length === 0 && (
-                <button
-                  onClick={() => onClearStatement(entry.id)}
-                  className="text-xs font-medium text-amber-700 border border-amber-200 bg-white px-2.5 py-1.5 rounded-full hover:border-amber-400 transition-colors"
-                >
-                  Clear
-                </button>
+          )}
+          {collapsed && (
+            <span className="flex items-center gap-1.5 text-xs font-semibold tabular-nums">
+              {entry.isPaid ? (
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              ) : isBillPending ? (
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0" title="Upcoming — statement not closed yet" />
+              ) : (
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" title="Pending" />
               )}
-            </div>
-          </div>
-          {postCloseTxs.length > 0 && <CCSubcatBreakdown txItems={postCloseTxs} onDelete={onDelete} />}
+              <span className={entry.isPaid ? "text-muted-foreground line-through" : ""}>{fmt(billedTotal)}</span>
+              {nextBillTotal > 0 && <span className="text-amber-600">· ↗ {fmt(nextBillTotal)}</span>}
+            </span>
+          )}
+          <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/60 transition-transform duration-200 shrink-0", !collapsed && "rotate-180")} />
         </div>
+      </button>
+
+      {!collapsed && (
+        <>
+          {/* Billed vs paying indicator — only when they differ */}
+          {entry.billedAmount != null && entry.billedAmount > entry.amount && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-amber-100 bg-amber-50/60">
+              <span className="text-xs text-amber-700">
+                Statement <span className="font-semibold">{fmt(entry.billedAmount)}</span>
+                {" · "}Rolling <span className="font-semibold">{fmt(entry.billedAmount - entry.amount)}</span> to next month
+              </span>
+            </div>
+          )}
+
+          {/* Current bill */}
+          <div className="p-2">
+            <EntryRow entry={entry} onUpdate={onUpdate} isBillPending={isBillPending} />
+            {preCloseTxs.length > 0 && (
+              <div className="mt-1.5 border-t border-border/40 pt-1.5">
+                <p className="text-xs text-muted-foreground font-medium px-1 mb-1">Added to this bill</p>
+                <CCSubcatBreakdown txItems={preCloseTxs} onDelete={onDelete} removingIds={removingIds} />
+              </div>
+            )}
+          </div>
+
+          {/* Next cycle charges */}
+          {nextBillTotal > 0 && (
+            <div className="border-t border-amber-100 bg-amber-50/50 px-3 py-2">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-semibold text-amber-700 uppercase tracking-wider">
+                  → {nextMonthName} bill
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-amber-800 tracking-tight">{fmt(nextBillTotal)}</span>
+                  {postCloseTxs.length === 0 && (
+                    <button
+                      onClick={() => onClearStatement(entry.id)}
+                      className="text-xs font-medium text-amber-700 border border-amber-200 bg-white px-2.5 py-1.5 rounded-full hover:border-amber-400 transition-colors"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+              {postCloseTxs.length > 0 && <CCSubcatBreakdown txItems={postCloseTxs} onDelete={onDelete} removingIds={removingIds} />}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -278,6 +325,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   const [currentMonth, setCurrentMonth] = useState(initialMonth);
   const [recentMonths, setRecentMonths] = useState(initialRecentMonths);
   const [showAdHoc, setShowAdHoc] = useState(false);
+  const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
   const [showSetup, setShowSetup] = useState(!initialMonth && !isProjected);
   const [showIncomeEdit, setShowIncomeEdit] = useState(false);
 
@@ -426,7 +474,20 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       }
     }
 
-    return { grouped: result, oneTimeItems: oneTime };
+    // Sink fully-settled categories (all entries paid, no loose ad-hoc tx)
+    // below groups that still need action. CATEGORY_ORDER / insertion order
+    // is preserved as a stable tiebreak within each bucket.
+    const isSettled = (items: GroupedItem[]) => {
+      const entryItems = items.filter((i): i is { kind: "entry"; data: EntryWithTemplate } => i.kind === "entry");
+      const txItems = items.filter(i => i.kind === "transaction");
+      return entryItems.length > 0 && entryItems.every(i => i.data.isPaid) && txItems.length === 0;
+    };
+    const ordered: Record<string, GroupedItem[]> = {};
+    for (const key of Object.keys(result).sort((a, b) => Number(isSettled(result[a])) - Number(isSettled(result[b])))) {
+      ordered[key] = result[key];
+    }
+
+    return { grouped: ordered, oneTimeItems: oneTime };
   }, [entries, adHocItems, isProjected, projEntries]);
 
   // Enhanced breakdown includes ad-hoc expenses in their categories
@@ -570,6 +631,15 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     setGroupToggled(prev => ({ ...prev, [key]: !isGroupCollapsed(key, entryItems) }));
   }
 
+  // Collapsible per-card body (current bill + next-cycle bill) within the CC category
+  const [ccCardToggled, setCcCardToggled] = useState<Record<string, boolean>>({});
+  function isCCCardCollapsed(entryId: string): boolean {
+    return entryId in ccCardToggled ? ccCardToggled[entryId] : true;
+  }
+  function toggleCCCard(entryId: string) {
+    setCcCardToggled(prev => ({ ...prev, [entryId]: !isCCCardCollapsed(entryId) }));
+  }
+
   function openIncomeEdit() {
     if (!currentMonth) return;
     setShowAddIncome(false);
@@ -628,9 +698,11 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     });
     if (!res.ok) { toast.error("Failed to save"); return; }
     const updated = await res.json();
-    setCurrentMonth(prev => prev ? {
-      ...prev, entries: prev.entries.map(e => e.id === entryId ? { ...e, ...updated } : e),
-    } : prev);
+    withReorderTransition(() => {
+      setCurrentMonth(prev => prev ? {
+        ...prev, entries: prev.entries.map(e => e.id === entryId ? { ...e, ...updated } : e),
+      } : prev);
+    });
     if (updates.amount !== undefined || updates.cashbackAmount !== undefined) {
       setRecentMonths(prev => prev.map(m =>
         m.id === currentMonth!.id
@@ -652,16 +724,18 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     });
     if (!res.ok) { toast.error("Failed to add"); return; }
     const { item: newItem, updatedEntry } = await res.json();
-    setCurrentMonth(prev => {
-      if (!prev) return prev;
-      const updatedEntries = updatedEntry
-        ? prev.entries.map(e => e.id === updatedEntry.id ? { ...e, amount: updatedEntry.amount, statementAmount: updatedEntry.statementAmount } : e)
-        : prev.entries;
-      return { ...prev, adHocItems: [...prev.adHocItems, newItem], entries: updatedEntries };
+    withReorderTransition(() => {
+      setCurrentMonth(prev => {
+        if (!prev) return prev;
+        const updatedEntries = updatedEntry
+          ? prev.entries.map(e => e.id === updatedEntry.id ? { ...e, amount: updatedEntry.amount, statementAmount: updatedEntry.statementAmount } : e)
+          : prev.entries;
+        return { ...prev, adHocItems: [newItem, ...prev.adHocItems], entries: updatedEntries };
+      });
     });
     setRecentMonths(prev => prev.map(m =>
       m.id === currentMonth!.id
-        ? { ...m, adHocItems: [...m.adHocItems, { id: newItem.id, type: newItem.type, amount: newItem.amount, category: newItem.category, notes: newItem.notes ?? null }] }
+        ? { ...m, adHocItems: [{ id: newItem.id, type: newItem.type, amount: newItem.amount, category: newItem.category, notes: newItem.notes ?? null }, ...m.adHocItems] }
         : m
     ));
     toast.success("Added");
@@ -670,21 +744,35 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
 
   async function handleAdHocDelete(id: string) {
     if (!currentMonth) return;
+    if (removingIds.has(id)) return; // already in flight — ignore a stray double-tap
+    setRemovingIds(prev => new Set(prev).add(id));
+
+    // let the exit transition play before the row actually leaves the list,
+    // so a second tap can't land on whatever row slides up to take its place
+    await new Promise(resolve => setTimeout(resolve, 180));
+
     const res = await fetch(`/api/months/${currentMonth.id}/adhoc?id=${id}`, { method: "DELETE" });
-    if (!res.ok) { toast.error("Failed to remove"); return; }
+    if (!res.ok) {
+      toast.error("Failed to remove");
+      setRemovingIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+      return;
+    }
     const { updatedEntry } = await res.json();
-    setCurrentMonth(prev => {
-      if (!prev) return prev;
-      const updatedEntries = updatedEntry
-        ? prev.entries.map(e => e.id === updatedEntry.id ? { ...e, amount: updatedEntry.amount, statementAmount: updatedEntry.statementAmount } : e)
-        : prev.entries;
-      return { ...prev, adHocItems: prev.adHocItems.filter(i => i.id !== id), entries: updatedEntries };
+    withReorderTransition(() => {
+      setCurrentMonth(prev => {
+        if (!prev) return prev;
+        const updatedEntries = updatedEntry
+          ? prev.entries.map(e => e.id === updatedEntry.id ? { ...e, amount: updatedEntry.amount, statementAmount: updatedEntry.statementAmount } : e)
+          : prev.entries;
+        return { ...prev, adHocItems: prev.adHocItems.filter(i => i.id !== id), entries: updatedEntries };
+      });
     });
     setRecentMonths(prev => prev.map(m =>
       m.id === currentMonth!.id
         ? { ...m, adHocItems: m.adHocItems.filter(i => i.id !== id) }
         : m
     ));
+    setRemovingIds(prev => { const next = new Set(prev); next.delete(id); return next; });
     toast.success("Removed");
   }
 
@@ -936,7 +1024,11 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             const collapsed = isGroupCollapsed(groupKey, entryItems);
 
             return (
-              <div key={groupKey} className="relative pl-3">
+              <div
+                key={groupKey}
+                className="relative pl-3"
+                style={{ viewTransitionName: `cat-${groupKey.replace(/[^a-zA-Z0-9-_]/g, "")}` } as CSSProperties}
+              >
                 {/* Left accent strip */}
                 <div
                   className="absolute left-0 top-0 bottom-0 w-[3px] rounded-full"
@@ -1005,13 +1097,16 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                             onUpdate={handleEntryUpdate}
                             onDelete={handleAdHocDelete}
                             onClearStatement={handleClearStatement}
+                            removingIds={removingIds}
+                            collapsed={isCCCardCollapsed(item.data.id)}
+                            onToggle={() => toggleCCCard(item.data.id)}
                           />
                         );
                       }
                       return <EntryRow key={item.data.id} entry={item.data} onUpdate={handleEntryUpdate} />;
                     })}
                     {!isCC && txItems.map(item =>
-                      <TransactionRow key={item.id} item={item} onDelete={handleAdHocDelete} />
+                      <TransactionRow key={item.id} item={item} onDelete={handleAdHocDelete} isRemoving={removingIds.has(item.id)} />
                     )}
 
                     {/* Orphaned CC transactions */}
@@ -1021,7 +1116,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                       return orphaned.length > 0 ? (
                         <div className="mt-2 rounded-xl border border-dashed border-border px-3 py-2">
                           <p className="text-xs text-muted-foreground mb-1.5">Unmatched transactions</p>
-                          <CCSubcatBreakdown txItems={orphaned} onDelete={handleAdHocDelete} />
+                          <CCSubcatBreakdown txItems={orphaned} onDelete={handleAdHocDelete} removingIds={removingIds} />
                         </div>
                       ) : null;
                     })()}
@@ -1038,7 +1133,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
               </div>
               <div className="space-y-1.5">
                 {oneTimeItems.map(item => (
-                  <TransactionRow key={item.id} item={item} onDelete={handleAdHocDelete} />
+                  <TransactionRow key={item.id} item={item} onDelete={handleAdHocDelete} isRemoving={removingIds.has(item.id)} />
                 ))}
               </div>
             </div>
@@ -1172,7 +1267,10 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
               <div className="space-y-1.5">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">One-time income</p>
                 {adHocItems.filter(i => i.type === "INCOME" && !i.notes?.startsWith("income_override:")).map(item => (
-                  <div key={item.id} className="flex items-center gap-2.5 px-3 py-2 rounded-xl border bg-card">
+                  <div key={item.id} className={cn(
+                    "flex items-center gap-2.5 px-3 py-2 rounded-xl border bg-card transition-all duration-150",
+                    removingIds.has(item.id) && "opacity-0 scale-95 pointer-events-none"
+                  )}>
                     <div className="w-0.5 h-7 rounded-full bg-emerald-600 shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{item.name}</p>
@@ -1182,7 +1280,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                       </p>
                     </div>
                     <span className="text-sm font-semibold text-emerald-600 shrink-0">+{fmt(item.amount)}</span>
-                    <Button variant="ghost" size="sm" onClick={() => handleAdHocDelete(item.id)} className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500 shrink-0">
+                    <Button variant="ghost" size="sm" disabled={removingIds.has(item.id)} onClick={() => handleAdHocDelete(item.id)} className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500 shrink-0">
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
                   </div>
@@ -1490,14 +1588,15 @@ function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, 
   );
 }
 
-function TransactionRow({ item, onDelete }: { item: AdHocItem; onDelete: (id: string) => void }) {
+function TransactionRow({ item, onDelete, isRemoving }: { item: AdHocItem; onDelete: (id: string) => void; isRemoving?: boolean }) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const isCarryForward = item.notes === "carry_forward";
   return (
     <div className={cn(
-      "flex items-center gap-3 px-3 py-2.5 rounded-xl border bg-card",
-      isCarryForward && "border-amber-200 bg-amber-50/40"
+      "flex items-center gap-3 px-3 py-2.5 rounded-xl border bg-card transition-all duration-150",
+      isCarryForward && "border-amber-200 bg-amber-50/40",
+      isRemoving && "opacity-0 scale-95 pointer-events-none"
     )}>
       <div className={cn("w-0.5 h-7 rounded-full shrink-0", item.type === "INCOME" ? "bg-emerald-600" : "bg-red-500")} />
       <div className="flex-1 min-w-0">
@@ -1515,7 +1614,7 @@ function TransactionRow({ item, onDelete }: { item: AdHocItem; onDelete: (id: st
       <span className={cn("text-sm font-semibold shrink-0", item.type === "INCOME" ? "text-emerald-600" : "text-red-500")}>
         {item.type === "INCOME" ? "+" : "-"}{fmt(item.amount)}
       </span>
-      <Button variant="ghost" size="sm" onClick={() => onDelete(item.id)} className="h-10 w-10 p-0 text-muted-foreground hover:text-red-500 shrink-0">
+      <Button variant="ghost" size="sm" disabled={isRemoving} onClick={() => onDelete(item.id)} className="h-10 w-10 p-0 text-muted-foreground hover:text-red-500 shrink-0">
         <Trash2 className="w-4 h-4" />
       </Button>
     </div>

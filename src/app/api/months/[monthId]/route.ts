@@ -20,7 +20,7 @@ export async function GET(
         include: { template: { include: { chitFund: true } } },
         orderBy: { template: { sortOrder: "asc" } },
       },
-      adHocItems: { orderBy: { date: "asc" } },
+      adHocItems: { orderBy: [{ date: "desc" }, { createdAt: "desc" }] },
     },
   });
 

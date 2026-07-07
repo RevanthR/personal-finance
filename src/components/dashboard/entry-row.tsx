@@ -183,12 +183,12 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
           <div className={cn(
             "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all pointer-events-none",
             isPaid
-              ? "bg-zinc-900 border-zinc-900"
+              ? "bg-emerald-600 border-emerald-600"
               : isBillPending
-                ? "border-zinc-300 bg-zinc-50"
+                ? "border-sky-300 bg-sky-50"
                 : isPartial
                   ? "border-amber-500 bg-amber-50"
-                  : "border-muted-foreground/50"
+                  : "border-amber-400/70 bg-amber-50/40"
           )}>
             {isPaid && <Check className="w-3 h-3 text-white" />}
             {isPartial && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
