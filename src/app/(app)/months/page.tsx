@@ -353,6 +353,10 @@ export default async function MonthsPage() {
   }
   const fyExpenses = recurringTotal + adHocExpenseTotal;
   const fyIncomeTotal = fyActual.reduce((s, m) => s + computeMonthIncome(m.adHocItems, incomeTemplates, m.month, m.year), 0);
+  // Full-year total including projected (not-yet-populated) months — same
+  // basis as the Overview tab's total, so the two tabs no longer disagree.
+  const fyExpensesProjected = currentFYMonths.reduce((s, m) => s + m.expenses, 0);
+  const fyIncomeProjected = currentFYMonths.reduce((s, m) => s + m.income, 0);
 
   // Group templates by category, add ad-hoc items per category
   const catMap = new Map<string, { total: number; items: TEntry[] }>();
@@ -603,7 +607,7 @@ export default async function MonthsPage() {
   };
 
   const analyticsData: AnalyticsData = {
-    fyExpenses, fyIncome: fyIncomeTotal, actualMonthCount: fyActual.length,
+    fyExpenses, fyIncome: fyIncomeTotal, fyExpensesProjected, fyIncomeProjected, actualMonthCount: fyActual.length,
     spendByCategory, recurringTotal, adHocExpenseTotal,
     essentialTotal, lifestyleTotal, committedOverhead,
     monthlyTrends, loans, chits, ccAnnualSubcats,

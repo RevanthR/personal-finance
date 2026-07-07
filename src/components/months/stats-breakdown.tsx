@@ -20,6 +20,8 @@ const IncomeChart = dynamic(() => import("./stats-charts").then(m => m.IncomeCha
 export type AnalyticsData = {
   fyExpenses: number;
   fyIncome: number;
+  fyExpensesProjected: number;
+  fyIncomeProjected: number;
   actualMonthCount: number;
   spendByCategory: {
     key: string;
@@ -411,9 +413,9 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
 
       {/* Summary cards — always full width */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <StatCard label="FY Spend" value={fmt(data.fyExpenses)} sub={`${data.actualMonthCount} months`} color="text-red-500" />
+        <StatCard label="Spend to date" value={fmt(data.fyExpenses)} sub={`${data.actualMonthCount} mo · proj ${fmt(data.fyExpensesProjected)}`} color="text-red-500" />
         <StatCard label="Avg / month" value={fmt(avgMonthlySpend)} />
-        <StatCard label="FY Income" value={fmt(data.fyIncome)} color="text-emerald-600" />
+        <StatCard label="Income to date" value={fmt(data.fyIncome)} sub={`proj ${fmt(data.fyIncomeProjected)}`} color="text-emerald-600" />
         <StatCard label="Avg savings" value={`${avgSavingsRate}%`} color={avgSavingsRate >= 20 ? "text-emerald-600" : avgSavingsRate >= 10 ? "text-amber-600" : "text-red-500"} />
       </div>
 
