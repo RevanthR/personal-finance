@@ -146,7 +146,7 @@ export function Sidebar({ isAdmin }: SidebarProps) {
                 key={href}
                 href={href}
                 className={cn(
-                  "flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-xs transition-all",
+                  "flex-1 flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-xs transition-all",
                   active
                     ? "bg-gradient-to-b from-amber-500/[0.12] to-orange-500/[0.04] text-orange-700"
                     : "text-gray-400"
