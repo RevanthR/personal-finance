@@ -4,7 +4,7 @@ import { useState, useMemo, useTransition, type CSSProperties } from "react";
 import { flushSync } from "react-dom";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { formatCurrency, formatMonthYear, getCategoryDisplay, getCategoryColor, MONTHS, pendingAmountKicks } from "@/lib/utils";
+import { formatCurrency, formatMonthYear, getCategoryDisplay, getCategoryColor, MONTHS, pendingAmountKicks, ordinal } from "@/lib/utils";
 import { netAmount as _net, effectivePaid as _effectivePaid, isBillPending as _isBillPending, computeMetrics, computeMonthIncome } from "@/lib/finance-utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,10 +16,12 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Wallet, TrendingDown, CheckCircle2, AlertCircle, TrendingUp, Plus, Pencil, ChevronDown, Trash2, CreditCard, ChevronLeft, ChevronRight, IndianRupee,
+  Wallet, TrendingDown, CheckCircle2, AlertCircle, TrendingUp, Plus, Pencil, ChevronDown, Trash2, CreditCard, ChevronLeft, ChevronRight, IndianRupee, Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import { EntryRow } from "./entry-row";
+import { PaymentDialog } from "./payment-dialog";
+import { usePaymentTick } from "@/hooks/use-payment-tick";
 import { DashboardTour } from "@/components/coach/dashboard-tour";
 import type { CCCard } from "./adhoc-dialog";
 import { format } from "date-fns";
@@ -205,6 +207,13 @@ function CCCardBlock({
   const statementDay = entry.template.statementDay;
   const nextBillTotal = entry.statementAmount ?? 0;
   const billedTotal = entry.billedAmount ?? entry.amount;
+  const isDueNextMonth = statementDay != null && entry.template.dueDateDay != null && entry.template.dueDateDay < statementDay;
+  // Single shared tick instance — used by both the collapsed header's tick
+  // and the expanded EntryRow's tick, so they never fall out of sync.
+  const tick = usePaymentTick(entry, onUpdate);
+  // Next-cycle charge list can get long — collapsed by default, independent
+  // of the card's own collapse state.
+  const [nextCycleCollapsed, setNextCycleCollapsed] = useState(true);
 
   // Pre-close txs bumped entry.amount; post-close go to next bill
   const preCloseTxs = statementDay
@@ -216,45 +225,66 @@ function CCCardBlock({
 
   return (
     <div className="rounded-xl border border-border overflow-hidden">
-      {/* Card header — click to expand/collapse the whole card */}
-      <button
-        type="button"
+      {/* Card header — click to expand/collapse the whole card.
+          A plain div (not a button) since it hosts the nested tick button below. */}
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onToggle}
+        onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); } }}
         className={cn(
-          "w-full flex items-center justify-between px-3 py-2 bg-muted/40 hover:bg-muted/60 transition-colors",
+          "w-full flex items-center justify-between px-3 py-2 bg-muted/40 hover:bg-muted/60 transition-colors cursor-pointer",
           !collapsed && "border-b border-border"
         )}
       >
-        <div className="flex items-center gap-2">
-          <CreditCard className="w-3.5 h-3.5 text-muted-foreground" />
-          <span className="text-xs font-semibold">{entry.template.name}</span>
+        <div className="flex items-center gap-2 min-w-0">
+          {/* Tap to tick — opens the same pay dialog as before, right from the header.
+              Same 44px-target / visible-circle pattern as every other tick in the app. */}
+          <button
+            type="button"
+            disabled={isBillPending}
+            onClick={e => { e.stopPropagation(); tick.handleTickClick(); }}
+            className="shrink-0 flex items-center justify-center w-9 h-9 -m-2 rounded-full disabled:cursor-default"
+          >
+            <div className={cn(
+              "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all pointer-events-none",
+              tick.isPaid
+                ? "bg-emerald-600 border-emerald-600"
+                : isBillPending
+                  ? "border-sky-300 bg-sky-50"
+                  : tick.isPartial
+                    ? "border-amber-500 bg-amber-50"
+                    : "border-amber-400/70 bg-amber-50/40"
+            )}>
+              {tick.isPaid && <Check className="w-3 h-3 text-white" />}
+              {tick.isPartial && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
+            </div>
+          </button>
+          <div className="flex flex-col items-start min-w-0 text-left">
+            <span className="text-xs font-semibold truncate max-w-full">{entry.template.name}</span>
+            {statementDay && (
+              <span className="text-[10px] text-muted-foreground">closes {ordinal(statementDay)}</span>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          {statementDay && (
-            <span className="text-xs text-muted-foreground">
-              closes {statementDay}th
-              {entry.template.dueDateDay ? (() => {
-                const isNextMonth = entry.template.dueDateDay < statementDay;
-                return ` · due ${entry.template.dueDateDay}th${isNextMonth ? ` ${nextMonthName}` : ""}`;
-              })() : ""}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Amount, due date — permanently in the header, not a separate row */}
+          <div className="flex flex-col items-end">
+            <span className={cn("flex items-center gap-1.5 text-xs font-semibold tabular-nums", tick.isPaid && "text-muted-foreground line-through")}>
+              {nextBillTotal > 0 && <span className="text-amber-600 font-normal">↗ {fmt(nextBillTotal)} ·</span>}
+              {tick.isPartial ? fmt(tick.outstanding) : tick.cashback > 0 && !tick.isPaid ? fmt(tick.netBill) : fmt(billedTotal)}
             </span>
-          )}
-          {collapsed && (
-            <span className="flex items-center gap-1.5 text-xs font-semibold tabular-nums">
-              {entry.isPaid ? (
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-              ) : isBillPending ? (
-                <span className="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0" title="Upcoming — statement not closed yet" />
-              ) : (
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" title="Pending" />
-              )}
-              <span className={entry.isPaid ? "text-muted-foreground line-through" : ""}>{fmt(billedTotal)}</span>
-              {nextBillTotal > 0 && <span className="text-amber-600">· ↗ {fmt(nextBillTotal)}</span>}
-            </span>
-          )}
+            {tick.isPartial ? (
+              <span className="text-[10px] text-amber-600">{fmt(tick.paidAmount!)} paid so far</span>
+            ) : entry.template.dueDateDay && (
+              <span className="text-[10px] text-amber-600">
+                due {ordinal(entry.template.dueDateDay)}{isDueNextMonth ? ` ${nextMonthName}` : ""}
+              </span>
+            )}
+          </div>
           <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/60 transition-transform duration-200 shrink-0", !collapsed && "rotate-180")} />
         </div>
-      </button>
+      </div>
 
       {!collapsed && (
         <>
@@ -268,23 +298,29 @@ function CCCardBlock({
             </div>
           )}
 
-          {/* Current bill */}
-          <div className="p-2">
-            <EntryRow entry={entry} onUpdate={onUpdate} isBillPending={isBillPending} />
-            {preCloseTxs.length > 0 && (
-              <div className="mt-1.5 border-t border-border/40 pt-1.5">
-                <p className="text-xs text-muted-foreground font-medium px-1 mb-1">Added to this bill</p>
-                <CCSubcatBreakdown txItems={preCloseTxs} onDelete={onDelete} removingIds={removingIds} />
-              </div>
-            )}
-          </div>
+          {preCloseTxs.length > 0 && (
+            <div className="p-2">
+              <p className="text-xs text-muted-foreground font-medium px-1 mb-1">Added to this bill</p>
+              <CCSubcatBreakdown txItems={preCloseTxs} onDelete={onDelete} removingIds={removingIds} />
+            </div>
+          )}
 
-          {/* Next cycle charges */}
+          {/* Next cycle charges — its own collapse, independent of the card's */}
           {nextBillTotal > 0 && (
             <div className="border-t border-amber-100 bg-amber-50/50 px-3 py-2">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-semibold text-amber-700 uppercase tracking-wider">
+              <div
+                onClick={postCloseTxs.length > 0 ? () => setNextCycleCollapsed(v => !v) : undefined}
+                className={cn(
+                  "flex items-center justify-between",
+                  postCloseTxs.length > 0 && "cursor-pointer",
+                  postCloseTxs.length > 0 && !nextCycleCollapsed && "mb-1.5"
+                )}
+              >
+                <span className="text-xs font-semibold text-amber-700 uppercase tracking-wider flex items-center gap-1">
                   → {nextMonthName} bill
+                  {postCloseTxs.length > 0 && (
+                    <ChevronDown className={cn("w-3 h-3 text-amber-700/60 transition-transform duration-200", !nextCycleCollapsed && "rotate-180")} />
+                  )}
                 </span>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-semibold text-amber-800 tracking-tight">{fmt(nextBillTotal)}</span>
@@ -298,11 +334,16 @@ function CCCardBlock({
                   )}
                 </div>
               </div>
-              {postCloseTxs.length > 0 && <CCSubcatBreakdown txItems={postCloseTxs} onDelete={onDelete} removingIds={removingIds} />}
+              {postCloseTxs.length > 0 && !nextCycleCollapsed && (
+                <CCSubcatBreakdown txItems={postCloseTxs} onDelete={onDelete} removingIds={removingIds} />
+              )}
             </div>
           )}
         </>
       )}
+
+      {/* Owned here (not by EntryRow) so it works from the collapsed tick too */}
+      <PaymentDialog tick={tick} entryName={entry.template.name} amount={entry.amount} fmt={fmt} />
     </div>
   );
 }
@@ -1018,8 +1059,8 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             const catTotal = isProjected
               ? projectedItems.reduce((s, i) => s + i.data.amount, 0)
               : entryItems.filter(i => !isBillPending(i.data, isCurrentMonth, todayDay)).reduce((s, i) => s + net(i.data), 0) + (isCC ? 0 : txTotal);
-            const catPaid  = entryItems.reduce((s, i) => s + effectivePaid(i.data), 0);
             const catCarry = entryItems.reduce((s, i) => s + (i.data.statementAmount ?? 0), 0);
+            const catPaid  = entryItems.reduce((s, i) => s + effectivePaid(i.data), 0);
             const allPaid  = !isProjected && entryItems.length > 0 && entryItems.every(i => i.data.isPaid) && txItems.length === 0;
             const collapsed = isGroupCollapsed(groupKey, entryItems);
 
@@ -1400,7 +1441,7 @@ function ProjectedEntryRow({ entry }: { entry: ProjectedEntry }) {
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium">{entry.name}</p>
         <p className="text-xs text-muted-foreground">
-          {entry.dueDateDay ? `due ${entry.dueDateDay}th` : "projected"}
+          {entry.dueDateDay ? `due ${ordinal(entry.dueDateDay)}` : "projected"}
           {entry.isFixed ? " · fixed" : ""}
         </p>
       </div>

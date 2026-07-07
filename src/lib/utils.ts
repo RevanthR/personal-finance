@@ -18,6 +18,17 @@ export function formatMonthYear(month: number, year: number): string {
   return format(new Date(year, month - 1, 1), "MMMM yyyy");
 }
 
+export function ordinal(day: number): string {
+  const v = day % 100;
+  if (v >= 11 && v <= 13) return `${day}th`;
+  switch (day % 10) {
+    case 1: return `${day}st`;
+    case 2: return `${day}nd`;
+    case 3: return `${day}rd`;
+    default: return `${day}th`;
+  }
+}
+
 export function getCurrentMonthYear(): { month: number; year: number } {
   const now = new Date();
   return { month: now.getMonth() + 1, year: now.getFullYear() };

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { formatCurrency, getCategoryDisplay, getCategoryColor } from "@/lib/utils";
+import { formatCurrency, getCategoryDisplay, getCategoryColor, ordinal } from "@/lib/utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { Clock, Check } from "lucide-react";
 import { format } from "date-fns";
@@ -10,21 +10,12 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { computeLoanAmortization } from "@/lib/loan-utils";
-
-// Partial payment doesn't carry forward for these categories
-const NO_PARTIAL = new Set(["LOAN", "CHIT_FUND"]);
+import { usePaymentTick, type PaymentTick, type PaymentTickEntry, type PaymentTickUpdate } from "@/hooks/use-payment-tick";
+import { PaymentDialog } from "./payment-dialog";
 
 interface EntryRowProps {
-  entry: {
-    id: string;
-    amount: number;
-    isPaid: boolean;
+  entry: PaymentTickEntry & {
     paidOn: string | null;
-    paidAmount: number | null;
-    cashbackAmount: number | null;
     notes: string | null;
     template: {
       name: string;
@@ -33,121 +24,32 @@ interface EntryRowProps {
       isFixed: boolean;
       dueDateDay: number | null;
       statementDay: number | null;
-      loanInterestRate: number | null;
-      loanRateType: string | null;
-      loanOriginalPrincipal: number | null;
-      loanStartDate: string | null;
-      loanOutstandingOverride: number | null;
     };
   };
-  onUpdate: (id: string, updates: { isPaid?: boolean; amount?: number; notes?: string; paidAmount?: number; cashbackAmount?: number }) => Promise<void>;
+  onUpdate: PaymentTickUpdate;
   isBillPending?: boolean;
+  // Shared tick state — pass this when the tick can also be triggered from
+  // elsewhere (e.g. a CC card's collapsed header), so both surfaces stay in
+  // sync. When omitted, this row owns its own tick state (standalone use).
+  tick?: PaymentTick;
 }
 
-export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowProps) {
+export function EntryRow({ entry, onUpdate, isBillPending = false, tick: externalTick }: EntryRowProps) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
-  const [optimisticPaid, setOptimisticPaid] = useState(entry.isPaid);
-  const [optimisticPaidAmount, setOptimisticPaidAmount] = useState(entry.paidAmount);
-  const [optimisticCashback, setOptimisticCashback] = useState(entry.cashbackAmount);
   const [editingAmount, setEditingAmount] = useState(false);
   const [amountVal, setAmountVal] = useState(String(entry.amount));
-
-  const [showDialog, setShowDialog] = useState(false);
-  const [payMode, setPayMode] = useState<"full" | "partial">("full");
-  const [partialVal, setPartialVal] = useState("");
-  const [cashbackVal, setCashbackVal] = useState("");
-  const partialRef = useRef<HTMLInputElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
 
-  const [loanPaidSnapshot, setLoanPaidSnapshot] = useState<{
-    emi: number;
-    principalThisMonth: number;
-    interestThisMonth: number;
-    outstandingBefore: number;
-    outstandingAfter: number;
-    totalInterestRemaining: number;
-    monthsRemaining: number;
-  } | null>(null);
+  const internalTick = usePaymentTick(entry, onUpdate);
+  const tick = externalTick ?? internalTick;
+  const isControlled = externalTick != null;
+  const {
+    isPaid, paidAmount, cashback, isCC, netBill, isPartial, outstanding, isLoan, loanAmort,
+    handleTickClick, loanPaidSnapshot, setLoanPaidSnapshot,
+  } = tick;
 
-  const isPaid = optimisticPaid;
-  const paidAmount = optimisticPaidAmount;
-  const cashback = optimisticCashback ?? 0;
-  const isCC = entry.template.category === "CREDIT_CARD";
-  const netBill = entry.amount - cashback;
-  const isPartial = !isPaid && paidAmount != null && paidAmount > 0;
-  const outstanding = netBill - (paidAmount ?? 0);
   const color = getCategoryColor(entry.template.category, entry.template.customCategory);
-  const canPartial = !NO_PARTIAL.has(entry.template.category);
-  const isLoan = entry.template.category === "LOAN";
-  const loanAmort = isLoan && entry.template.loanInterestRate != null ? computeLoanAmortization({
-    emi: entry.amount,
-    annualRate: entry.template.loanInterestRate,
-    originalPrincipal: entry.template.loanOriginalPrincipal,
-    startDate: entry.template.loanStartDate,
-    outstandingOverride: entry.template.loanOutstandingOverride,
-    isPaidThisMonth: isPaid,
-  }) : null;
-
-  function handleTickClick() {
-    if (isPaid) {
-      setOptimisticPaid(false);
-      setOptimisticPaidAmount(null);
-      onUpdate(entry.id, { isPaid: false });
-      return;
-    }
-    if (!canPartial) {
-      setOptimisticPaid(true);
-      setOptimisticPaidAmount(null);
-      onUpdate(entry.id, { isPaid: true });
-      if (isLoan && loanAmort) {
-        setLoanPaidSnapshot({
-          emi: entry.amount,
-          principalThisMonth: loanAmort.principalThisMonth,
-          interestThisMonth: loanAmort.interestThisMonth,
-          outstandingBefore: loanAmort.outstandingPrincipal,
-          outstandingAfter: Math.max(0, loanAmort.outstandingPrincipal - loanAmort.principalThisMonth),
-          totalInterestRemaining: Math.max(0, loanAmort.totalInterestRemaining - loanAmort.interestThisMonth),
-          monthsRemaining: Math.max(0, loanAmort.monthsRemaining - 1),
-        });
-      }
-      return;
-    }
-    setPayMode("full");
-    setPartialVal(paidAmount != null ? String(outstanding) : "");
-    setCashbackVal(cashback > 0 ? String(cashback) : "");
-    setShowDialog(true);
-  }
-
-  function parsedCashback() {
-    const n = parseFloat(cashbackVal);
-    return isNaN(n) || n <= 0 ? 0 : Math.min(n, entry.amount);
-  }
-
-  async function handlePayFull() {
-    const cb = parsedCashback();
-    setOptimisticPaid(true);
-    setOptimisticPaidAmount(null);
-    setOptimisticCashback(cb > 0 ? cb : null);
-    setShowDialog(false);
-    await onUpdate(entry.id, { isPaid: true, ...(isCC && { cashbackAmount: cb }) });
-  }
-
-  async function handleSavePartial() {
-    const num = parseFloat(partialVal);
-    if (isNaN(num) || num < 0) return;
-    const cb = parsedCashback();
-    const netAmt = entry.amount - cb;
-    if (num >= netAmt) {
-      setOptimisticPaid(true);
-      setOptimisticPaidAmount(num > netAmt ? num : null);
-    } else {
-      setOptimisticPaidAmount(num > 0 ? num : null);
-    }
-    setOptimisticCashback(cb > 0 ? cb : null);
-    setShowDialog(false);
-    await onUpdate(entry.id, { paidAmount: num, ...(isCC && { cashbackAmount: cb }) });
-  }
 
   function handleAmountClick(e: React.MouseEvent) {
     if (entry.template.isFixed || isPaid) return;
@@ -198,39 +100,34 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
         <div className={cn("w-0.5 rounded-full shrink-0 transition-all duration-200", isPaid ? "h-4" : "h-7")} style={{ backgroundColor: color }} />
 
         <div className="flex-1 min-w-0">
-          <p className={cn("text-sm font-medium leading-tight", isPaid && "line-through text-muted-foreground")}>
-            {entry.template.name}
-          </p>
-          <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
-            <span>{getCategoryDisplay(entry.template.category, entry.template.customCategory)}</span>
-            {isLoan && loanAmort && loanAmort.monthsRemaining > 0 && (
-              <span className="text-muted-foreground/70">
-                {loanAmort.monthsRemaining} mo left
-              </span>
-            )}
-            {isBillPending && entry.template.statementDay && (
-              <span className="text-muted-foreground/60 italic">
-                Statement closes {entry.template.statementDay}th
-              </span>
-            )}
-            {!isBillPending && entry.template.category === "CREDIT_CARD" && entry.template.statementDay && !isPaid && (
-              <span className="text-amber-600">
-                closes {entry.template.statementDay}th
-                {entry.template.dueDateDay ? ` · due ${entry.template.dueDateDay}th` : ""}
-              </span>
-            )}
-            {entry.template.category !== "CREDIT_CARD" && entry.template.dueDateDay && !isPaid && (
-              <span className="flex items-center gap-0.5 text-amber-600">
-                <Clock className="w-2.5 h-2.5" />{entry.template.dueDateDay}th
-              </span>
-            )}
-            {isPaid && entry.paidOn && (
-              <span className="text-emerald-600">{format(new Date(entry.paidOn), "dd MMM")}</span>
-            )}
-            {isLoan && entry.template.loanInterestRate && (
-              <span className="text-muted-foreground/70">{entry.template.loanInterestRate}%</span>
-            )}
-          </p>
+          {/* Inside a CC card, the card header above already establishes the
+              card name and "current cycle" — no label needed here at all. */}
+          {!isControlled && (
+            <p className={cn("text-sm font-medium leading-tight", isPaid && "line-through text-muted-foreground")}>
+              {entry.template.name}
+            </p>
+          )}
+          {(!isControlled || (isPaid && entry.paidOn)) && (
+            <p className={cn("text-xs text-muted-foreground flex items-center gap-1.5", !isControlled && "mt-0.5")}>
+              {!isControlled && <span>{getCategoryDisplay(entry.template.category, entry.template.customCategory)}</span>}
+              {isLoan && loanAmort && loanAmort.monthsRemaining > 0 && (
+                <span className="text-muted-foreground/70">
+                  {loanAmort.monthsRemaining} mo left
+                </span>
+              )}
+              {entry.template.category !== "CREDIT_CARD" && entry.template.dueDateDay && !isPaid && (
+                <span className="flex items-center gap-0.5 text-amber-600">
+                  <Clock className="w-2.5 h-2.5" />{ordinal(entry.template.dueDateDay)}
+                </span>
+              )}
+              {isPaid && entry.paidOn && (
+                <span className="text-emerald-600">{format(new Date(entry.paidOn), "dd MMM")}</span>
+              )}
+              {isLoan && entry.template.loanInterestRate && (
+                <span className="text-muted-foreground/70">{entry.template.loanInterestRate}%</span>
+              )}
+            </p>
+          )}
           {loanAmort && !isPaid && (
             <p className="text-xs mt-0.5 flex items-center gap-1">
               <span className="text-emerald-600">{fmt(loanAmort.principalThisMonth)} principal</span>
@@ -262,118 +159,29 @@ export function EntryRow({ entry, onUpdate, isBillPending = false }: EntryRowPro
               <p className="text-xs text-emerald-600">-{fmt(cashback)} cashback</p>
             </>
           ) : (
-            <span
-              onClick={handleAmountClick}
-              className={cn(
-                "text-sm font-semibold",
-                !entry.template.isFixed && !isPaid && "cursor-pointer hover:text-zinc-600 underline decoration-dotted underline-offset-2"
+            <>
+              <span
+                onClick={handleAmountClick}
+                className={cn(
+                  "text-sm font-semibold",
+                  !entry.template.isFixed && !isPaid && "cursor-pointer hover:text-zinc-600 underline decoration-dotted underline-offset-2"
+                )}
+              >
+                {fmt(entry.amount)}
+              </span>
+              {isCC && !isPaid && !isBillPending && entry.template.dueDateDay && (
+                <p className="text-xs text-amber-600">due {ordinal(entry.template.dueDateDay)}</p>
               )}
-            >
-              {fmt(entry.amount)}
-            </span>
+            </>
           )}
         </div>
       </div>
 
-      {/* Payment dialog */}
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="max-w-xs">
-          <DialogHeader>
-            <DialogTitle className="text-base">{entry.template.name}</DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4 py-1">
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Bill amount</span>
-                <span className="font-semibold">{fmt(entry.amount)}</span>
-              </div>
-              {isCC && (
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm text-emerald-600">Cashback</span>
-                  <Input
-                    type="number"
-                    value={cashbackVal}
-                    onChange={e => setCashbackVal(e.target.value)}
-                    placeholder="0"
-                    className="h-7 w-28 text-right text-sm text-emerald-600 border-emerald-200 focus:border-emerald-400"
-                  />
-                </div>
-              )}
-              {isCC && parsedCashback() > 0 && (
-                <div className="flex items-center justify-between text-sm border-t border-dashed border-border pt-1.5">
-                  <span className="font-medium">Net payable</span>
-                  <span className="font-bold">{fmt(entry.amount - parsedCashback())}</span>
-                </div>
-              )}
-              {isPartial && (
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Already paid</span>
-                  <span className="text-amber-600 font-semibold">{fmt(paidAmount!)}</span>
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-2 bg-zinc-100 rounded-lg p-1">
-              <button
-                onClick={() => setPayMode("full")}
-                className={cn(
-                  "flex-1 py-3 rounded-md text-sm font-medium transition-colors",
-                  payMode === "full" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground"
-                )}
-              >
-                Pay in full
-              </button>
-              <button
-                onClick={() => {
-                  setPayMode("partial");
-                  setTimeout(() => partialRef.current?.focus(), 50);
-                }}
-                className={cn(
-                  "flex-1 py-3 rounded-md text-sm font-medium transition-colors",
-                  payMode === "partial" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground"
-                )}
-              >
-                Partial
-              </button>
-            </div>
-
-            {payMode === "full" ? (
-              <Button className="w-full" onClick={handlePayFull}>
-                Mark paid · {fmt(entry.amount - parsedCashback())}
-              </Button>
-            ) : (
-              <div className="space-y-2">
-                <div>
-                  <Label className="text-xs">Amount paying now (₹)</Label>
-                  <Input
-                    ref={partialRef}
-                    type="number"
-                    value={partialVal}
-                    onChange={e => setPartialVal(e.target.value)}
-                    onKeyDown={e => { if (e.key === "Enter") handleSavePartial(); }}
-                    placeholder={`up to ${fmt(outstanding)}`}
-                    className="mt-1"
-                  />
-                </div>
-                <button
-                  onClick={() => setPartialVal(String(outstanding))}
-                  className="w-full text-sm text-muted-foreground hover:text-foreground py-3 rounded-lg border border-dashed transition-colors"
-                >
-                  Pay remaining {fmt(outstanding)}
-                </button>
-                <Button className="w-full" onClick={handleSavePartial}>
-                  Save partial payment
-                </Button>
-              </div>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setShowDialog(false)}>Cancel</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Payment dialog — only when this row owns its own tick state.
+          When shared (e.g. inside a CC card), the parent renders it once. */}
+      {!isControlled && (
+        <PaymentDialog tick={tick} entryName={entry.template.name} amount={entry.amount} fmt={fmt} />
+      )}
 
       {/* Loan payment success popup */}
       <Dialog open={!!loanPaidSnapshot} onOpenChange={open => { if (!open) setLoanPaidSnapshot(null); }}>
