@@ -149,6 +149,7 @@ async function DashboardData({
         currentMonth={null}
         recentMonths={[]}
         ccTemplates={[]}
+        customCategories={[]}
         incomeTemplates={[]}
         todayMonth={todayMonth}
         todayYear={todayYear}
@@ -164,7 +165,7 @@ async function DashboardData({
   }
 
   // ── Actual (past or current) month ────────────────────────────────────────
-  const [currentMonth, recentMonths, ccTemplates, allTemplates] = await Promise.all([
+  const [currentMonth, recentMonths, ccTemplates, allTemplates, customCategories] = await Promise.all([
     db.month.findUnique({
       where: { userId_month_year: { userId, month: targetMonth, year: targetYear } },
       include: {
@@ -194,6 +195,11 @@ async function DashboardData({
       where: { userId, isActive: true },
       include: { chitFund: true },
     }),
+    db.customCategory.findMany({
+      where: { userId },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   const incomeTemplates = allTemplates
@@ -212,6 +218,7 @@ async function DashboardData({
       currentMonth={currentMonth ? JSON.parse(JSON.stringify(currentMonth)) : null}
       recentMonths={JSON.parse(JSON.stringify(recentMonths))}
       ccTemplates={JSON.parse(JSON.stringify(ccTemplates))}
+      customCategories={customCategories}
       incomeTemplates={JSON.parse(JSON.stringify(incomeTemplates))}
       todayMonth={todayMonth}
       todayYear={todayYear}

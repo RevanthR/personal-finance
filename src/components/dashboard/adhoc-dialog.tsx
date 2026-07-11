@@ -32,26 +32,58 @@ const INCOME_SOURCES = [
 
 export type CCCard = { templateId: string; name: string };
 
+export interface EditableAdHocItem {
+  id: string;
+  name: string;
+  amount: number;
+  type: string;
+  category: string | null;
+  customCategory: string | null;
+  date: string;
+  notes: string | null;
+  ccTemplateId: string | null;
+}
+
+export interface AdHocSubmitFields {
+  name: string; amount: number; type: string;
+  category?: string; customCategory?: string; date: string; notes?: string; ccTemplateId?: string;
+}
+
 interface AdHocDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAdd: (item: {
-    name: string; amount: number; type: string;
-    category?: string; customCategory?: string; date: string; notes?: string; ccTemplateId?: string;
-  }) => Promise<void>;
+  onAdd: (item: AdHocSubmitFields) => Promise<void>;
+  onEdit: (id: string, item: AdHocSubmitFields) => Promise<void>;
   ccCards: CCCard[];
+  customCategories: { id: string; name: string }[];
+  editing?: EditableAdHocItem | null;
 }
 
-export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogProps) {
-  const [type, setType] = useState<"INCOME" | "EXPENSE">("EXPENSE");
-  const [category, setCategory] = useState("");
-  const [customLabel, setCustomLabel] = useState("");
-  const [ccCard, setCCCard] = useState<CCCard | null>(ccCards[0] ?? null);
-  const [ccSpendCat, setCCSpendCat] = useState("");
-  const [name, setName] = useState("");
-  const [amount, setAmount] = useState("");
-  const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [notes, setNotes] = useState("");
+// Best-effort split of the composite "CardName · SpendCat · userNotes" string
+// CC items store their sub-details in, for pre-filling an edit form.
+function parseCCNotes(notes: string | null, cardName: string | undefined) {
+  if (!notes) return { spendCat: "", userNotes: "" };
+  let rest = notes.split(" · ");
+  if (cardName && rest[0] === cardName) rest = rest.slice(1);
+  const spendCat = CC_SPEND_CATEGORIES.includes(rest[0]) ? rest[0] : "";
+  const userNotes = spendCat ? rest.slice(1).join(" · ") : rest.join(" · ");
+  return { spendCat, userNotes };
+}
+
+export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, customCategories, editing }: AdHocDialogProps) {
+  const isEditing = !!editing;
+  const initialCCCard = editing?.ccTemplateId ? ccCards.find(c => c.templateId === editing.ccTemplateId) ?? null : (ccCards[0] ?? null);
+  const initialParsed = editing?.category === "CREDIT_CARD" ? parseCCNotes(editing.notes, initialCCCard?.name) : null;
+
+  const [type, setType] = useState<"INCOME" | "EXPENSE">((editing?.type as "INCOME" | "EXPENSE") ?? "EXPENSE");
+  const [category, setCategory] = useState(editing?.customCategory ? "__custom__" : (editing?.category ?? ""));
+  const [customLabel, setCustomLabel] = useState(editing?.customCategory ?? "");
+  const [ccCard, setCCCard] = useState<CCCard | null>(initialCCCard);
+  const [ccSpendCat, setCCSpendCat] = useState(initialParsed?.spendCat ?? "");
+  const [name, setName] = useState(editing?.name ?? "");
+  const [amount, setAmount] = useState(editing ? String(editing.amount) : "");
+  const [date, setDate] = useState(editing ? editing.date.split("T")[0] : format(new Date(), "yyyy-MM-dd"));
+  const [notes, setNotes] = useState(initialParsed?.userNotes ?? editing?.notes ?? "");
   const [loading, setLoading] = useState(false);
 
   const isCC = category === "CREDIT_CARD";
@@ -77,7 +109,7 @@ export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogP
       ? (INCOME_SOURCES.find(s => s.value === category)?.dbCategory ?? undefined)
       : isCustom ? "MISCELLANEOUS" : (category || undefined);
 
-    await onAdd({
+    const fields: AdHocSubmitFields = {
       name,
       amount: parseFloat(amount),
       type,
@@ -86,17 +118,24 @@ export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogP
       date,
       notes: notesStr || undefined,
       ccTemplateId: isCC ? (ccCard?.templateId ?? undefined) : undefined,
-    });
+    };
+
+    if (isEditing) {
+      await onEdit(editing.id, fields);
+    } else {
+      await onAdd(fields);
+      reset();
+    }
 
     setLoading(false);
-    reset();
+    if (!isEditing) onOpenChange(false);
   }
 
   return (
-    <Dialog open={open} onOpenChange={v => { if (!v) reset(); onOpenChange(v); }}>
+    <Dialog open={open} onOpenChange={v => { if (!v && !isEditing) reset(); onOpenChange(v); }}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Add Transaction</DialogTitle>
+          <DialogTitle>{isEditing ? "Edit Transaction" : "Add Transaction"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
 
@@ -106,6 +145,7 @@ export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogP
               <button
                 key={t}
                 type="button"
+                disabled={isEditing}
                 onClick={() => { setType(t); setCategory(""); setCCSpendCat(""); }}
                 className={cn(
                   "py-3 rounded-md text-sm font-semibold transition-all",
@@ -113,13 +153,19 @@ export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogP
                     ? t === "INCOME"
                       ? "bg-emerald-700 text-white shadow-sm"
                       : "bg-white text-zinc-900 shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                  isEditing && "opacity-60 cursor-not-allowed"
                 )}
               >
                 {t === "EXPENSE" ? "Expense" : "Income"}
               </button>
             ))}
           </div>
+          {isEditing && (
+            <p className="text-xs text-muted-foreground -mt-2">
+              Type can&apos;t be changed here — delete and re-add for that.
+            </p>
+          )}
 
           {/* Category chips */}
           <div>
@@ -143,13 +189,28 @@ export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogP
                   {c.label}
                 </button>
               ))}
+              {type === "EXPENSE" && customCategories.map(c => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => { setCategory("__custom__"); setCustomLabel(c.name); }}
+                  className={cn(
+                    "px-3 py-2 rounded-full text-sm font-medium border transition-colors",
+                    isCustom && customLabel === c.name
+                      ? "bg-zinc-900 text-white border-zinc-900"
+                      : "border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"
+                  )}
+                >
+                  {c.name}
+                </button>
+              ))}
               {type === "EXPENSE" && (
                 <button
                   type="button"
-                  onClick={() => { setCategory("__custom__"); setCCSpendCat(""); }}
+                  onClick={() => { setCategory("__custom__"); setCCSpendCat(""); setCustomLabel(""); }}
                   className={cn(
                     "px-3 py-2 rounded-full text-sm font-medium border transition-colors",
-                    isCustom
+                    isCustom && !customLabel
                       ? "bg-zinc-900 text-white border-zinc-900"
                       : "border-dashed border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"
                   )}
@@ -260,7 +321,7 @@ export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogP
 
           <DialogFooter>
             <Button type="submit" disabled={loading || !name || !amount} className="w-full">
-              {loading ? "Adding..." : type === "INCOME" ? "Add Income" : "Add Expense"}
+              {loading ? "Saving..." : isEditing ? "Save Changes" : type === "INCOME" ? "Add Income" : "Add Expense"}
             </Button>
           </DialogFooter>
         </form>

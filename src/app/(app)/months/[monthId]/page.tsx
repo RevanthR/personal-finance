@@ -26,7 +26,7 @@ export default async function MonthDetailPage({
 
   if (!currentMonth) notFound();
 
-  const [recentMonths, ccTemplates, allTemplates] = await Promise.all([
+  const [recentMonths, ccTemplates, allTemplates, customCategories] = await Promise.all([
     db.month.findMany({
       where: { userId: session.user.id },
       orderBy: [{ year: "desc" }, { month: "desc" }],
@@ -45,6 +45,11 @@ export default async function MonthDetailPage({
     db.lineItemTemplate.findMany({
       where: { userId: session.user.id, isActive: true },
       include: { chitFund: true },
+    }),
+    db.customCategory.findMany({
+      where: { userId: session.user.id },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
     }),
   ]);
 
@@ -68,6 +73,7 @@ export default async function MonthDetailPage({
       currentMonth={JSON.parse(JSON.stringify(currentMonth))}
       recentMonths={JSON.parse(JSON.stringify(recentMonths))}
       ccTemplates={JSON.parse(JSON.stringify(ccTemplates))}
+      customCategories={customCategories}
       incomeTemplates={JSON.parse(JSON.stringify(incomeTemplates))}
       todayMonth={todayMonth}
       todayYear={todayYear}

@@ -68,9 +68,19 @@ export const AdHocPostSchema = z.object({
 });
 
 export const AdHocPatchSchema = z.object({
-  id:     z.string().min(1),
-  amount: z.number().finite().positive(),
-});
+  id:             z.string().min(1),
+  name:           zName.optional(),
+  amount:         z.number().finite().positive().optional(),
+  category:       zCategory.optional(),
+  customCategory: z.string().trim().max(50).optional().nullable(),
+  date:           zDateStr.optional(),
+  notes:          zNotes,
+  ccTemplateId:   z.string().optional(),
+}).refine(
+  (d) => d.name !== undefined || d.amount !== undefined || d.category !== undefined
+    || d.customCategory !== undefined || d.date !== undefined || d.notes !== undefined || d.ccTemplateId !== undefined,
+  { message: "Must provide at least one field to update" },
+);
 
 export const TemplatePostSchema = z.object({
   name:                  zName,

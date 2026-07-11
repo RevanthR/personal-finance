@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useTransition, type CSSProperties } from "react";
+import { useState, useMemo, useTransition, type CSSProperties } from "react";
 import { flushSync } from "react-dom";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
@@ -23,7 +23,7 @@ import { EntryRow } from "./entry-row";
 import { PaymentDialog } from "./payment-dialog";
 import { usePaymentTick } from "@/hooks/use-payment-tick";
 import { DashboardTour } from "@/components/coach/dashboard-tour";
-import type { CCCard } from "./adhoc-dialog";
+import type { CCCard, AdHocSubmitFields } from "./adhoc-dialog";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -64,6 +64,7 @@ interface DashboardClientProps {
   currentMonth: MonthWithDetails | null;
   recentMonths: RecentMonthSummary[];
   ccTemplates: { id: string; name: string; statementDay: number | null; dueDateDay: number | null }[];
+  customCategories: { id: string; name: string }[];
   incomeTemplates: IncomeTemplate[];
   todayMonth: number;
   todayYear: number;
@@ -98,7 +99,7 @@ type EntryWithTemplate = {
 };
 
 type AdHocItem = {
-  id: string; name: string; amount: number; type: string; category: string | null; customCategory: string | null; date: string; notes: string | null;
+  id: string; name: string; amount: number; type: string; category: string | null; customCategory: string | null; date: string; notes: string | null; ccTemplateId: string | null;
 };
 
 
@@ -146,7 +147,7 @@ function parseCCCardName(notes: string | null): string | null {
   return notes.split(" · ")[0] ?? null;
 }
 
-function CCSubcatBreakdown({ txItems, onDelete, onEdit, removingIds }: { txItems: AdHocItem[]; onDelete: (id: string) => void; onEdit?: (id: string, amount: number) => void; removingIds: Set<string> }) {
+function CCSubcatBreakdown({ txItems, onDelete, onEditRequest, removingIds }: { txItems: AdHocItem[]; onDelete: (id: string) => void; onEditRequest?: (item: AdHocItem) => void; removingIds: Set<string> }) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
@@ -178,7 +179,7 @@ function CCSubcatBreakdown({ txItems, onDelete, onEdit, removingIds }: { txItems
             </button>
             {open && (
               <div className="space-y-1 mt-1 mb-1">
-                {txs.map(t => <TransactionRow key={t.id} item={t} onDelete={onDelete} onEdit={onEdit} isRemoving={removingIds.has(t.id)} />)}
+                {txs.map(t => <TransactionRow key={t.id} item={t} onDelete={onDelete} onEditRequest={onEditRequest} isRemoving={removingIds.has(t.id)} />)}
               </div>
             )}
           </div>
@@ -189,7 +190,7 @@ function CCSubcatBreakdown({ txItems, onDelete, onEdit, removingIds }: { txItems
 }
 
 function CCCardBlock({
-  entry, txItems, nextMonthName, isBillPending, onUpdate, onDelete, onEditTx, onClearStatement, removingIds, collapsed, onToggle,
+  entry, txItems, nextMonthName, isBillPending, onUpdate, onDelete, onEditRequestTx, onClearStatement, removingIds, collapsed, onToggle,
 }: {
   entry: EntryWithTemplate;
   txItems: AdHocItem[];
@@ -197,7 +198,7 @@ function CCCardBlock({
   isBillPending: boolean;
   onUpdate: (id: string, updates: { isPaid?: boolean; amount?: number; notes?: string; paidAmount?: number; cashbackAmount?: number }) => Promise<void>;
   onDelete: (id: string) => void;
-  onEditTx?: (id: string, amount: number) => void;
+  onEditRequestTx?: (item: AdHocItem) => void;
   onClearStatement: (entryId: string) => Promise<void>;
   removingIds: Set<string>;
   collapsed: boolean;
@@ -302,7 +303,7 @@ function CCCardBlock({
           {preCloseTxs.length > 0 && (
             <div className="p-2">
               <p className="text-xs text-muted-foreground font-medium px-1 mb-1">Added to this bill</p>
-              <CCSubcatBreakdown txItems={preCloseTxs} onDelete={onDelete} onEdit={onEditTx} removingIds={removingIds} />
+              <CCSubcatBreakdown txItems={preCloseTxs} onDelete={onDelete} onEditRequest={onEditRequestTx} removingIds={removingIds} />
             </div>
           )}
 
@@ -336,7 +337,7 @@ function CCCardBlock({
                 </div>
               </div>
               {postCloseTxs.length > 0 && !nextCycleCollapsed && (
-                <CCSubcatBreakdown txItems={postCloseTxs} onDelete={onDelete} onEdit={onEditTx} removingIds={removingIds} />
+                <CCSubcatBreakdown txItems={postCloseTxs} onDelete={onDelete} onEditRequest={onEditRequestTx} removingIds={removingIds} />
               )}
             </div>
           )}
@@ -349,7 +350,7 @@ function CCCardBlock({
   );
 }
 
-export function DashboardClient({ currentMonth: initialMonth, recentMonths: initialRecentMonths, ccTemplates, incomeTemplates, todayMonth, todayYear, targetMonth, targetYear, prevUrl, nextUrl, projectedIncome, projectedEntries }: DashboardClientProps) {
+export function DashboardClient({ currentMonth: initialMonth, recentMonths: initialRecentMonths, ccTemplates, customCategories, incomeTemplates, todayMonth, todayYear, targetMonth, targetYear, prevUrl, nextUrl, projectedIncome, projectedEntries }: DashboardClientProps) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const viewMonth = targetMonth ?? todayMonth;
@@ -367,6 +368,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   const [currentMonth, setCurrentMonth] = useState(initialMonth);
   const [recentMonths, setRecentMonths] = useState(initialRecentMonths);
   const [showAdHoc, setShowAdHoc] = useState(false);
+  const [editingItem, setEditingItem] = useState<AdHocItem | null>(null);
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
   const [showSetup, setShowSetup] = useState(!initialMonth && !isProjected);
   const [showIncomeEdit, setShowIncomeEdit] = useState(false);
@@ -757,7 +759,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     if (updates.cashbackAmount !== undefined) toast.success(`Cashback of ${formatCurrency(updates.cashbackAmount)} applied`);
   }
 
-  async function handleAdHocAdd(item: { name: string; amount: number; type: string; category?: string; customCategory?: string; date: string; notes?: string; ccTemplateId?: string }) {
+  async function handleAdHocAdd(item: AdHocSubmitFields) {
     if (!currentMonth) return;
     const res = await fetch(`/api/months/${currentMonth.id}/adhoc`, {
       method: "POST",
@@ -818,30 +820,36 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     toast.success("Removed");
   }
 
-  async function handleAdHocEdit(id: string, amount: number) {
+  async function handleAdHocEdit(id: string, fields: AdHocSubmitFields) {
     if (!currentMonth) return;
     const res = await fetch(`/api/months/${currentMonth.id}/adhoc`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, amount }),
+      body: JSON.stringify({ id, ...fields }),
     });
     if (!res.ok) { toast.error("Failed to save"); return; }
-    const { item: updated, updatedEntry } = await res.json();
+    const { item: updated, updatedEntries } = await res.json();
     withReorderTransition(() => {
       setCurrentMonth(prev => {
         if (!prev) return prev;
-        const updatedEntries = updatedEntry
-          ? prev.entries.map(e => e.id === updatedEntry.id ? { ...e, amount: updatedEntry.amount, statementAmount: updatedEntry.statementAmount } : e)
-          : prev.entries;
-        return { ...prev, adHocItems: prev.adHocItems.map(i => i.id === id ? { ...i, amount: updated.amount } : i), entries: updatedEntries };
+        let entries = prev.entries;
+        for (const ue of updatedEntries as { id: string; amount: number; statementAmount: number | null }[]) {
+          entries = entries.map(e => e.id === ue.id ? { ...e, amount: ue.amount, statementAmount: ue.statementAmount } : e);
+        }
+        return { ...prev, adHocItems: prev.adHocItems.map(i => i.id === id ? { ...i, ...updated } : i), entries };
       });
     });
     setRecentMonths(prev => prev.map(m =>
       m.id === currentMonth!.id
-        ? { ...m, adHocItems: m.adHocItems.map(i => i.id === id ? { ...i, amount: updated.amount } : i) }
+        ? { ...m, adHocItems: m.adHocItems.map(i => i.id === id ? { ...i, type: updated.type, amount: updated.amount, category: updated.category, notes: updated.notes ?? null } : i) }
         : m
     ));
     toast.success("Updated");
+    setEditingItem(null);
+  }
+
+  function handleEditRequest(item: AdHocItem) {
+    setEditingItem(item);
   }
 
   async function handleClearStatement(entryId: string) {
@@ -1164,7 +1172,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                             isBillPending={isBillPending(item.data, isCurrentMonth, todayDay)}
                             onUpdate={handleEntryUpdate}
                             onDelete={handleAdHocDelete}
-                            onEditTx={handleAdHocEdit}
+                            onEditRequestTx={handleEditRequest}
                             onClearStatement={handleClearStatement}
                             removingIds={removingIds}
                             collapsed={isCCCardCollapsed(item.data.id)}
@@ -1175,7 +1183,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                       return <EntryRow key={item.data.id} entry={item.data} onUpdate={handleEntryUpdate} />;
                     })}
                     {!isCC && txItems.map(item =>
-                      <TransactionRow key={item.id} item={item} onDelete={handleAdHocDelete} onEdit={handleAdHocEdit} isRemoving={removingIds.has(item.id)} />
+                      <TransactionRow key={item.id} item={item} onDelete={handleAdHocDelete} onEditRequest={handleEditRequest} isRemoving={removingIds.has(item.id)} />
                     )}
 
                     {/* Orphaned CC transactions */}
@@ -1185,7 +1193,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                       return orphaned.length > 0 ? (
                         <div className="mt-2 rounded-xl border border-dashed border-border px-3 py-2">
                           <p className="text-xs text-muted-foreground mb-1.5">Unmatched transactions</p>
-                          <CCSubcatBreakdown txItems={orphaned} onDelete={handleAdHocDelete} onEdit={handleAdHocEdit} removingIds={removingIds} />
+                          <CCSubcatBreakdown txItems={orphaned} onDelete={handleAdHocDelete} onEditRequest={handleEditRequest} removingIds={removingIds} />
                         </div>
                       ) : null;
                     })()}
@@ -1202,7 +1210,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
               </div>
               <div className="space-y-1.5">
                 {oneTimeItems.map(item => (
-                  <TransactionRow key={item.id} item={item} onDelete={handleAdHocDelete} onEdit={handleAdHocEdit} isRemoving={removingIds.has(item.id)} />
+                  <TransactionRow key={item.id} item={item} onDelete={handleAdHocDelete} onEditRequest={handleEditRequest} isRemoving={removingIds.has(item.id)} />
                 ))}
               </div>
             </div>
@@ -1425,10 +1433,14 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
 
       {!isProjected && (
         <AdHocDialog
-          open={showAdHoc}
-          onOpenChange={setShowAdHoc}
+          key={editingItem?.id ?? "new"}
+          open={showAdHoc || editingItem !== null}
+          onOpenChange={v => { if (!v) { setShowAdHoc(false); setEditingItem(null); } else setShowAdHoc(true); }}
           onAdd={handleAdHocAdd}
+          onEdit={handleAdHocEdit}
+          editing={editingItem}
           ccCards={ccTemplates.map(t => ({ templateId: t.id, name: t.name } satisfies CCCard))}
+          customCategories={customCategories}
         />
       )}
     </div>
@@ -1657,25 +1669,10 @@ function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, 
   );
 }
 
-function TransactionRow({ item, onDelete, onEdit, isRemoving }: { item: AdHocItem; onDelete: (id: string) => void; onEdit?: (id: string, amount: number) => void; isRemoving?: boolean }) {
+function TransactionRow({ item, onDelete, onEditRequest, isRemoving }: { item: AdHocItem; onDelete: (id: string) => void; onEditRequest?: (item: AdHocItem) => void; isRemoving?: boolean }) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const isCarryForward = item.notes === "carry_forward";
-  const [editing, setEditing] = useState(false);
-  const [val, setVal] = useState(String(item.amount));
-  const amountRef = useRef<HTMLInputElement>(null);
-
-  function startEdit() {
-    setVal(String(item.amount));
-    setEditing(true);
-    setTimeout(() => amountRef.current?.select(), 0);
-  }
-
-  function saveEdit() {
-    setEditing(false);
-    const num = parseFloat(val);
-    if (!isNaN(num) && num > 0 && num !== item.amount) onEdit?.(item.id, num);
-  }
 
   return (
     <div className={cn(
@@ -1699,26 +1696,11 @@ function TransactionRow({ item, onDelete, onEdit, isRemoving }: { item: AdHocIte
           {item.notes && !isCarryForward ? ` · ${item.notes}` : ""}
         </p>
       </div>
-      {editing ? (
-        <input
-          ref={amountRef}
-          type="number"
-          value={val}
-          onChange={e => setVal(e.target.value)}
-          onBlur={saveEdit}
-          onKeyDown={e => {
-            if (e.key === "Enter") amountRef.current?.blur();
-            if (e.key === "Escape") { setVal(String(item.amount)); setEditing(false); }
-          }}
-          className="w-20 text-right text-sm font-semibold bg-transparent border-b border-zinc-400 outline-none shrink-0"
-        />
-      ) : (
-        <span className={cn("text-sm font-semibold shrink-0", item.type === "INCOME" ? "text-emerald-600" : "text-red-500")}>
-          {item.type === "INCOME" ? "+" : "-"}{fmt(item.amount)}
-        </span>
-      )}
-      {onEdit && !isCarryForward && !editing && (
-        <Button variant="ghost" size="sm" onClick={startEdit} className="h-10 w-10 p-0 text-muted-foreground hover:text-foreground shrink-0">
+      <span className={cn("text-sm font-semibold shrink-0", item.type === "INCOME" ? "text-emerald-600" : "text-red-500")}>
+        {item.type === "INCOME" ? "+" : "-"}{fmt(item.amount)}
+      </span>
+      {onEditRequest && !isCarryForward && (
+        <Button variant="ghost" size="sm" onClick={() => onEditRequest(item)} className="h-10 w-10 p-0 text-muted-foreground hover:text-foreground shrink-0">
           <Pencil className="w-4 h-4" />
         </Button>
       )}

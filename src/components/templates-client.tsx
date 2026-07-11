@@ -90,10 +90,12 @@ export function TemplatesClient({
   templates: initial,
   recentIncome,
   paidTemplateIds = [],
+  customCategories = [],
 }: {
   templates: Template[];
   recentIncome: { salary: number; freelance: number; other: number } | null;
   paidTemplateIds?: string[];
+  customCategories?: { id: string; name: string }[];
 }) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
@@ -544,6 +546,7 @@ export function TemplatesClient({
           initial={editing}
           onOpenChange={(v) => !v && setEditing(null)}
           onSave={saveEdit}
+          customCategories={customCategories}
         />
       )}
 
@@ -562,6 +565,7 @@ export function TemplatesClient({
         defaultType={activeTab === "income" ? "INCOME" : "EXPENSE"}
         onOpenChange={setShowAdd}
         onSave={addTemplate}
+        customCategories={customCategories}
       />
     </div>
   );
@@ -573,7 +577,7 @@ const EXPENSE_CATEGORY_CHIPS = Object.entries(CATEGORY_LABELS).filter(
 const INCOME_CATEGORY_CHIPS_LABELS = INCOME_CATEGORIES.map(k => [k, CATEGORY_LABELS[k]] as [string, string]);
 
 function TemplateDialog({
-  open, title, initial, defaultType = "EXPENSE", onOpenChange, onSave,
+  open, title, initial, defaultType = "EXPENSE", onOpenChange, onSave, customCategories = [],
 }: {
   open: boolean;
   title: string;
@@ -581,6 +585,7 @@ function TemplateDialog({
   defaultType?: "INCOME" | "EXPENSE";
   onOpenChange: (v: boolean) => void;
   onSave: (data: SaveData) => Promise<void>;
+  customCategories?: { id: string; name: string }[];
 }) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
@@ -783,11 +788,20 @@ function TemplateDialog({
                     {v}
                   </button>
                 ))}
-                {!isIncome && (
-                  <button type="button" onClick={() => setCategory("__custom__")}
+                {!isIncome && customCategories.map(c => (
+                  <button key={c.id} type="button" onClick={() => { setCategory("__custom__"); setCustomLabel(c.name); }}
                     className={cn(
                       "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
-                      isCustom ? "bg-amber-500 text-white border-amber-500" : "border-dashed border-border text-muted-foreground hover:border-gray-400 hover:text-foreground"
+                      isCustom && customLabel === c.name ? "bg-amber-500 text-white border-amber-500" : "border-border text-muted-foreground hover:border-gray-400 hover:text-foreground"
+                    )}>
+                    {c.name}
+                  </button>
+                ))}
+                {!isIncome && (
+                  <button type="button" onClick={() => { setCategory("__custom__"); setCustomLabel(""); }}
+                    className={cn(
+                      "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
+                      isCustom && !customLabel ? "bg-amber-500 text-white border-amber-500" : "border-dashed border-border text-muted-foreground hover:border-gray-400 hover:text-foreground"
                     )}>
                     + Custom
                   </button>

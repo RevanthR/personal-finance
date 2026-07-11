@@ -11,7 +11,7 @@ export default async function TemplatesPage() {
   const curMonth = now.getMonth() + 1;
   const curYear = now.getFullYear();
 
-  const [templates, recentMonth, paidEntries] = await Promise.all([
+  const [templates, recentMonth, paidEntries, customCategories] = await Promise.all([
     db.lineItemTemplate.findMany({
       where: { userId: session.user.id },
       include: { chitFund: true },
@@ -29,6 +29,11 @@ export default async function TemplatesPage() {
       },
       select: { templateId: true },
     }),
+    db.customCategory.findMany({
+      where: { userId: session.user.id },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   const recentIncome = recentMonth && (recentMonth.salaryIncome + recentMonth.freelanceIncome + recentMonth.otherIncome) > 0
@@ -42,6 +47,7 @@ export default async function TemplatesPage() {
       templates={JSON.parse(JSON.stringify(templates))}
       recentIncome={recentIncome}
       paidTemplateIds={paidTemplateIds}
+      customCategories={customCategories}
     />
   );
 }

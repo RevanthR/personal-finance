@@ -5,6 +5,7 @@ import { Category, TemplateType } from "@/generated/prisma/client";
 import { revalidateTag } from "next/cache";
 import { templateCacheTag } from "@/lib/cached-queries";
 import { validate, TemplatePostSchema } from "@/lib/validation";
+import { resolveCustomCategory } from "@/lib/custom-category";
 
 export async function GET() {
   const session = await auth();
@@ -28,12 +29,14 @@ export async function POST(req: NextRequest) {
   const body = parsed.data;
 
   const isCustom = Boolean(body.customCategory);
+  const customCat = isCustom ? await resolveCustomCategory(session.user.id, body.customCategory!) : null;
   const template = await db.lineItemTemplate.create({
     data: {
       userId: session.user.id,
       name: body.name,
       category: (isCustom ? "MISCELLANEOUS" : body.category) as Category,
-      customCategory: isCustom ? body.customCategory : null,
+      customCategory: customCat?.name ?? null,
+      customCategoryId: customCat?.id ?? null,
       amount: body.amount,
       isFixed: body.isFixed ?? true,
       dueDateDay: body.dueDateDay ?? null,

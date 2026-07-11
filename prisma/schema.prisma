@@ -76,6 +76,21 @@ model User {
   receivables       Receivable[]
   pushSubscriptions PushSubscription[]
   payments          Payment[]
+  customCategories  CustomCategory[]
+}
+
+// User-defined expense categories, reused (not retyped) across templates
+// and ad-hoc items so a name can't drift into near-duplicates over time.
+model CustomCategory {
+  id         String             @id @default(cuid())
+  userId     String
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  createdAt  DateTime           @default(now())
+  templates  LineItemTemplate[]
+  adHocItems AdHocItem[]
+
+  @@unique([userId, name])
 }
 
 model Payment {
@@ -131,6 +146,8 @@ model LineItemTemplate {
   name             String
   category         Category
   customCategory   String?
+  customCategoryId String?
+  customCategoryRef CustomCategory? @relation(fields: [customCategoryId], references: [id], onDelete: SetNull)
   amount           Float
   isFixed          Boolean        @default(true)
   dueDateDay       Int?
@@ -156,6 +173,7 @@ model LineItemTemplate {
   entries          MonthlyEntry[]
   chitFund         ChitFund?
   creditCard       CreditCard?
+  adHocCharges     AdHocItem[]
 }
 
 // One record per calendar month per user
@@ -232,17 +250,23 @@ model CreditCard {
 
 // One-off income or expense for a month
 model AdHocItem {
-  id             String    @id @default(cuid())
-  monthId        String
-  month          Month     @relation(fields: [monthId], references: [id], onDelete: Cascade)
-  name           String
-  amount         Float
-  type           AdHocType
-  category       Category?
-  customCategory String?
-  date           DateTime
-  notes          String?
-  createdAt      DateTime  @default(now())
+  id                String          @id @default(cuid())
+  monthId           String
+  month             Month           @relation(fields: [monthId], references: [id], onDelete: Cascade)
+  name              String
+  amount            Float
+  type              AdHocType
+  category          Category?
+  customCategory    String?
+  customCategoryId  String?
+  customCategoryRef CustomCategory? @relation(fields: [customCategoryId], references: [id], onDelete: SetNull)
+  // Authoritative link for CC statement math — replaces parsing the card
+  // name out of the notes field, which broke if notes became user-editable.
+  ccTemplateId      String?
+  ccTemplate        LineItemTemplate? @relation(fields: [ccTemplateId], references: [id], onDelete: SetNull)
+  date              DateTime
+  notes             String?
+  createdAt         DateTime        @default(now())
 }
 
 enum ReceivableCategory {

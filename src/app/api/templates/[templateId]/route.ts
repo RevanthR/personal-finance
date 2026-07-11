@@ -5,6 +5,7 @@ import { Category } from "@/generated/prisma/client";
 import { revalidateTag } from "next/cache";
 import { templateCacheTag } from "@/lib/cached-queries";
 import { validate, TemplatePatchSchema } from "@/lib/validation";
+import { resolveCustomCategory } from "@/lib/custom-category";
 
 export async function PATCH(
   req: NextRequest,
@@ -20,6 +21,7 @@ export async function PATCH(
   const body = parsed.data;
 
   const isCustom = body.customCategory != null && body.customCategory !== "";
+  const customCat = isCustom ? await resolveCustomCategory(session.user.id, body.customCategory!) : null;
 
   try {
     await db.lineItemTemplate.updateMany({
@@ -28,7 +30,8 @@ export async function PATCH(
         ...(body.name     !== undefined && { name: body.name }),
         ...(body.category !== undefined && {
           category: (isCustom ? "MISCELLANEOUS" : body.category) as Category,
-          customCategory: isCustom ? body.customCategory : null,
+          customCategory: customCat?.name ?? null,
+          customCategoryId: customCat?.id ?? null,
         }),
         ...(body.amount       !== undefined && { amount: body.amount }),
         ...(body.isFixed      !== undefined && { isFixed: body.isFixed }),
