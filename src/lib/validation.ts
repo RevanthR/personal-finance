@@ -57,13 +57,19 @@ export const EntryPatchSchema = z.object({
 });
 
 export const AdHocPostSchema = z.object({
-  name:         zName,
-  amount:       z.number().finite().positive(),
-  type:         zAdHocType,
-  category:     zCategory.optional(),
-  date:         zDateStr,
-  notes:        zNotes,
-  ccTemplateId: z.string().optional(),
+  name:           zName,
+  amount:         z.number().finite().positive(),
+  type:           zAdHocType,
+  category:       zCategory.optional(),
+  customCategory: z.string().trim().max(50).optional().nullable(),
+  date:           zDateStr,
+  notes:          zNotes,
+  ccTemplateId:   z.string().optional(),
+});
+
+export const AdHocPatchSchema = z.object({
+  id:     z.string().min(1),
+  amount: z.number().finite().positive(),
 });
 
 export const TemplatePostSchema = z.object({

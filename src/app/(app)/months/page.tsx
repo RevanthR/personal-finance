@@ -276,7 +276,7 @@ export default async function MonthsPage() {
     }
     for (const a of cm.adHocItems) {
       if (a.type === "EXPENSE" && a.category !== "CREDIT_CARD") {
-        const cat = a.category ?? "MISCELLANEOUS";
+        const cat = a.customCategory ?? a.category ?? "MISCELLANEOUS";
         catMap.set(cat, (catMap.get(cat) ?? 0) + a.amount);
       }
     }
@@ -369,7 +369,7 @@ export default async function MonthsPage() {
   for (const m of fyActual) {
     for (const a of m.adHocItems) {
       if (a.type === "EXPENSE" && a.category !== "CREDIT_CARD") {
-        const key = a.category ?? "MISCELLANEOUS";
+        const key = a.customCategory ?? a.category ?? "MISCELLANEOUS";
         const ex = catMap.get(key);
         if (ex) ex.total += a.amount;
         else catMap.set(key, { total: a.amount, items: [] });
@@ -588,7 +588,7 @@ export default async function MonthsPage() {
     }
     for (const a of m.adHocItems) {
       if (a.type === "EXPENSE" && a.category !== "CREDIT_CARD") {
-        const key = a.category ?? "MISCELLANEOUS";
+        const key = a.customCategory ?? a.category ?? "MISCELLANEOUS";
         prevCatMap.set(key, (prevCatMap.get(key) ?? 0) + a.amount);
       }
     }

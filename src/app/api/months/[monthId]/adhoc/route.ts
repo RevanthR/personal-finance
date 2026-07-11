@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { AdHocType, Category } from "@/generated/prisma/client";
-import { validate, AdHocPostSchema } from "@/lib/validation";
+import { validate, AdHocPostSchema, AdHocPatchSchema } from "@/lib/validation";
 
 // Recompute statementAmount for a CC card from ALL remaining post-close adHocItems.
 // This is idempotent and self-healing regardless of past accumulation bugs.
@@ -61,6 +61,7 @@ export async function POST(
       amount: body.amount,
       type: body.type as AdHocType,
       category: body.category as Category | undefined,
+      customCategory: body.customCategory ?? null,
       date: new Date(body.date),
       notes: body.notes ?? null,
     },
@@ -109,6 +110,77 @@ export async function POST(
   }
 
   return NextResponse.json({ item, updatedEntry }, { status: 201 });
+}
+
+// PATCH /api/months/[monthId]/adhoc — amount-only edit.
+// Name/date/category/type/notes stay fixed via this route; delete + re-add
+// covers those (rare) cases without reopening the pre-close/post-close and
+// card-reassignment complexity that would come with editing them in place.
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ monthId: string }> }
+) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { monthId } = await params;
+
+  const parsed = validate(AdHocPatchSchema, await req.json());
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.data;
+
+  const existing = await db.adHocItem.findFirst({
+    where: { id: body.id, monthId, month: { userId: session.user.id } },
+  });
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const item = await db.adHocItem.update({
+    where: { id: body.id },
+    data: { amount: body.amount },
+  });
+
+  let updatedEntry: { id: string; amount: number; statementAmount: number | null } | null = null;
+
+  if (existing.category === "CREDIT_CARD" && existing.type === "EXPENSE") {
+    const cardName = existing.notes?.split(" · ")[0] ?? null;
+    const entry = await db.monthlyEntry.findFirst({
+      where: {
+        monthId,
+        template: {
+          category: "CREDIT_CARD",
+          userId: session.user.id,
+          ...(cardName ? { name: cardName } : {}),
+        },
+      },
+      select: {
+        id: true, amount: true, statementAmount: true, billedAmount: true,
+        template: { select: { statementDay: true } },
+      },
+    });
+
+    if (entry) {
+      const statementDay = entry.template.statementDay ?? null;
+      const expenseDay = new Date(existing.date).getDate();
+      const isPreClose = statementDay !== null && expenseDay <= statementDay;
+      const delta = body.amount - existing.amount;
+
+      if (isPreClose) {
+        updatedEntry = await db.monthlyEntry.update({
+          where: { id: entry.id },
+          data: {
+            amount: Math.max(0, entry.amount + delta),
+            billedAmount: Math.max(0, (entry.billedAmount ?? entry.amount) + delta),
+          },
+          select: { id: true, amount: true, statementAmount: true, billedAmount: true },
+        });
+      } else {
+        // item.amount is already updated above, so this re-sum picks up the new value
+        updatedEntry = await recomputeStatementAmount(monthId, entry.id, cardName, statementDay);
+      }
+    }
+  }
+
+  return NextResponse.json({ item, updatedEntry });
 }
 
 // DELETE /api/months/[monthId]/adhoc?id=xxx

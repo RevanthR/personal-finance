@@ -232,16 +232,17 @@ model CreditCard {
 
 // One-off income or expense for a month
 model AdHocItem {
-  id        String    @id @default(cuid())
-  monthId   String
-  month     Month     @relation(fields: [monthId], references: [id], onDelete: Cascade)
-  name      String
-  amount    Float
-  type      AdHocType
-  category  Category?
-  date      DateTime
-  notes     String?
-  createdAt DateTime  @default(now())
+  id             String    @id @default(cuid())
+  monthId        String
+  month          Month     @relation(fields: [monthId], references: [id], onDelete: Cascade)
+  name           String
+  amount         Float
+  type           AdHocType
+  category       Category?
+  customCategory String?
+  date           DateTime
+  notes          String?
+  createdAt      DateTime  @default(now())
 }
 
 enum ReceivableCategory {

@@ -37,7 +37,7 @@ interface AdHocDialogProps {
   onOpenChange: (open: boolean) => void;
   onAdd: (item: {
     name: string; amount: number; type: string;
-    category?: string; date: string; notes?: string; ccTemplateId?: string;
+    category?: string; customCategory?: string; date: string; notes?: string; ccTemplateId?: string;
   }) => Promise<void>;
   ccCards: CCCard[];
 }
@@ -45,6 +45,7 @@ interface AdHocDialogProps {
 export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogProps) {
   const [type, setType] = useState<"INCOME" | "EXPENSE">("EXPENSE");
   const [category, setCategory] = useState("");
+  const [customLabel, setCustomLabel] = useState("");
   const [ccCard, setCCCard] = useState<CCCard | null>(ccCards[0] ?? null);
   const [ccSpendCat, setCCSpendCat] = useState("");
   const [name, setName] = useState("");
@@ -54,9 +55,10 @@ export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogP
   const [loading, setLoading] = useState(false);
 
   const isCC = category === "CREDIT_CARD";
+  const isCustom = category === "__custom__";
 
   function reset() {
-    setType("EXPENSE"); setCategory(""); setCCCard(ccCards[0] ?? null);
+    setType("EXPENSE"); setCategory(""); setCustomLabel(""); setCCCard(ccCards[0] ?? null);
     setCCSpendCat(""); setName(""); setAmount("");
     setDate(format(new Date(), "yyyy-MM-dd")); setNotes("");
   }
@@ -64,6 +66,7 @@ export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogP
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name || !amount) return;
+    if (isCustom && !customLabel.trim()) return;
     setLoading(true);
 
     const notesStr = isCC
@@ -72,13 +75,14 @@ export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogP
 
     const resolvedCategory = type === "INCOME"
       ? (INCOME_SOURCES.find(s => s.value === category)?.dbCategory ?? undefined)
-      : (category || undefined);
+      : isCustom ? "MISCELLANEOUS" : (category || undefined);
 
     await onAdd({
       name,
       amount: parseFloat(amount),
       type,
       category: resolvedCategory,
+      customCategory: isCustom ? customLabel.trim() : undefined,
       date,
       notes: notesStr || undefined,
       ccTemplateId: isCC ? (ccCard?.templateId ?? undefined) : undefined,
@@ -128,7 +132,7 @@ export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogP
                 <button
                   key={c.value}
                   type="button"
-                  onClick={() => { setCategory(category === c.value ? "" : c.value); setCCSpendCat(""); }}
+                  onClick={() => { setCategory(category === c.value ? "" : c.value); setCCSpendCat(""); setCustomLabel(""); }}
                   className={cn(
                     "px-3 py-2 rounded-full text-sm font-medium border transition-colors",
                     category === c.value
@@ -139,7 +143,31 @@ export function AdHocDialog({ open, onOpenChange, onAdd, ccCards }: AdHocDialogP
                   {c.label}
                 </button>
               ))}
+              {type === "EXPENSE" && (
+                <button
+                  type="button"
+                  onClick={() => { setCategory("__custom__"); setCCSpendCat(""); }}
+                  className={cn(
+                    "px-3 py-2 rounded-full text-sm font-medium border transition-colors",
+                    isCustom
+                      ? "bg-zinc-900 text-white border-zinc-900"
+                      : "border-dashed border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"
+                  )}
+                >
+                  + Custom
+                </button>
+              )}
             </div>
+            {isCustom && (
+              <Input
+                className="mt-2"
+                placeholder="Category name (e.g. Gifts)"
+                value={customLabel}
+                onChange={e => setCustomLabel(e.target.value)}
+                autoFocus
+                required={isCustom}
+              />
+            )}
           </div>
 
           {/* CC sub-options */}
