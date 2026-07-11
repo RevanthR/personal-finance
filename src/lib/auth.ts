@@ -15,11 +15,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   events: {
     async createUser({ user }) {
-      // Give every new user a 3-day free trial
+      // Give every new user a 14-day free trial
       if (user.id) {
         await db.user.update({
           where: { id: user.id },
-          data: { trialEndsAt: addDays(new Date(), 3) },
+          data: { trialEndsAt: addDays(new Date(), 14) },
         });
       }
     },
