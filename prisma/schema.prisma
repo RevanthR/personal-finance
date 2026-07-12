@@ -77,6 +77,9 @@ model User {
   pushSubscriptions PushSubscription[]
   payments          Payment[]
   customCategories  CustomCategory[]
+  gmailConnection   GmailConnection?
+  parsedTransactions ParsedTransaction[]
+  gmailSeenMessages  GmailSeenMessage[]
 }
 
 // User-defined expense categories, reused (not retyped) across templates
@@ -245,6 +248,7 @@ model CreditCard {
   user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   bank         String?
   network      String?          // "Visa" | "Mastercard" | "Rupay" | "Amex"
+  last4        String?          // last 4 digits, used to auto-match Gmail-imported transactions
   createdAt    DateTime         @default(now())
 }
 
@@ -308,4 +312,72 @@ model PushSubscription {
   auth      String
   label     String?
   createdAt DateTime @default(now())
+}
+
+// ─── Gmail transaction import ──────────────────────────────────────────────
+
+// One per user — opt-in connection storing the OAuth token used to read
+// (read-only) bank transaction alert emails. Separate from the NextAuth
+// Account record so the sensitive gmail.readonly scope is only ever
+// requested when a user explicitly opts in from Settings, not at sign-in.
+model GmailConnection {
+  id           String    @id @default(cuid())
+  userId       String    @unique
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email        String?
+  accessToken  String    @db.Text
+  refreshToken String    @db.Text
+  tokenExpiry  DateTime
+  lastSyncAt   DateTime?
+  connectedAt  DateTime  @default(now())
+}
+
+enum ParsedTransactionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ParsedTransactionPaymentMethod {
+  CREDIT_CARD
+  UPI
+  DEBIT_CARD
+  OTHER
+}
+
+// A bank email Gemini identified as a transaction, awaiting the user's
+// review before it becomes a real AdHocItem (and, for credit cards, a
+// MonthlyEntry statement-math effect).
+model ParsedTransaction {
+  id                     String                          @id @default(cuid())
+  userId                 String
+  user                   User                            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gmailMessageId         String
+  bank                   String
+  amount                 Float
+  merchant               String?
+  last4                  String?
+  date                   DateTime
+  rawSnippet             String
+  status                 ParsedTransactionStatus         @default(PENDING)
+  paymentMethod          ParsedTransactionPaymentMethod  @default(CREDIT_CARD)
+  suggestedCcTemplateId  String?
+  suggestedSubcategory   String?
+  createdAt              DateTime                        @default(now())
+
+  @@unique([userId, gmailMessageId])
+}
+
+// Every Gmail message the sync has ever inspected, whether or not it turned
+// into a ParsedTransaction — prevents re-fetching and re-sending the same
+// non-transaction email (promos, OTPs, statements) to Gemini on every sync
+// for as long as it stays inside the search window.
+model GmailSeenMessage {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gmailMessageId String
+  createdAt      DateTime @default(now())
+
+  @@unique([userId, gmailMessageId])
 }

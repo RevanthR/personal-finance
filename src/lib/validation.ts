@@ -168,6 +168,17 @@ export const ChitPostSchema = z.object({
   endDate:              zDateStr.optional().nullable(),
 });
 
+export const ParsedTransactionPatchSchema = z.object({
+  action:         z.enum(["approve", "reject"]),
+  amount:         z.number().finite().positive().optional(),
+  date:           zDateStr.optional(),
+  ccTemplateId:   z.string().optional(),
+  category:       zCategory.optional(),
+  customCategory: z.string().trim().max(50).optional().nullable(),
+  merchant:       zName.optional(),
+  subcategory:    z.enum(["Food", "Coffee", "Groceries", "Fuel", "Shopping", "Travel", "Health", "Bills", "Entertainment", "Other"]).optional(),
+});
+
 export const PaymentOrderSchema = z.object({
   planType: zPlanType.exclude(["FREE"]),
 });

@@ -9,6 +9,7 @@ const CardPostSchema = z.object({
   name:         zName,
   bank:         z.string().trim().max(100).optional(),
   network:      z.enum(["Visa", "Mastercard", "Rupay", "Amex"]).optional(),
+  last4:        z.string().trim().regex(/^\d{4}$/).optional(),
   statementDay: zDay.optional(),
   dueDateDay:   zDay.optional(),
 });
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
 
   const parsed = validate(CardPostSchema, await req.json());
   if (!parsed.ok) return parsed.response;
-  const { name, bank, network, statementDay, dueDateDay } = parsed.data;
+  const { name, bank, network, last4, statementDay, dueDateDay } = parsed.data;
 
   const template = await db.lineItemTemplate.create({
     data: {
@@ -61,6 +62,7 @@ export async function POST(req: NextRequest) {
       userId:     session.user.id,
       bank:       bank    ?? null,
       network:    network ?? null,
+      last4:      last4   ?? null,
     },
     include: {
       template: {

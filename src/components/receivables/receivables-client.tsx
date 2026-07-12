@@ -31,7 +31,7 @@ type CCEntry = {
 };
 
 type CCCard = {
-  id: string; bank: string | null; network: string | null;
+  id: string; bank: string | null; network: string | null; last4: string | null;
   template: { id: string; name: string; isActive: boolean; statementDay: number | null; dueDateDay: number | null };
   currentEntry: CCEntry | null;
 };
@@ -63,6 +63,14 @@ interface Props {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const NETWORKS = ["Visa", "Mastercard", "Rupay", "Amex"] as const;
+
+const BANKS = [
+  "Axis Bank", "HDFC Bank", "ICICI Bank", "State Bank of India", "Kotak Mahindra Bank",
+  "IndusInd Bank", "Federal Bank", "IDFC FIRST Bank", "Yes Bank", "RBL Bank",
+  "Standard Chartered", "Citibank", "American Express", "Bank of Baroda",
+  "Punjab National Bank", "Canara Bank", "IDBI Bank", "AU Small Finance Bank",
+  "Bandhan Bank", "HSBC", "Other",
+] as const;
 const RECV_LABELS: Record<string, string> = { INVESTMENT: "Investment", PERSONAL_LOAN: "Personal Loan", CUSTOM: "Custom" };
 const RECV_COLORS: Record<string, string> = {
   INVESTMENT: "bg-emerald-50 text-emerald-700 border border-emerald-200",
@@ -79,11 +87,13 @@ type RecvTab = "pending" | "received";
 function AddCardDialog({ open, onOpenChange, onAdd }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onAdd: (data: { name: string; bank?: string; network?: string; statementDay?: number; dueDateDay?: number }) => Promise<void>;
+  onAdd: (data: { name: string; bank?: string; network?: string; last4?: string; statementDay?: number; dueDateDay?: number }) => Promise<void>;
 }) {
   const [name, setName]         = useState("");
   const [bank, setBank]         = useState("");
+  const [bankOther, setBankOther] = useState("");
   const [network, setNetwork]   = useState("");
+  const [last4, setLast4]       = useState("");
   const [stmtDay, setStmtDay]   = useState("");
   const [dueDay, setDueDay]     = useState("");
   const [saving, setSaving]     = useState(false);
@@ -91,16 +101,18 @@ function AddCardDialog({ open, onOpenChange, onAdd }: {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
+    const bankValue = bank === "Other" ? bankOther.trim() : bank;
     setSaving(true);
     try {
       await onAdd({
         name: name.trim(),
-        ...(bank.trim()    && { bank: bank.trim() }),
+        ...(bankValue      && { bank: bankValue }),
         ...(network        && { network }),
+        ...(last4.trim()   && { last4: last4.trim() }),
         ...(stmtDay        && { statementDay: parseInt(stmtDay) }),
         ...(dueDay         && { dueDateDay:   parseInt(dueDay)  }),
       });
-      setName(""); setBank(""); setNetwork(""); setStmtDay(""); setDueDay("");
+      setName(""); setBank(""); setBankOther(""); setNetwork(""); setLast4(""); setStmtDay(""); setDueDay("");
     } finally { setSaving(false); }
   }
 
@@ -116,7 +128,11 @@ function AddCardDialog({ open, onOpenChange, onAdd }: {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Bank (optional)</Label>
-              <Input value={bank} onChange={e => setBank(e.target.value)} placeholder="Axis" className="mt-1" />
+              <select value={bank} onChange={e => setBank(e.target.value)}
+                className="mt-1 w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                <option value="">Select</option>
+                {BANKS.map(b => <option key={b} value={b}>{b}</option>)}
+              </select>
             </div>
             <div>
               <Label className="text-xs">Network</Label>
@@ -126,6 +142,16 @@ function AddCardDialog({ open, onOpenChange, onAdd }: {
                 {NETWORKS.map(n => <option key={n} value={n}>{n}</option>)}
               </select>
             </div>
+            {bank === "Other" && (
+              <div className="col-span-2">
+                <Label className="text-xs">Bank name</Label>
+                <Input value={bankOther} onChange={e => setBankOther(e.target.value)} placeholder="Bank name" className="mt-1" autoFocus />
+              </div>
+            )}
+          </div>
+          <div>
+            <Label className="text-xs">Last 4 digits <span className="text-muted-foreground">(optional, helps auto-match imported transactions)</span></Label>
+            <Input value={last4} onChange={e => setLast4(e.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="1234" className="mt-1" maxLength={4} inputMode="numeric" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -162,7 +188,7 @@ function CCCardTile({ card, fmt, onEntryUpdate, onDelete, onMetaUpdate }: {
   currentMonthLabel: string;
   onEntryUpdate: (cardTemplateId: string, updates: { amount?: number; billedAmount?: number; isPaid?: boolean }) => Promise<void>;
   onDelete: (cardId: string) => void;
-  onMetaUpdate: (cardId: string, updates: { statementDay?: number | null; dueDateDay?: number | null }) => Promise<void>;
+  onMetaUpdate: (cardId: string, updates: { statementDay?: number | null; dueDateDay?: number | null; bank?: string | null; network?: string | null; last4?: string | null }) => Promise<void>;
 }) {
   const entry   = card.currentEntry;
   const billed  = entry ? (entry.billedAmount ?? entry.amount) : null;
@@ -178,6 +204,26 @@ function CCCardTile({ card, fmt, onEntryUpdate, onDelete, onMetaUpdate }: {
   const [stmtInput, setStmtInput]         = useState(String(card.template.statementDay ?? ""));
   const [dueInput, setDueInput]           = useState(String(card.template.dueDateDay ?? ""));
   const [savingDates, setSavingDates]     = useState(false);
+  const [editingDetails, setEditingDetails] = useState(false);
+  const isKnownBank = !!card.bank && (BANKS as readonly string[]).includes(card.bank);
+  const [bankInput, setBankInput]         = useState(isKnownBank ? card.bank! : (card.bank ? "Other" : ""));
+  const [bankOtherInput, setBankOtherInput] = useState(isKnownBank ? "" : (card.bank ?? ""));
+  const [networkInput, setNetworkInput]   = useState(card.network ?? "");
+  const [last4Input, setLast4Input]       = useState(card.last4 ?? "");
+  const [savingDetails, setSavingDetails] = useState(false);
+
+  async function handleSaveDetails() {
+    const bankValue = bankInput === "Other" ? bankOtherInput.trim() : bankInput;
+    setSavingDetails(true);
+    try {
+      await onMetaUpdate(card.id, {
+        bank: bankValue || null,
+        network: networkInput || null,
+        last4: last4Input.trim() || null,
+      });
+      setEditingDetails(false);
+    } finally { setSavingDetails(false); }
+  }
 
   async function handleSaveDates() {
     setSavingDates(true);
@@ -214,13 +260,18 @@ function CCCardTile({ card, fmt, onEntryUpdate, onDelete, onMetaUpdate }: {
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="text-sm font-semibold">{card.template.name}</p>
-            <div className="flex items-center gap-2 mt-0.5">
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
               {card.bank && <p className="text-xs text-muted-foreground">{card.bank}</p>}
               {card.network && (
                 <span className={cn("text-xs font-medium px-1.5 py-0.5 rounded border", accent?.badge ?? "bg-zinc-50 text-zinc-600 border-zinc-200")}>
                   {card.network}
                 </span>
               )}
+              {card.last4 && <p className="text-xs text-muted-foreground">•• {card.last4}</p>}
+              <button onClick={() => setEditingDetails(v => !v)}
+                className="text-muted-foreground/40 hover:text-foreground transition-colors">
+                <Pencil className="w-3 h-3" />
+              </button>
             </div>
           </div>
           {confirmDelete ? (
@@ -241,6 +292,48 @@ function CCCardTile({ card, fmt, onEntryUpdate, onDelete, onMetaUpdate }: {
             </button>
           )}
         </div>
+
+        {editingDetails && (
+          <div className="space-y-2 pb-1 border-b border-border/50">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs">Bank</Label>
+                <select value={bankInput} onChange={e => setBankInput(e.target.value)}
+                  className="mt-1 w-full h-9 rounded-md border border-input bg-background px-3 text-sm">
+                  <option value="">Select</option>
+                  {BANKS.map(b => <option key={b} value={b}>{b}</option>)}
+                </select>
+              </div>
+              <div>
+                <Label className="text-xs">Network</Label>
+                <select value={networkInput} onChange={e => setNetworkInput(e.target.value)}
+                  className="mt-1 w-full h-9 rounded-md border border-input bg-background px-3 text-sm">
+                  <option value="">Select</option>
+                  {NETWORKS.map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+            </div>
+            {bankInput === "Other" && (
+              <div>
+                <Label className="text-xs">Bank name</Label>
+                <Input value={bankOtherInput} onChange={e => setBankOtherInput(e.target.value)} placeholder="Bank name" className="mt-1 h-9" autoFocus />
+              </div>
+            )}
+            <div>
+              <Label className="text-xs">Last 4 digits <span className="text-muted-foreground">(helps auto-match imported transactions)</span></Label>
+              <Input value={last4Input} onChange={e => setLast4Input(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                placeholder="1234" maxLength={4} inputMode="numeric" className="mt-1 h-9" />
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={handleSaveDetails} disabled={savingDetails} className="flex-1 h-9">
+                {savingDetails ? "Saving…" : "Save"}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setEditingDetails(false)} className="flex-1 h-9">
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Bill amount area */}
         {settingBill ? (
@@ -273,6 +366,11 @@ function CCCardTile({ card, fmt, onEntryUpdate, onDelete, onMetaUpdate }: {
               </>
             ) : (
               <p className="text-sm text-muted-foreground/60 italic">No bill set yet</p>
+            )}
+            {!!entry?.statementAmount && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Next statement so far: <span className="font-medium text-foreground">{fmt(entry.statementAmount)}</span>
+              </p>
             )}
           </div>
         )}
@@ -386,7 +484,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
 
   // ── Card handlers ──────────────────────────────────────────────────────────
 
-  async function handleAddCard(data: { name: string; bank?: string; network?: string; statementDay?: number; dueDateDay?: number }) {
+  async function handleAddCard(data: { name: string; bank?: string; network?: string; last4?: string; statementDay?: number; dueDateDay?: number }) {
     const res = await fetch("/api/credit-cards", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
     if (!res.ok) { toast.error("Failed to add card"); return; }
     const newCard = await res.json();
@@ -416,18 +514,18 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
     toast.success("Card removed");
   }
 
-  async function handleCardMetaUpdate(cardId: string, updates: { statementDay?: number | null; dueDateDay?: number | null }) {
+  async function handleCardMetaUpdate(cardId: string, updates: { statementDay?: number | null; dueDateDay?: number | null; bank?: string | null; network?: string | null; last4?: string | null }) {
     const res = await fetch(`/api/credit-cards/${cardId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(updates),
     });
-    if (!res.ok) { toast.error("Failed to update dates"); return; }
+    if (!res.ok) { toast.error("Failed to update card"); return; }
     const updated = await res.json();
     setCards(prev => prev.map(c => c.id === cardId
-      ? { ...c, template: { ...c.template, statementDay: updated.template.statementDay, dueDateDay: updated.template.dueDateDay } }
+      ? { ...c, bank: updated.bank, network: updated.network, last4: updated.last4, template: { ...c.template, statementDay: updated.template.statementDay, dueDateDay: updated.template.dueDateDay } }
       : c));
-    toast.success("Dates updated");
+    toast.success("Card updated");
   }
 
   // ── Chit handlers ──────────────────────────────────────────────────────────

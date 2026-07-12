@@ -9,6 +9,7 @@ const CardPatchSchema = z.object({
   name:         zName.optional(),
   bank:         z.string().trim().max(100).nullable().optional(),
   network:      z.enum(["Visa", "Mastercard", "Rupay", "Amex"]).nullable().optional(),
+  last4:        z.string().trim().regex(/^\d{4}$/).nullable().optional(),
   statementDay: zDay.nullable().optional(),
   dueDateDay:   zDay.nullable().optional(),
   isActive:     z.boolean().optional(),
@@ -32,7 +33,7 @@ export async function PATCH(
 
   const parsed = validate(CardPatchSchema, await req.json());
   if (!parsed.ok) return parsed.response;
-  const { name, bank, network, statementDay, dueDateDay, isActive } = parsed.data;
+  const { name, bank, network, last4, statementDay, dueDateDay, isActive } = parsed.data;
 
   // Update template fields (name, statementDay, dueDateDay, isActive)
   if (name !== undefined || statementDay !== undefined || dueDateDay !== undefined || isActive !== undefined) {
@@ -52,6 +53,7 @@ export async function PATCH(
     data: {
       ...(bank    !== undefined && { bank:    bank    ?? null }),
       ...(network !== undefined && { network: network ?? null }),
+      ...(last4   !== undefined && { last4:   last4   ?? null }),
     },
     include: {
       template: {

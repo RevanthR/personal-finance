@@ -1,0 +1,60 @@
+import { auth } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { redirect } from "next/navigation";
+import { ImportsClient } from "@/components/imports/imports-client";
+import { findExistingMatches, findParsedTransactionDuplicates } from "@/lib/gmail/dedupe";
+
+export default async function ImportsPage() {
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
+  const userId = session.user.id;
+
+  const [gmailConnection, ccTemplates, customCategories, pending] = await Promise.all([
+    db.gmailConnection.findUnique({ where: { userId } }),
+    db.lineItemTemplate.findMany({
+      where: { userId, category: "CREDIT_CARD", isActive: true },
+      select: { id: true, name: true },
+      orderBy: { sortOrder: "asc" },
+    }),
+    db.customCategory.findMany({
+      where: { userId },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    db.parsedTransaction.findMany({
+      where: { userId, status: "PENDING" },
+      orderBy: { date: "desc" },
+    }),
+  ]);
+
+  const matches = await findExistingMatches(
+    userId,
+    pending.map(p => ({ id: p.id, date: p.date, amount: p.amount })),
+  );
+  const dupes = findParsedTransactionDuplicates(
+    pending.map(p => ({ id: p.id, date: p.date, amount: p.amount, last4: p.last4, merchant: p.merchant, bank: p.bank, createdAt: p.createdAt })),
+  );
+
+  const gmail = {
+    connected: !!gmailConnection,
+    connectedEmail: gmailConnection?.email ?? null,
+    lastSyncAt: gmailConnection?.lastSyncAt?.toISOString() ?? null,
+    ccCards: ccTemplates.map(t => ({ templateId: t.id, name: t.name })),
+    customCategories,
+    pending: pending.map(p => ({
+      id: p.id,
+      bank: p.bank,
+      amount: p.amount,
+      merchant: p.merchant,
+      last4: p.last4,
+      date: p.date.toISOString(),
+      rawSnippet: p.rawSnippet,
+      paymentMethod: p.paymentMethod,
+      suggestedCcTemplateId: p.suggestedCcTemplateId,
+      suggestedSubcategory: p.suggestedSubcategory,
+      possibleMatch: matches.get(p.id) ?? dupes.get(p.id) ?? null,
+    })),
+  };
+
+  return <ImportsClient gmail={JSON.parse(JSON.stringify(gmail))} />;
+}

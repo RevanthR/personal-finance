@@ -151,6 +151,19 @@ export function SettingsClient({ user }: SettingsClientProps) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Gmail transaction import lives on its own page now */}
+      <Card>
+        <CardContent className="flex items-center justify-between py-4">
+          <div>
+            <p className="text-sm font-medium">Bank transaction import</p>
+            <p className="text-xs text-muted-foreground">Connect Gmail and review imported transactions</p>
+          </div>
+          <Button asChild size="sm" variant="outline">
+            <a href="/imports">Open Imports</a>
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   );
 }

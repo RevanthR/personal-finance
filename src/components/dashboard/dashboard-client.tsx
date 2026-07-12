@@ -142,11 +142,6 @@ function parseCCSubcat(notes: string | null): string {
   return "Other";
 }
 
-function parseCCCardName(notes: string | null): string | null {
-  if (!notes) return null;
-  return notes.split(" · ")[0] ?? null;
-}
-
 function CCSubcatBreakdown({ txItems, onDelete, onEditRequest, removingIds }: { txItems: AdHocItem[]; onDelete: (id: string) => void; onEditRequest?: (item: AdHocItem) => void; removingIds: Set<string> }) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
@@ -1161,8 +1156,8 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                     ))}
                     {entryItems.map(item => {
                       if (isCC) {
-                        const cardName = item.data.template.name;
-                        const cardTxs = txItems.filter(t => parseCCCardName(t.notes) === cardName);
+                        const cardTemplateId = item.data.templateId;
+                        const cardTxs = txItems.filter(t => t.ccTemplateId === cardTemplateId);
                         return (
                           <CCCardBlock
                             key={item.data.id}
@@ -1188,8 +1183,8 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
 
                     {/* Orphaned CC transactions */}
                     {isCC && (() => {
-                      const entryNames = new Set(entryItems.map(i => i.data.template.name));
-                      const orphaned = txItems.filter(t => !entryNames.has(parseCCCardName(t.notes) ?? ""));
+                      const entryTemplateIds = new Set(entryItems.map(i => i.data.templateId));
+                      const orphaned = txItems.filter(t => !t.ccTemplateId || !entryTemplateIds.has(t.ccTemplateId));
                       return orphaned.length > 0 ? (
                         <div className="mt-2 rounded-xl border border-dashed border-border px-3 py-2">
                           <p className="text-xs text-muted-foreground mb-1.5">Unmatched transactions</p>
