@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -27,37 +27,26 @@ const navItems = [
 
 interface SidebarProps {
   isAdmin: boolean;
+  importsBadge?: number;
 }
 
-export function Sidebar({ isAdmin }: SidebarProps) {
+export function Sidebar({ isAdmin, importsBadge = 0 }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
-  const [importsBadge, setImportsBadge] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/gmail/parsed?countOnly=1")
-      .then(res => res.ok ? res.json() : null)
-      .then(data => { if (data && !cancelled) setImportsBadge(data.count ?? 0); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [pathname]);
 
   // Once per mount, not per navigation: no-ops server-side unless it's
   // been 4h+ since the last sync, but still no reason to hit it on every
-  // route change.
+  // route change. router.refresh() re-runs the server layout that computes
+  // importsBadge, rather than fetching a second, independently-stale copy
+  // of the same count here — that mismatch is exactly what caused the
+  // badge to go stale after approving/rejecting on the imports page.
   useEffect(() => {
     fetch("/api/gmail/sync/maybe", { method: "POST" })
       .then(res => res.ok ? res.json() : null)
-      .then(data => {
-        if (data?.ran) {
-          fetch("/api/gmail/parsed?countOnly=1")
-            .then(res => res.ok ? res.json() : null)
-            .then(d => d && setImportsBadge(d.count ?? 0))
-            .catch(() => {});
-        }
-      })
+      .then(data => { if (data?.ran) router.refresh(); })
       .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

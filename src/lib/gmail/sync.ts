@@ -53,8 +53,9 @@ function extractPlainText(payload: gmail_v1.Schema$MessagePart | undefined): str
 }
 
 type SyncResult = { synced: number; skipped: number; failed: number; error?: string };
+type ProgressCallback = (processed: number, total: number) => void;
 
-export async function syncGmailForUser(userId: string): Promise<SyncResult> {
+export async function syncGmailForUser(userId: string, onProgress?: ProgressCallback): Promise<SyncResult> {
   const gmail = await getGmailClientForUser(userId);
   if (!gmail) return { synced: 0, skipped: 0, failed: 0, error: "Gmail not connected" };
 
@@ -80,9 +81,10 @@ export async function syncGmailForUser(userId: string): Promise<SyncResult> {
   let synced = 0;
   let skipped = 0;
   let failed = 0;
+  let processed = 0;
 
   for (const id of candidateIds) {
-    if (seenIds.has(id)) { skipped++; continue; }
+    if (seenIds.has(id)) { skipped++; processed++; onProgress?.(processed, candidateIds.length); continue; }
 
     try {
       const full = await gmail.users.messages.get({ userId: "me", id, format: "full" });
@@ -125,6 +127,9 @@ export async function syncGmailForUser(userId: string): Promise<SyncResult> {
       // isn't marked "seen", so it's retried on the next sync.
       failed++;
       console.error(`[gmail-sync] failed on message ${id}:`, err instanceof Error ? err.message : err);
+    } finally {
+      processed++;
+      onProgress?.(processed, candidateIds.length);
     }
   }
 

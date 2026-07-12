@@ -59,6 +59,7 @@ interface ImportsClientProps {
 export function ImportsClient({ gmail }: ImportsClientProps) {
   const router = useRouter();
   const [syncing, setSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<{ processed: number; total: number } | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
 
   const grouped = useMemo(() => {
@@ -73,19 +74,45 @@ export function ImportsClient({ gmail }: ImportsClientProps) {
 
   async function handleSync() {
     setSyncing(true);
+    setSyncProgress(null);
     try {
       const res = await fetch("/api/gmail/sync", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error ?? "Sync failed");
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => null);
+        toast.error(data?.error ?? "Sync failed");
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let final: { type: string; synced?: number; error?: string } | null = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const msg = JSON.parse(line);
+          if (msg.type === "progress") setSyncProgress({ processed: msg.processed, total: msg.total });
+          else final = msg;
+        }
+      }
+
+      if (!final || final.type === "error") {
+        toast.error(final?.error ?? "Sync failed");
       } else {
-        toast.success(data.synced > 0 ? `Found ${data.synced} new transaction${data.synced === 1 ? "" : "s"}` : "No new transactions");
+        toast.success((final.synced ?? 0) > 0 ? `Found ${final.synced} new transaction${final.synced === 1 ? "" : "s"}` : "No new transactions");
         router.refresh();
       }
     } catch {
       toast.error("Sync failed");
     } finally {
       setSyncing(false);
+      setSyncProgress(null);
     }
   }
 
@@ -137,6 +164,25 @@ export function ImportsClient({ gmail }: ImportsClientProps) {
                   {disconnecting ? "Disconnecting..." : "Disconnect"}
                 </Button>
               </div>
+              {syncing && (
+                <div className="space-y-1">
+                  <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-zinc-900 transition-all duration-300 ease-out"
+                      style={{
+                        width: syncProgress
+                          ? `${Math.round((syncProgress.processed / Math.max(syncProgress.total, 1)) * 100)}%`
+                          : "6%",
+                      }}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {syncProgress
+                      ? `Checking email ${syncProgress.processed} of ${syncProgress.total}...`
+                      : "Searching your inbox..."}
+                  </p>
+                </div>
+              )}
             </div>
           ) : (
             <Button size="sm" onClick={() => { window.location.href = "/api/gmail/connect"; }}>
