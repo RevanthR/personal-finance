@@ -1,8 +1,14 @@
 import { google } from "googleapis";
 import { db } from "@/lib/db";
 
+// gmail.modify (superset of readonly — read + label/trash, still no send)
+// is required for users.watch() to succeed: Google's Gmail API rejects
+// that call with a 403 ACCESS_TOKEN_SCOPE_INSUFFICIENT under gmail.readonly
+// alone, despite docs suggesting readonly should be enough. Confirmed
+// directly against the live API. Nothing in this app's code performs any
+// write/modify action, this scope is requested solely to satisfy watch().
 export const GMAIL_SCOPES = [
-  "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/gmail.modify",
   "https://www.googleapis.com/auth/userinfo.email",
 ];
 
