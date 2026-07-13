@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -15,7 +15,7 @@ import {
   Sparkles,
   Inbox,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -32,7 +32,27 @@ interface SidebarProps {
 
 export function Sidebar({ isAdmin, importsBadge = 0 }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
+
+  // The sidebar (and its badge count) is present on every authenticated
+  // page, but sync now happens silently in the background via push
+  // notifications — nothing tells the client it happened. Present here
+  // (not just on /imports) so the badge stays live regardless of which
+  // page you're on when a background sync lands.
+  useEffect(() => {
+    const interval = setInterval(() => router.refresh(), 20_000);
+    const onFocus = () => router.refresh();
+    const onVisibilityChange = () => { if (document.visibilityState === "visible") router.refresh(); };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("focus", onFocus);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <>

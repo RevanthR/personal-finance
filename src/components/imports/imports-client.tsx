@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -101,24 +101,9 @@ export function ImportsClient({ gmail }: ImportsClientProps) {
   const [syncProgress, setSyncProgress] = useState<{ processed: number; total: number } | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
 
-  // Sync now happens server-side in the background (push notifications,
-  // renewal cron) with nothing on this page to tell the client it happened —
-  // so this page polls lightly, and refreshes immediately when the app
-  // regains focus (the common PWA case: background it, a push-triggered
-  // sync runs, reopen it and expect it to already be current).
-  useEffect(() => {
-    const interval = setInterval(() => router.refresh(), 20_000);
-    const onFocus = () => router.refresh();
-    const onVisibilityChange = () => { if (document.visibilityState === "visible") router.refresh(); };
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    window.addEventListener("focus", onFocus);
-    return () => {
-      clearInterval(interval);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-      window.removeEventListener("focus", onFocus);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Live-refresh (polling + focus/visibility) now lives in Sidebar, since
+  // it's present on every page and this page is rendered inside it — no
+  // need for a second, redundant effect here.
 
   const grouped = useMemo(() => {
     const byDay = new Map<string, ParsedTransactionItem[]>();
