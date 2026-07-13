@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { getOAuthClient } from "@/lib/gmail/client";
+import { startWatch } from "@/lib/gmail/watch";
 import { google } from "googleapis";
 
 // GET /api/gmail/callback — Google redirects here after consent.
@@ -48,6 +49,11 @@ export async function GET(req: NextRequest) {
   } catch {
     return NextResponse.redirect(new URL("/settings?gmail=error", req.url));
   }
+
+  // Best-effort: push notifications are a fast-path on top of the existing
+  // lazy poll, not a hard requirement — a failure here (e.g. GMAIL_PUBSUB_TOPIC
+  // not configured yet) must not block the connection itself.
+  void startWatch(session.user.id);
 
   const res = NextResponse.redirect(new URL("/settings?gmail=connected", req.url));
   res.cookies.delete("gmail_oauth_state");

@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextResponse } from "next/server";
 import { getOAuthClient } from "@/lib/gmail/client";
+import { stopWatch } from "@/lib/gmail/watch";
 
 // DELETE /api/gmail/disconnect
 export async function DELETE() {
@@ -10,6 +11,7 @@ export async function DELETE() {
 
   const conn = await db.gmailConnection.findUnique({ where: { userId: session.user.id } });
   if (conn) {
+    await stopWatch(session.user.id);
     try {
       const oauth2Client = getOAuthClient();
       await oauth2Client.revokeToken(conn.refreshToken);

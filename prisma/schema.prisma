@@ -330,6 +330,8 @@ model GmailConnection {
   tokenExpiry  DateTime
   lastSyncAt   DateTime?
   connectedAt  DateTime  @default(now())
+  historyId       String?
+  watchExpiration DateTime?
 }
 
 enum ParsedTransactionStatus {

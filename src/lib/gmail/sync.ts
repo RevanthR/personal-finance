@@ -56,6 +56,27 @@ function extractPlainText(payload: gmail_v1.Schema$MessagePart | undefined): str
 type SyncResult = { synced: number; skipped: number; failed: number; error?: string };
 type ProgressCallback = (processed: number, total: number) => void;
 
+// How many messages to process at once. Each message is fully independent
+// (its own Gmail fetch, Gemini call, and DB rows) so this is safe to run
+// concurrently — no shared mutable state besides the plain counters below,
+// and JS's single-threaded event loop makes a bare `counter++` safe across
+// concurrent async work as long as no `await` splits the read and write.
+const CONCURRENCY = 4;
+
+// Dependency-free worker pool: each worker pulls the next index off a
+// shared cursor until the list is exhausted. No ordering guarantee across
+// items, which is fine — onProgress only reports a count, not identity.
+async function runPool<T>(items: T[], concurrency: number, worker: (item: T) => Promise<void>): Promise<void> {
+  let cursor = 0;
+  async function runWorker() {
+    while (cursor < items.length) {
+      const item = items[cursor++];
+      await worker(item);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, runWorker));
+}
+
 // Bank alert emails only ever show the foreign-currency amount, the actual
 // INR-converted figure (with the bank's forex markup) is only known after
 // settlement, a day or two later. Resolves the best available INR estimate
@@ -92,8 +113,9 @@ async function resolveInrAmount(
 }
 
 export async function syncGmailForUser(userId: string, onProgress?: ProgressCallback): Promise<SyncResult> {
-  const gmail = await getGmailClientForUser(userId);
-  if (!gmail) return { synced: 0, skipped: 0, failed: 0, error: "Gmail not connected" };
+  const gmailClient = await getGmailClientForUser(userId);
+  if (!gmailClient) return { synced: 0, skipped: 0, failed: 0, error: "Gmail not connected" };
+  const gmail = gmailClient; // non-null, closed over by processOne() below
 
   const list = await gmail.users.messages.list({ userId: "me", q: SEARCH_QUERY, maxResults: 25 });
   const messages = list.data.messages ?? [];
@@ -119,22 +141,24 @@ export async function syncGmailForUser(userId: string, onProgress?: ProgressCall
   let failed = 0;
   let processed = 0;
 
-  for (const id of candidateIds) {
-    if (seenIds.has(id)) { skipped++; processed++; onProgress?.(processed, candidateIds.length); continue; }
+  async function processOne(id: string): Promise<void> {
+    if (seenIds.has(id)) { skipped++; processed++; onProgress?.(processed, candidateIds.length); return; }
 
     try {
       const full = await gmail.users.messages.get({ userId: "me", id, format: "full" });
       const text = extractPlainText(full.data.payload ?? undefined) || full.data.snippet || "";
-      if (!text) { skipped++; continue; }
+      if (!text) { skipped++; return; }
 
       const extracted = await extractTransaction(text);
 
-      // Mark as inspected regardless of outcome — a "not a transaction"
-      // result is still a completed inspection, not a transient failure,
-      // so it must not be re-fetched/re-sent to Gemini next sync.
-      await db.gmailSeenMessage.create({ data: { userId, gmailMessageId: id } });
-
-      if (!extracted) { skipped++; continue; }
+      if (!extracted) {
+        // "Not a transaction" is a completed inspection, not a transient
+        // failure — safe to mark seen immediately so it's never re-sent to
+        // Gemini next sync.
+        await db.gmailSeenMessage.create({ data: { userId, gmailMessageId: id } });
+        skipped++;
+        return;
+      }
 
       const paymentMethod = PAYMENT_METHOD_MAP[extracted.paymentMethod ?? "other"] ?? "OTHER";
       const suggestedCcTemplateId = paymentMethod === "CREDIT_CARD"
@@ -159,6 +183,11 @@ export async function syncGmailForUser(userId: string, onProgress?: ProgressCall
           suggestedSubcategory: extracted.subcategory,
         },
       });
+      // Only mark seen once the transaction is actually persisted — if the
+      // write above throws, this is skipped and the catch block below
+      // deliberately leaves it unseen so it's retried next sync, instead of
+      // being silently and permanently lost.
+      await db.gmailSeenMessage.create({ data: { userId, gmailMessageId: id } });
       synced++;
     } catch (err) {
       // A transient failure (Gmail/Gemini timeout, network error) on one
@@ -171,6 +200,8 @@ export async function syncGmailForUser(userId: string, onProgress?: ProgressCall
       onProgress?.(processed, candidateIds.length);
     }
   }
+
+  await runPool(candidateIds, CONCURRENCY, processOne);
 
   await db.gmailConnection.update({ where: { userId }, data: { lastSyncAt: new Date() } });
 
