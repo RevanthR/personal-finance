@@ -50,10 +50,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL("/settings?gmail=error", req.url));
   }
 
-  // Best-effort: push notifications are a fast-path on top of the existing
-  // lazy poll, not a hard requirement — a failure here (e.g. GMAIL_PUBSUB_TOPIC
-  // not configured yet) must not block the connection itself.
-  void startWatch(session.user.id);
+  // Best-effort and non-fatal (a failure here, e.g. GMAIL_PUBSUB_TOPIC not
+  // configured yet, must not block the connection itself) — but must be
+  // awaited: on Vercel's serverless runtime, an un-awaited "fire and forget"
+  // call can get frozen mid-flight the moment the response below is sent,
+  // before the Gmail watch() call and its DB write ever complete.
+  try {
+    await startWatch(session.user.id);
+  } catch {
+    // startWatch() already logs its own errors — nothing further to do.
+  }
 
   const res = NextResponse.redirect(new URL("/settings?gmail=connected", req.url));
   res.cookies.delete("gmail_oauth_state");
