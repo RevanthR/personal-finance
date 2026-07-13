@@ -146,7 +146,7 @@ export function ImportsClient({ gmail }: ImportsClientProps) {
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
-        <h1 className="text-2xl font-bold">Bank Imports</h1>
+        <h1 className="text-2xl font-bold">Sync</h1>
         <p className="text-sm text-muted-foreground">Transactions found in your Gmail, ready to review</p>
       </div>
 

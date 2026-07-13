@@ -160,7 +160,7 @@ export function SettingsClient({ user }: SettingsClientProps) {
             <p className="text-xs text-muted-foreground">Connect Gmail and review imported transactions</p>
           </div>
           <Button asChild size="sm" variant="outline">
-            <a href="/imports">Open Imports</a>
+            <a href="/imports">Open Sync</a>
           </Button>
         </CardContent>
       </Card>

@@ -20,9 +20,9 @@ import { useEffect, useState } from "react";
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/months", label: "Year View", mobileLabel: "Year", icon: Calendar },
-  { href: "/receivables", label: "Accounts", icon: CreditCard },
-  { href: "/imports", label: "Bank Imports", mobileLabel: "Imports", icon: Inbox, badge: true },
-  { href: "/templates", label: "Budgets", icon: SlidersHorizontal },
+  { href: "/receivables", label: "Vault", icon: CreditCard },
+  { href: "/imports", label: "Sync", icon: Inbox, badge: true },
+  { href: "/templates", label: "Recurring", icon: SlidersHorizontal },
 ];
 
 interface SidebarProps {

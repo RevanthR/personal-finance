@@ -125,9 +125,12 @@ function AddCardDialog({ open, onOpenChange, onAdd }: {
             <Label className="text-xs">Card name *</Label>
             <Input value={name} onChange={e => setName(e.target.value)} placeholder="Axis Bank CC" className="mt-1" required />
           </div>
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">
+            Filling in bank, network, and last 4 digits below (all optional) helps Gmail Imports automatically match transactions to this card.
+          </p>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs">Bank (optional)</Label>
+              <Label className="text-xs">Bank</Label>
               <select value={bank} onChange={e => setBank(e.target.value)}
                 className="mt-1 w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                 <option value="">Select</option>
@@ -150,7 +153,7 @@ function AddCardDialog({ open, onOpenChange, onAdd }: {
             )}
           </div>
           <div>
-            <Label className="text-xs">Last 4 digits <span className="text-muted-foreground">(optional, helps auto-match imported transactions)</span></Label>
+            <Label className="text-xs">Last 4 digits</Label>
             <Input value={last4} onChange={e => setLast4(e.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="1234" className="mt-1" maxLength={4} inputMode="numeric" />
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -273,6 +276,14 @@ function CCCardTile({ card, fmt, onEntryUpdate, onDelete, onMetaUpdate }: {
                 <Pencil className="w-3 h-3" />
               </button>
             </div>
+            {!card.last4 && !editingDetails && (
+              <button
+                onClick={() => setEditingDetails(true)}
+                className="mt-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 hover:bg-amber-100 transition-colors"
+              >
+                Add last 4 digits for better matching
+              </button>
+            )}
           </div>
           {confirmDelete ? (
             <div className="flex items-center gap-2 shrink-0">
@@ -617,7 +628,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
 
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-xl font-bold sm:text-2xl">Accounts</h1>
+        <h1 className="text-xl font-bold sm:text-2xl">Vault</h1>
         <div className="shrink-0">
           {mainTab === "cards"       && <Button size="sm" onClick={() => setShowAddCard(true)}       className="h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm"><Plus className="w-3.5 h-3.5 mr-1" />Add Card</Button>}
           {mainTab === "chits"       && <Button size="sm" variant="outline" onClick={() => setShowAddChit(true)}       className="h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm"><Plus className="w-3.5 h-3.5 mr-1" />Add Chit</Button>}
