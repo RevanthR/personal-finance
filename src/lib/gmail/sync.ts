@@ -166,6 +166,11 @@ export async function syncGmailForUser(userId: string, onProgress?: ProgressCall
         : null;
       const { amount, originalCurrency, originalAmount } = await resolveInrAmount(extracted);
 
+      // Gmail's own received timestamp — always available, used as the
+      // fallback when Gemini can't determine a date, and as the fallback
+      // display time when the email doesn't state a specific clock time.
+      const emailReceivedAt = full.data.internalDate ? new Date(Number(full.data.internalDate)) : null;
+
       await db.parsedTransaction.create({
         data: {
           userId,
@@ -176,7 +181,9 @@ export async function syncGmailForUser(userId: string, onProgress?: ProgressCall
           originalAmount,
           merchant: extracted.merchant,
           last4: extracted.last4,
-          date: extracted.date && !isNaN(Date.parse(extracted.date)) ? new Date(extracted.date) : new Date(),
+          date: extracted.date && !isNaN(Date.parse(extracted.date)) ? new Date(extracted.date) : (emailReceivedAt ?? new Date()),
+          transactionTime: extracted.transactionTime,
+          emailReceivedAt,
           rawSnippet: full.data.snippet ?? text.slice(0, 200),
           paymentMethod,
           suggestedCcTemplateId,

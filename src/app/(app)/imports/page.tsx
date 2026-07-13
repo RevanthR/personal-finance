@@ -50,6 +50,8 @@ export default async function ImportsPage() {
       merchant: p.merchant,
       last4: p.last4,
       date: p.date.toISOString(),
+      transactionTime: p.transactionTime,
+      emailReceivedAt: p.emailReceivedAt?.toISOString() ?? null,
       rawSnippet: p.rawSnippet,
       paymentMethod: p.paymentMethod,
       suggestedCcTemplateId: p.suggestedCcTemplateId,

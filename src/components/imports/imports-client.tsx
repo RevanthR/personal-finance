@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,8 @@ export interface ParsedTransactionItem {
   merchant: string | null;
   last4: string | null;
   date: string;
+  transactionTime: string | null;
+  emailReceivedAt: string | null;
   rawSnippet: string;
   paymentMethod: PaymentMethod;
   suggestedCcTemplateId: string | null;
@@ -48,6 +50,29 @@ const METHOD_LABEL: Record<PaymentMethod, string> = {
 };
 
 const CURRENCY_SYMBOLS: Record<string, string> = { USD: "$", EUR: "€", GBP: "£", AUD: "A$", CAD: "C$", SGD: "S$", AED: "AED " };
+
+// Prefers a time the email explicitly stated for the transaction itself;
+// falls back to when the email arrived (a proxy, not the real transaction
+// time, so callers should mark it visually distinct) when Gemini couldn't
+// find one stated.
+function getDisplayTime(item: ParsedTransactionItem): { label: string; exact: boolean } | null {
+  if (item.transactionTime && /^\d{1,2}:\d{2}$/.test(item.transactionTime)) {
+    const [h, m] = item.transactionTime.split(":").map(Number);
+    const d = new Date();
+    d.setHours(h, m, 0, 0);
+    return { label: format(d, "h:mm a"), exact: true };
+  }
+  if (item.emailReceivedAt) {
+    return { label: format(new Date(item.emailReceivedAt), "h:mm a"), exact: false };
+  }
+  return null;
+}
+
+function TimeNote({ item }: { item: ParsedTransactionItem }) {
+  const t = getDisplayTime(item);
+  if (!t) return null;
+  return <> · {t.exact ? t.label : `~${t.label} (email time)`}</>;
+}
 
 function FxEstimateNote({ item }: { item: ParsedTransactionItem }) {
   if (!item.originalCurrency || item.originalCurrency === "INR" || !item.originalAmount) return null;
@@ -75,6 +100,25 @@ export function ImportsClient({ gmail }: ImportsClientProps) {
   const [syncing, setSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState<{ processed: number; total: number } | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
+
+  // Sync now happens server-side in the background (push notifications,
+  // renewal cron) with nothing on this page to tell the client it happened —
+  // so this page polls lightly, and refreshes immediately when the app
+  // regains focus (the common PWA case: background it, a push-triggered
+  // sync runs, reopen it and expect it to already be current).
+  useEffect(() => {
+    const interval = setInterval(() => router.refresh(), 20_000);
+    const onFocus = () => router.refresh();
+    const onVisibilityChange = () => { if (document.visibilityState === "visible") router.refresh(); };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("focus", onFocus);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const grouped = useMemo(() => {
     const byDay = new Map<string, ParsedTransactionItem[]>();
@@ -259,7 +303,7 @@ function TransactionRow({ item, ccCards, customCategories, onDone }: {
         <div className="flex items-start justify-between gap-2">
           <div>
             <p className="text-sm font-medium">{item.merchant ?? item.bank}</p>
-            <p className="text-xs text-muted-foreground">{item.bank} · {METHOD_LABEL[item.paymentMethod]}{item.last4 && ` · •• ${item.last4}`}</p>
+            <p className="text-xs text-muted-foreground">{item.bank} · {METHOD_LABEL[item.paymentMethod]}{item.last4 && ` · •• ${item.last4}`}<TimeNote item={item} /></p>
           </div>
           <p className="text-sm font-semibold">₹{item.amount.toLocaleString("en-IN")}</p>
         </div>
@@ -349,7 +393,7 @@ function AddForm({ item, ccCards, customCategories, onDone, showBack, onBack }: 
         <div>
           <p className="text-sm font-medium">{item.merchant ?? item.bank}</p>
           <p className="text-xs text-muted-foreground flex items-center gap-1">
-            <Landmark className="w-3 h-3" /> {item.bank} · {METHOD_LABEL[item.paymentMethod]}{item.last4 && ` · •• ${item.last4}`}
+            <Landmark className="w-3 h-3" /> {item.bank} · {METHOD_LABEL[item.paymentMethod]}{item.last4 && ` · •• ${item.last4}`}<TimeNote item={item} />
           </p>
         </div>
         <input

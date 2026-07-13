@@ -362,6 +362,8 @@ model ParsedTransaction {
   merchant               String?
   last4                  String?
   date                   DateTime
+  transactionTime        String?
+  emailReceivedAt        DateTime?
   rawSnippet             String
   status                 ParsedTransactionStatus         @default(PENDING)
   paymentMethod          ParsedTransactionPaymentMethod  @default(CREDIT_CARD)
