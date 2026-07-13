@@ -45,6 +45,8 @@ export default async function ImportsPage() {
       id: p.id,
       bank: p.bank,
       amount: p.amount,
+      originalCurrency: p.originalCurrency,
+      originalAmount: p.originalAmount,
       merchant: p.merchant,
       last4: p.last4,
       date: p.date.toISOString(),

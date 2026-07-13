@@ -1,7 +1,8 @@
 import { db } from "@/lib/db";
 import { getGmailClientForUser } from "./client";
-import { extractTransaction } from "./extract";
+import { extractTransaction, type ExtractedTransaction } from "./extract";
 import { matchCard } from "./card-match";
+import { getInrRate } from "./fx-rate";
 import type { gmail_v1 } from "googleapis";
 import type { ParsedTransactionPaymentMethod } from "@/generated/prisma/client";
 
@@ -55,6 +56,41 @@ function extractPlainText(payload: gmail_v1.Schema$MessagePart | undefined): str
 type SyncResult = { synced: number; skipped: number; failed: number; error?: string };
 type ProgressCallback = (processed: number, total: number) => void;
 
+// Bank alert emails only ever show the foreign-currency amount, the actual
+// INR-converted figure (with the bank's forex markup) is only known after
+// settlement, a day or two later. Resolves the best available INR estimate
+// in priority order: bank-stated conversion > live rate > Gemini's own
+// rough estimate > raw number as a last resort (today's old behavior).
+async function resolveInrAmount(
+  extracted: ExtractedTransaction,
+): Promise<{ amount: number; originalCurrency: string | null; originalAmount: number | null }> {
+  const currency = (extracted.currency ?? "INR").toUpperCase();
+  const rawAmount = extracted.amount!;
+
+  if (currency === "INR") {
+    return { amount: rawAmount, originalCurrency: null, originalAmount: null };
+  }
+
+  if (extracted.convertedInrAmount) {
+    return { amount: extracted.convertedInrAmount, originalCurrency: currency, originalAmount: rawAmount };
+  }
+
+  const liveRate = await getInrRate(currency);
+  if (liveRate) {
+    return { amount: Math.round(rawAmount * liveRate * 100) / 100, originalCurrency: currency, originalAmount: rawAmount };
+  }
+
+  if (extracted.approxInrRate) {
+    return { amount: Math.round(rawAmount * extracted.approxInrRate * 100) / 100, originalCurrency: currency, originalAmount: rawAmount };
+  }
+
+  // Every conversion signal failed — fall back to the raw number rather
+  // than dropping the transaction. Still tagged with originalCurrency so
+  // the review screen flags it as unconverted instead of showing it as a
+  // confident INR figure.
+  return { amount: rawAmount, originalCurrency: currency, originalAmount: rawAmount };
+}
+
 export async function syncGmailForUser(userId: string, onProgress?: ProgressCallback): Promise<SyncResult> {
   const gmail = await getGmailClientForUser(userId);
   if (!gmail) return { synced: 0, skipped: 0, failed: 0, error: "Gmail not connected" };
@@ -104,13 +140,16 @@ export async function syncGmailForUser(userId: string, onProgress?: ProgressCall
       const suggestedCcTemplateId = paymentMethod === "CREDIT_CARD"
         ? matchCard({ bank: extracted.bank, last4: extracted.last4 }, cards)
         : null;
+      const { amount, originalCurrency, originalAmount } = await resolveInrAmount(extracted);
 
       await db.parsedTransaction.create({
         data: {
           userId,
           gmailMessageId: id,
           bank: extracted.bank ?? "Unknown",
-          amount: extracted.amount!,
+          amount,
+          originalCurrency,
+          originalAmount,
           merchant: extracted.merchant,
           last4: extracted.last4,
           date: extracted.date && !isNaN(Date.parse(extracted.date)) ? new Date(extracted.date) : new Date(),

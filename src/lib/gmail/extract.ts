@@ -9,6 +9,9 @@ const zExtraction = z.object({
   isTransaction: z.boolean(),
   bank: z.string().nullable(),
   amount: z.number().nullable(),
+  currency: z.string().nullable(),
+  convertedInrAmount: z.number().nullable(),
+  approxInrRate: z.number().nullable(),
   merchant: z.string().nullable(),
   date: z.string().nullable(),
   last4: z.string().nullable(),
@@ -41,6 +44,8 @@ const SYSTEM_INSTRUCTION = `You extract bank transaction details from an alert e
 
 Determine whether the email is actually a transaction alert (not a promotion, statement summary, OTP, login alert, or unrelated email). If it is, extract: the bank name, the transaction amount (a plain number, no currency symbols or commas), the merchant/description (for UPI, the payee name or VPA), the transaction date (ISO 8601 "YYYY-MM-DD" if determinable, else null), the last 4 digits of the card/account if present, whether it's a debit (a charge/spend), credit (a payment/adjustment), or refund, and the payment method: "creditCard", "upi", "debitCard", or "other".
 
+Also extract the currency the amount is stated in, as an ISO code (e.g. "USD", "EUR", "INR"). If the email uses "₹", "Rs", "INR", or gives no currency at all, use "INR". If the currency is NOT INR (a foreign-currency card transaction): also check whether the email separately states an already-converted INR equivalent (e.g. "approx ₹X" or "INR equivalent: X") and extract that as convertedInrAmount if present, else null. Also give your own best estimate of the current approximate INR exchange rate for that currency as approxInrRate (a plain number, e.g. 87.5 for USD) — this is a fallback only, used solely if a live rate lookup fails, so a rough estimate from your own knowledge is fine.
+
 If this is a debit/spend, also classify it into a spend category based on the merchant name: one of Food, Coffee, Groceries, Fuel, Shopping, Travel, Health, Bills, Entertainment, or Other. Pick the closest match; use Other only if genuinely ambiguous. Leave null for credits/refunds.
 
 Respond with isTransaction: false and null for the other fields if this is not a transaction alert or you cannot confidently extract an amount.`;
@@ -51,6 +56,9 @@ const RESPONSE_SCHEMA = {
     isTransaction: { type: Type.BOOLEAN },
     bank: { type: Type.STRING, nullable: true },
     amount: { type: Type.NUMBER, nullable: true },
+    currency: { type: Type.STRING, nullable: true },
+    convertedInrAmount: { type: Type.NUMBER, nullable: true },
+    approxInrRate: { type: Type.NUMBER, nullable: true },
     merchant: { type: Type.STRING, nullable: true },
     date: { type: Type.STRING, nullable: true },
     last4: { type: Type.STRING, nullable: true },

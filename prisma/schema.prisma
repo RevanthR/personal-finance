@@ -355,6 +355,8 @@ model ParsedTransaction {
   gmailMessageId         String
   bank                   String
   amount                 Float
+  originalCurrency       String?
+  originalAmount         Float?
   merchant               String?
   last4                  String?
   date                   DateTime

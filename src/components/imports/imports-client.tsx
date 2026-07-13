@@ -18,6 +18,8 @@ export interface ParsedTransactionItem {
   id: string;
   bank: string;
   amount: number;
+  originalCurrency: string | null;
+  originalAmount: number | null;
   merchant: string | null;
   last4: string | null;
   date: string;
@@ -44,6 +46,18 @@ const METHOD_LABEL: Record<PaymentMethod, string> = {
   DEBIT_CARD: "Debit Card",
   OTHER: "Other",
 };
+
+const CURRENCY_SYMBOLS: Record<string, string> = { USD: "$", EUR: "€", GBP: "£", AUD: "A$", CAD: "C$", SGD: "S$", AED: "AED " };
+
+function FxEstimateNote({ item }: { item: ParsedTransactionItem }) {
+  if (!item.originalCurrency || item.originalCurrency === "INR" || !item.originalAmount) return null;
+  const symbol = CURRENCY_SYMBOLS[item.originalCurrency] ?? `${item.originalCurrency} `;
+  return (
+    <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-md px-2 py-1 mt-1">
+      {symbol}{item.originalAmount.toLocaleString()} {item.originalCurrency} → ≈ ₹{item.amount.toLocaleString("en-IN")} (estimated, confirm against your statement)
+    </p>
+  );
+}
 
 interface ImportsClientProps {
   gmail: {
@@ -249,6 +263,7 @@ function TransactionRow({ item, ccCards, customCategories, onDone }: {
           </div>
           <p className="text-sm font-semibold">₹{item.amount.toLocaleString("en-IN")}</p>
         </div>
+        <FxEstimateNote item={item} />
         <div className="text-xs text-muted-foreground bg-background rounded-md p-2 border border-border">
           Looks like you already added this: <span className="font-medium text-foreground">{item.possibleMatch.name}</span>, ₹{item.possibleMatch.amount.toLocaleString("en-IN")} on {format(new Date(item.possibleMatch.date), "d MMM")}
         </div>
@@ -344,6 +359,8 @@ function AddForm({ item, ccCards, customCategories, onDone, showBack, onBack }: 
           className="w-24 text-right text-sm font-semibold border border-border rounded-md px-2 py-1 bg-background"
         />
       </div>
+
+      <FxEstimateNote item={item} />
 
       {isCC ? (
         <>
