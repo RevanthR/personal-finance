@@ -5,76 +5,79 @@
    so the in-app Appearance toggle actually controls it. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* ── Design tokens — "Warm & Friendly" ────────────────────────────────────────
-   Coral-amber accent, warm neutrals (never pure grey), rounder shapes.
-   Every token is redefined under .dark — see the block below — so nothing
-   in the UI should reference a raw hex value directly. */
+/* ── Design tokens — "Warm & Friendly", desaturated pass ──────────────────────
+   First pass leaned too hard into visible light-orange tints everywhere
+   (secondary/muted/accent/warning all read as "peach"). This pass keeps the
+   coral accent for actual CTAs but pulls every background tint down to a
+   near-neutral warm grey, and darkens/adjusts foreground pairings for real
+   contrast rather than orange-on-orange. Every token is redefined under
+   .dark below — nothing in the UI should reference a raw hex value directly. */
 :root {
   color-scheme: light;
-  --background:             #fdf9f4;
-  --foreground:             #3a2a1e;
+  --background:             #fdfcfb;
+  --foreground:             #2b2420;
   --card:                   #ffffff;
-  --card-foreground:        #3a2a1e;
+  --card-foreground:        #2b2420;
   --popover:                #ffffff;
-  --popover-foreground:     #3a2a1e;
-  --primary:                #f2622e;   /* coral-amber accent */
+  --popover-foreground:     #2b2420;
+  --primary:                #e8632f;   /* coral accent — used sparingly, for real CTAs */
   --primary-foreground:     #ffffff;
-  --secondary:              #fdf1e6;   /* soft warm tint, not neutral grey */
-  --secondary-foreground:   #3a2a1e;
-  --muted:                  #f6ece0;
-  --muted-foreground:       #9c7f68;   /* warm taupe, not cool grey */
-  --accent:                 #fff1e0;   /* subtle hover/highlight tint */
-  --accent-foreground:      #b3541c;
+  --secondary:              #f4f1ee;   /* near-neutral warm grey, not peach */
+  --secondary-foreground:   #2b2420;
+  --muted:                  #f4f1ee;
+  --muted-foreground:       #8a7f77;   /* warm grey with real contrast on white */
+  --accent:                 #f6efe9;   /* barely-there hover tint */
+  --accent-foreground:      #8a4a2a;   /* contrasting warm brown, not bright orange */
   --destructive:            #c23b2c;
   --destructive-foreground: #ffffff;
-  --border:                 #f0e2d3;
-  --input:                  #f0e2d3;
-  --ring:                   #f2622e;
+  --border:                 #e8e3de;
+  --input:                  #e8e3de;
+  --ring:                   #e8632f;
   --radius:                 1rem;
 
   /* ── Semantic financial colors ───────────────────────────────────────────── */
   --positive:               #2f9e5c;
-  --positive-bg:            #e6f4ea;
-  --positive-border:        #bfe4cc;
+  --positive-bg:            #eaf5ee;
+  --positive-border:        #cbe6d4;
   --negative:               #c23b2c;
-  --negative-bg:            #ffe4e0;
-  --negative-border:        #f3c4bd;
-  --warning:                #c2760c;
-  --warning-bg:             #fff1e0;
-  --warning-border:         #f3d9b8;
+  --negative-bg:            #fcecea;
+  --negative-border:        #f2cfc9;
+  --warning:                #a8650a;   /* darker amber for contrast, not light-orange */
+  --warning-bg:             #f7eee0;
+  --warning-border:         #e8d7bd;
 }
 
 .dark {
   color-scheme: dark;
-  --background:             #221812;
-  --foreground:             #f7ece2;
-  --card:                   #2b1f18;
-  --card-foreground:        #f7ece2;
-  --popover:                #2b1f18;
-  --popover-foreground:     #f7ece2;
-  --primary:                #ff8a5c;
-  --primary-foreground:     #2a1a10;
-  --secondary:              #3a2b21;
-  --secondary-foreground:   #f7ece2;
-  --muted:                  #33261d;
-  --muted-foreground:       #c7a488;
-  --accent:                 #3d2a1e;
-  --accent-foreground:      #ffb385;
+  --background:             #1c1a18;
+  --foreground:             #ece8e3;
+  --card:                   #242220;
+  --card-foreground:        #ece8e3;
+  --popover:                #242220;
+  --popover-foreground:     #ece8e3;
+  --primary:                #f08a5f;
+  --primary-foreground:     #1c1210;
+  --secondary:              #322e2a;
+  --secondary-foreground:   #ece8e3;
+  --muted:                  #2c2926;
+  --muted-foreground:       #b3a89e;
+  --accent:                 #332a22;
+  --accent-foreground:      #e0a97c;
   --destructive:            #e0574a;
-  --destructive-foreground: #2a1a10;
-  --border:                 #3c2c22;
-  --input:                  #3c2c22;
-  --ring:                   #ff8a5c;
+  --destructive-foreground: #1c1210;
+  --border:                 #3a3532;
+  --input:                  #3a3532;
+  --ring:                   #f08a5f;
 
-  --positive:               #6ad495;
-  --positive-bg:            #1e3327;
-  --positive-border:        #2f4c39;
+  --positive:               #5cc98a;
+  --positive-bg:            #1c2b21;
+  --positive-border:        #2c4433;
   --negative:               #f3766a;
-  --negative-bg:            #3a2320;
-  --negative-border:        #55322d;
-  --warning:                #ffbf5c;
-  --warning-bg:             #3a2c17;
-  --warning-border:         #55431f;
+  --negative-bg:            #332320;
+  --negative-border:        #4d302b;
+  --warning:                #d1a25c;
+  --warning-bg:             #2e2820;
+  --warning-border:         #453a29;
 }
 
 /* ── Map all tokens → Tailwind colour utilities ───────────────────────────── */

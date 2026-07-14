@@ -8,9 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { PageHeader } from "@/components/ui/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
 import { formatCurrency, cn, MONTHS } from "@/lib/utils";
 import { usePrivacy } from "@/contexts/privacy-context";
-import { Plus, TrendingUp, TrendingDown, Wallet, Clock, CheckCircle2, Trash2, CreditCard, Pencil, AlertCircle } from "lucide-react";
+import { Plus, TrendingUp, TrendingDown, Wallet, Clock, CheckCircle2, Trash2, CreditCard, Pencil } from "lucide-react";
 import { PageCoach } from "@/components/coach/page-coach";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -73,10 +75,10 @@ const BANKS = [
 ] as const;
 const RECV_LABELS: Record<string, string> = { INVESTMENT: "Investment", PERSONAL_LOAN: "Personal Loan", CUSTOM: "Custom" };
 const RECV_COLORS: Record<string, string> = {
-  INVESTMENT: "bg-emerald-50 text-emerald-700 border border-emerald-200",
-  PERSONAL_LOAN: "bg-amber-50 text-amber-700 border border-amber-200",
-  CUSTOM: "bg-gray-100 text-gray-600 border border-gray-200",
-  CHIT_FUND: "bg-amber-50 text-amber-700 border border-amber-200",
+  INVESTMENT: "bg-positive-bg text-positive border border-positive-border",
+  PERSONAL_LOAN: "bg-warning-bg text-warning border border-warning-border",
+  CUSTOM: "bg-muted text-muted-foreground border border-border",
+  CHIT_FUND: "bg-warning-bg text-warning border border-warning-border",
 };
 
 type MainTab = "cards" | "chits" | "receivables";
@@ -125,7 +127,7 @@ function AddCardDialog({ open, onOpenChange, onAdd }: {
             <Label className="text-xs">Card name *</Label>
             <Input value={name} onChange={e => setName(e.target.value)} placeholder="Axis Bank CC" className="mt-1" required />
           </div>
-          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">
+          <p className="text-xs text-warning bg-warning-bg border border-warning-border rounded-md px-2.5 py-1.5">
             Filling in bank, network, and last 4 digits below (all optional) helps Gmail Imports automatically match transactions to this card.
           </p>
           <div className="grid grid-cols-2 gap-3">
@@ -176,13 +178,108 @@ function AddCardDialog({ open, onOpenChange, onAdd }: {
   );
 }
 
+// ── Edit-card dialog ──────────────────────────────────────────────────────────
+// Combines bank/network/last4 and statement/due-day editing in one place —
+// previously two separate inline-expanding sections on the card itself,
+// unlike every other edit flow in this page (chits, receivables), which
+// opens a single dialog.
+
+function EditCardDialog({ open, onOpenChange, card, onSave }: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  card: CCCard;
+  onSave: (data: { bank: string | null; network: string | null; last4: string | null; statementDay: number | null; dueDateDay: number | null }) => Promise<void>;
+}) {
+  const isKnownBank = !!card.bank && (BANKS as readonly string[]).includes(card.bank);
+  const [bank, setBank]         = useState(isKnownBank ? card.bank! : (card.bank ? "Other" : ""));
+  const [bankOther, setBankOther] = useState(isKnownBank ? "" : (card.bank ?? ""));
+  const [network, setNetwork]   = useState(card.network ?? "");
+  const [last4, setLast4]       = useState(card.last4 ?? "");
+  const [stmtDay, setStmtDay]   = useState(String(card.template.statementDay ?? ""));
+  const [dueDay, setDueDay]     = useState(String(card.template.dueDateDay ?? ""));
+  const [saving, setSaving]     = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const bankValue = bank === "Other" ? bankOther.trim() : bank;
+    setSaving(true);
+    try {
+      await onSave({
+        bank: bankValue || null,
+        network: network || null,
+        last4: last4.trim() || null,
+        statementDay: stmtDay ? parseInt(stmtDay) : null,
+        dueDateDay: dueDay ? parseInt(dueDay) : null,
+      });
+      onOpenChange(false);
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader><DialogTitle>Edit {card.template.name}</DialogTitle></DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Bank</Label>
+              <select value={bank} onChange={e => setBank(e.target.value)}
+                className="mt-1 w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                <option value="">Select</option>
+                {BANKS.map(b => <option key={b} value={b}>{b}</option>)}
+              </select>
+            </div>
+            <div>
+              <Label className="text-xs">Network</Label>
+              <select value={network} onChange={e => setNetwork(e.target.value)}
+                className="mt-1 w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                <option value="">Select</option>
+                {NETWORKS.map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+          </div>
+          {bank === "Other" && (
+            <div>
+              <Label className="text-xs">Bank name</Label>
+              <Input value={bankOther} onChange={e => setBankOther(e.target.value)} placeholder="Bank name" className="mt-1" autoFocus />
+            </div>
+          )}
+          <div>
+            <Label className="text-xs">Last 4 digits <span className="text-muted-foreground">(helps auto-match imported transactions)</span></Label>
+            <Input value={last4} onChange={e => setLast4(e.target.value.replace(/\D/g, "").slice(0, 4))}
+              placeholder="1234" maxLength={4} inputMode="numeric" className="mt-1" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Statement closes (day)</Label>
+              <Input type="number" min={1} max={31} value={stmtDay} onChange={e => setStmtDay(e.target.value)} placeholder="15" className="mt-1" />
+            </div>
+            <div>
+              <Label className="text-xs">Payment due (day)</Label>
+              <Input type="number" min={1} max={31} value={dueDay} onChange={e => setDueDay(e.target.value)} placeholder="5" className="mt-1" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── CC Card row ───────────────────────────────────────────────────────────────
 
+// Per-network brand accent — intentionally distinct hues (not semantic
+// status colors), so these stay literal rather than mapping to the
+// positive/negative/warning tokens. dark: variants keep the light-mode
+// -50 backgrounds from looking like a blown-out patch in dark mode.
 const NETWORK_ACCENT: Record<string, { bar: string; badge: string }> = {
-  Visa:       { bar: "bg-gray-400",    badge: "bg-gray-50 text-gray-600 border-gray-200" },
-  Mastercard: { bar: "bg-red-500",     badge: "bg-red-50 text-red-500 border-red-200" },
-  Rupay:      { bar: "bg-amber-500",   badge: "bg-amber-50 text-amber-700 border-amber-200" },
-  Amex:       { bar: "bg-emerald-600", badge: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  Visa:       { bar: "bg-gray-400",    badge: "bg-gray-50 text-gray-600 border-gray-200 dark:bg-gray-400/10 dark:text-gray-300 dark:border-gray-400/30" },
+  Mastercard: { bar: "bg-red-500",     badge: "bg-red-50 text-red-500 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/30" },
+  Rupay:      { bar: "bg-amber-500",   badge: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/30" },
+  Amex:       { bar: "bg-emerald-600", badge: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30" },
 };
 
 function CCCardTile({ card, fmt, onEntryUpdate, onDelete, onMetaUpdate }: {
@@ -203,41 +300,7 @@ function CCCardTile({ card, fmt, onEntryUpdate, onDelete, onMetaUpdate }: {
   const [billInput, setBillInput]         = useState("");
   const [saving, setSaving]               = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [editingDates, setEditingDates]   = useState(false);
-  const [stmtInput, setStmtInput]         = useState(String(card.template.statementDay ?? ""));
-  const [dueInput, setDueInput]           = useState(String(card.template.dueDateDay ?? ""));
-  const [savingDates, setSavingDates]     = useState(false);
-  const [editingDetails, setEditingDetails] = useState(false);
-  const isKnownBank = !!card.bank && (BANKS as readonly string[]).includes(card.bank);
-  const [bankInput, setBankInput]         = useState(isKnownBank ? card.bank! : (card.bank ? "Other" : ""));
-  const [bankOtherInput, setBankOtherInput] = useState(isKnownBank ? "" : (card.bank ?? ""));
-  const [networkInput, setNetworkInput]   = useState(card.network ?? "");
-  const [last4Input, setLast4Input]       = useState(card.last4 ?? "");
-  const [savingDetails, setSavingDetails] = useState(false);
-
-  async function handleSaveDetails() {
-    const bankValue = bankInput === "Other" ? bankOtherInput.trim() : bankInput;
-    setSavingDetails(true);
-    try {
-      await onMetaUpdate(card.id, {
-        bank: bankValue || null,
-        network: networkInput || null,
-        last4: last4Input.trim() || null,
-      });
-      setEditingDetails(false);
-    } finally { setSavingDetails(false); }
-  }
-
-  async function handleSaveDates() {
-    setSavingDates(true);
-    try {
-      await onMetaUpdate(card.id, {
-        statementDay: stmtInput ? parseInt(stmtInput) : null,
-        dueDateDay:   dueInput  ? parseInt(dueInput)  : null,
-      });
-      setEditingDates(false);
-    } finally { setSavingDates(false); }
-  }
+  const [editingCard, setEditingCard]     = useState(false);
 
   async function handleSetBill() {
     const val = parseFloat(billInput);
@@ -249,220 +312,118 @@ function CCCardTile({ card, fmt, onEntryUpdate, onDelete, onMetaUpdate }: {
     } finally { setSaving(false); }
   }
 
+  const dueLabel = card.template.statementDay || card.template.dueDateDay
+    ? [
+        card.template.statementDay && `Closes ${card.template.statementDay}th`,
+        card.template.dueDateDay && `Due ${card.template.dueDateDay}th`,
+      ].filter(Boolean).join(" · ")
+    : "—";
+
   return (
-    <div className={cn(
-      "rounded-xl border border-border bg-card overflow-hidden",
-      entry?.isPaid && "opacity-60"
-    )}>
-      {/* Network colour bar */}
-      <div className={cn("h-1 w-full", accent?.bar ?? "bg-zinc-200")} />
-
-      <div className="px-4 pt-3 pb-4 space-y-3">
-
-        {/* Header: name + delete */}
+    <Card className={cn(entry?.isPaid && "opacity-60")}>
+      <CardHeader className="pb-2 px-4 pt-4">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-sm font-semibold">{card.template.name}</p>
-            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-              {card.bank && <p className="text-xs text-muted-foreground">{card.bank}</p>}
-              {card.network && (
-                <span className={cn("text-xs font-medium px-1.5 py-0.5 rounded border", accent?.badge ?? "bg-zinc-50 text-zinc-600 border-zinc-200")}>
-                  {card.network}
-                </span>
-              )}
-              {card.last4 && <p className="text-xs text-muted-foreground">•• {card.last4}</p>}
-              <button onClick={() => setEditingDetails(v => !v)}
-                className="text-muted-foreground/40 hover:text-foreground transition-colors">
-                <Pencil className="w-3 h-3" />
-              </button>
-            </div>
-            {!card.last4 && !editingDetails && (
-              <button
-                onClick={() => setEditingDetails(true)}
-                className="mt-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 hover:bg-amber-100 transition-colors"
-              >
-                Add last 4 digits for better matching
+            <CardTitle className="text-sm font-semibold truncate">{card.template.name}</CardTitle>
+            {(card.bank || card.last4) && (
+              <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                {card.bank}{card.bank && card.last4 && " · "}{card.last4 && `•• ${card.last4}`}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {card.network && (
+              <Badge className={cn("text-xs shrink-0", accent?.badge ?? "bg-muted text-muted-foreground border border-border")}>
+                {card.network}
+              </Badge>
+            )}
+            {confirmDelete ? (
+              <div className="flex items-center gap-1">
+                <Button variant="destructive" size="sm" className="h-6 text-xs px-2" onClick={() => onDelete(card.id)}>Confirm</Button>
+                <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setConfirmDelete(false)}>Cancel</Button>
+              </div>
+            ) : (
+              <button onClick={() => setConfirmDelete(true)} className="p-1 rounded text-muted-foreground hover:text-destructive transition-colors">
+                <Trash2 className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
-          {confirmDelete ? (
-            <div className="flex items-center gap-2 shrink-0">
-              <button onClick={() => onDelete(card.id)}
-                className="text-xs font-semibold text-destructive border border-destructive/30 px-3 py-1.5 rounded-lg">
-                Delete
-              </button>
-              <button onClick={() => setConfirmDelete(false)}
-                className="text-xs text-muted-foreground border border-border px-3 py-1.5 rounded-lg">
-                Cancel
-              </button>
-            </div>
-          ) : (
-            <button onClick={() => setConfirmDelete(true)}
-              className="shrink-0 flex items-center justify-center w-9 h-9 rounded-lg text-muted-foreground/40 hover:text-destructive hover:bg-red-50 transition-colors">
-              <Trash2 className="w-4 h-4" />
-            </button>
-          )}
         </div>
-
-        {editingDetails && (
-          <div className="space-y-2 pb-1 border-b border-border/50">
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label className="text-xs">Bank</Label>
-                <select value={bankInput} onChange={e => setBankInput(e.target.value)}
-                  className="mt-1 w-full h-9 rounded-md border border-input bg-background px-3 text-sm">
-                  <option value="">Select</option>
-                  {BANKS.map(b => <option key={b} value={b}>{b}</option>)}
-                </select>
-              </div>
-              <div>
-                <Label className="text-xs">Network</Label>
-                <select value={networkInput} onChange={e => setNetworkInput(e.target.value)}
-                  className="mt-1 w-full h-9 rounded-md border border-input bg-background px-3 text-sm">
-                  <option value="">Select</option>
-                  {NETWORKS.map(n => <option key={n} value={n}>{n}</option>)}
-                </select>
-              </div>
-            </div>
-            {bankInput === "Other" && (
-              <div>
-                <Label className="text-xs">Bank name</Label>
-                <Input value={bankOtherInput} onChange={e => setBankOtherInput(e.target.value)} placeholder="Bank name" className="mt-1 h-9" autoFocus />
-              </div>
-            )}
-            <div>
-              <Label className="text-xs">Last 4 digits <span className="text-muted-foreground">(helps auto-match imported transactions)</span></Label>
-              <Input value={last4Input} onChange={e => setLast4Input(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                placeholder="1234" maxLength={4} inputMode="numeric" className="mt-1 h-9" />
-            </div>
-            <div className="flex gap-2">
-              <Button size="sm" onClick={handleSaveDetails} disabled={savingDetails} className="flex-1 h-9">
-                {savingDetails ? "Saving…" : "Save"}
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setEditingDetails(false)} className="flex-1 h-9">
-                Cancel
-              </Button>
-            </div>
-          </div>
+      </CardHeader>
+      <CardContent className="px-4 pb-4 space-y-3">
+        {!card.last4 && (
+          <button
+            onClick={() => setEditingCard(true)}
+            className="text-xs text-warning bg-warning-bg border border-warning-border rounded-full px-2 py-0.5 hover:bg-warning-bg transition-colors"
+          >
+            Add last 4 digits for better matching
+          </button>
         )}
 
-        {/* Bill amount area */}
         {settingBill ? (
           <div className="space-y-2">
             <Input
               type="number" min={0} step={1}
               value={billInput} onChange={e => setBillInput(e.target.value)}
-              placeholder="Bill amount (₹)" className="h-11 text-base"
+              placeholder="Bill amount (₹)" className="h-10 text-sm"
               autoFocus onKeyDown={e => { if (e.key === "Enter") handleSetBill(); if (e.key === "Escape") setSettingBill(false); }}
             />
             <div className="flex gap-2">
-              <Button size="sm" onClick={handleSetBill} disabled={saving} className="flex-1 h-10">
-                {saving ? "Saving…" : "Set Bill"}
+              <Button size="sm" onClick={handleSetBill} disabled={saving} className="flex-1 h-9">
+                {saving ? "Saving…" : "Save"}
               </Button>
-              <Button size="sm" variant="outline" onClick={() => { setSettingBill(false); setBillInput(""); }} className="flex-1 h-10">
+              <Button size="sm" variant="outline" onClick={() => { setSettingBill(false); setBillInput(""); }} className="flex-1 h-9">
                 Cancel
               </Button>
             </div>
           </div>
         ) : (
-          <div>
-            {billed != null ? (
-              <>
-                <p className="text-2xl font-bold tabular-nums">{fmt(billed)}</p>
-                {rolling > 0 && (
-                  <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
-                    <AlertCircle className="w-3.5 h-3.5" />{fmt(rolling)} rolling to next month
-                  </p>
-                )}
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground/60 italic">No bill set yet</p>
-            )}
-            {!!entry?.statementAmount && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Next statement so far: <span className="font-medium text-foreground">{fmt(entry.statementAmount)}</span>
-              </p>
-            )}
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+            <button className="text-left" onClick={() => { setBillInput(billed != null ? String(billed) : ""); setSettingBill(true); }}>
+              <p className="text-xs text-muted-foreground flex items-center gap-1">Bill<Pencil className="w-2.5 h-2.5 text-muted-foreground/60" /></p>
+              <p className="font-semibold">{billed != null ? fmt(billed) : "—"}</p>
+              {rolling > 0 && <p className="text-xs text-warning mt-0.5">{fmt(rolling)} rolling</p>}
+            </button>
+            <div>
+              <p className="text-xs text-muted-foreground">Due</p>
+              <p className="font-semibold text-xs">{dueLabel}</p>
+              {!!entry?.statementAmount && (
+                <p className="text-xs text-muted-foreground mt-0.5">Next: {fmt(entry.statementAmount)}</p>
+              )}
+            </div>
           </div>
         )}
 
-        {/* Dates edit */}
-        {editingDates ? (
-          <div className="space-y-2 pt-1 border-t border-border/50">
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label className="text-xs">Closes on (day)</Label>
-                <Input type="number" min={1} max={31} value={stmtInput}
-                  onChange={e => setStmtInput(e.target.value)} placeholder="e.g. 15" className="mt-1 h-10" />
+        {!settingBill && (
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" onClick={() => setEditingCard(true)}>
+              <Pencil className="w-3 h-3 mr-1" />Edit
+            </Button>
+            {entry?.isPaid ? (
+              <div className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-positive">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Paid
               </div>
-              <div>
-                <Label className="text-xs">Payment due (day)</Label>
-                <Input type="number" min={1} max={31} value={dueInput}
-                  onChange={e => setDueInput(e.target.value)} placeholder="e.g. 5" className="mt-1 h-10" />
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button size="sm" onClick={handleSaveDates} disabled={savingDates} className="flex-1 h-10">
-                {savingDates ? "Saving…" : "Save"}
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setEditingDates(false)} className="flex-1 h-10">
-                Cancel
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <button
-            onClick={() => setEditingDates(true)}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-left py-1"
-          >
-            <Pencil className="w-3.5 h-3.5 shrink-0" />
-            {(card.template.statementDay || card.template.dueDateDay) ? (
-              <span>
-                {card.template.statementDay && `Closes ${card.template.statementDay}th`}
-                {card.template.statementDay && card.template.dueDateDay && " · "}
-                {card.template.dueDateDay && `Due ${card.template.dueDateDay}th`}
-              </span>
             ) : (
-              <span className="italic text-muted-foreground/50">Add statement & due dates</span>
-            )}
-          </button>
-        )}
-
-        {/* Action buttons */}
-        {!settingBill && !editingDates && (
-          entry?.isPaid ? (
-            <div className="flex items-center gap-1.5 text-sm font-medium text-emerald-600 pt-1 border-t border-border/50">
-              <CheckCircle2 className="w-4 h-4" /> Paid this month
-            </div>
-          ) : billed != null ? (
-            <div className="flex gap-2 pt-1 border-t border-border/50">
               <Button
                 size="sm"
+                className="flex-1 h-8 text-xs bg-primary hover:bg-primary/90 text-white"
+                disabled={billed == null}
                 onClick={() => onEntryUpdate(card.template.id, { isPaid: true })}
-                className="flex-1 h-10 bg-primary hover:bg-primary/90 text-white"
               >
                 Mark paid
               </Button>
-              <Button
-                size="sm" variant="outline"
-                onClick={() => { setBillInput(String(billed)); setSettingBill(true); }}
-                className="h-10 px-4"
-              >
-                Edit
-              </Button>
-            </div>
-          ) : (
-            <Button
-              size="sm" variant="outline"
-              onClick={() => { setBillInput(""); setSettingBill(true); }}
-              className="w-full h-10 pt-1 border-t-0"
-            >
-              Set bill amount
-            </Button>
-          )
+            )}
+          </div>
         )}
-      </div>
-    </div>
+      </CardContent>
+
+      <EditCardDialog
+        open={editingCard}
+        onOpenChange={setEditingCard}
+        card={card}
+        onSave={data => onMetaUpdate(card.id, data)}
+      />
+    </Card>
   );
 }
 
@@ -620,21 +581,23 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
       <PageCoach
         coachKey="receivables"
         icon={Wallet}
-        iconClass="text-emerald-600"
-        bgClass="bg-emerald-50 border-emerald-100"
-        title="Accounts"
+        iconClass="text-positive"
+        bgClass="bg-positive-bg border-positive-border"
+        title="Vault"
         desc="Manage your credit cards, chit funds, and money owed to you — all in one place."
       />
 
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-xl font-bold sm:text-2xl">Vault</h1>
-        <div className="shrink-0">
-          {mainTab === "cards"       && <Button size="sm" onClick={() => setShowAddCard(true)}       className="h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm"><Plus className="w-3.5 h-3.5 mr-1" />Add Card</Button>}
-          {mainTab === "chits"       && <Button size="sm" variant="outline" onClick={() => setShowAddChit(true)}       className="h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm"><Plus className="w-3.5 h-3.5 mr-1" />Add Chit</Button>}
-          {mainTab === "receivables" && <Button size="sm" onClick={() => setShowAddReceivable(true)} className="h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm"><Plus className="w-3.5 h-3.5 mr-1" />Add</Button>}
-        </div>
-      </div>
+      <PageHeader
+        title="Vault"
+        action={
+          <>
+            {mainTab === "cards"       && <Button size="sm" onClick={() => setShowAddCard(true)}       className="h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm"><Plus className="w-3.5 h-3.5 mr-1" />Add Card</Button>}
+            {mainTab === "chits"       && <Button size="sm" variant="outline" onClick={() => setShowAddChit(true)}       className="h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm"><Plus className="w-3.5 h-3.5 mr-1" />Add Chit</Button>}
+            {mainTab === "receivables" && <Button size="sm" onClick={() => setShowAddReceivable(true)} className="h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm"><Plus className="w-3.5 h-3.5 mr-1" />Add</Button>}
+          </>
+        }
+        className="mb-0"
+      />
 
       {/* Main tabs */}
       <div className="flex gap-1 bg-muted p-1 rounded-lg w-fit">
@@ -644,7 +607,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
             onClick={() => setMainTab(t.key)}
             className={cn(
               "flex items-center gap-1.5 px-3 py-2.5 rounded-md text-sm font-medium transition-colors",
-              mainTab === t.key ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+              mainTab === t.key ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
             )}
           >
             {t.icon}{t.label}
@@ -656,11 +619,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
       {mainTab === "cards" && (
         <div className="space-y-3">
           {activeCards.length === 0 && (
-            <div className="text-center py-16 text-muted-foreground">
-              <CreditCard className="w-10 h-10 mx-auto mb-3 text-muted-foreground/40" />
-              <p className="text-sm">No credit cards added yet.</p>
-              <p className="text-xs mt-1">Add your cards to track bills and carry-forwards.</p>
-            </div>
+            <EmptyState icon={CreditCard} title="No credit cards added yet" description="Add your cards to track bills and carry-forwards." />
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {activeCards.map(card => (
@@ -697,7 +656,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                       <CardHeader className="pb-2 px-4 pt-4">
                         <div className="flex items-center justify-between gap-2">
                           <CardTitle className="text-sm font-semibold truncate">{chit.template.name}</CardTitle>
-                          <Badge className="text-xs shrink-0 bg-amber-50 text-amber-700 border border-amber-200">
+                          <Badge className="text-xs shrink-0 bg-warning-bg text-warning border border-warning-border">
                             <TrendingUp className="w-3 h-3 mr-1" />Active
                           </Badge>
                         </div>
@@ -733,7 +692,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                             onClick={() => setEditingChit(chit)}>
                             <Pencil className="w-3 h-3 mr-1" />Edit
                           </Button>
-                          <Button size="sm" className="flex-1 h-8 text-xs bg-amber-600 hover:bg-amber-700"
+                          <Button size="sm" className="flex-1 h-8 text-xs bg-warning hover:bg-warning/90"
                             onClick={() => setLiftingChit(chit)}>
                             Mark as Lifted
                           </Button>
@@ -757,7 +716,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                       <div className="flex items-center justify-between gap-2">
                         <CardTitle className="text-sm font-semibold truncate">{chit.template.name}</CardTitle>
                         <div className="flex items-center gap-2 shrink-0">
-                          <Badge variant="outline" className="text-xs text-gray-500 border-gray-200">
+                          <Badge variant="outline" className="text-xs text-muted-foreground border-border">
                             <TrendingDown className="w-3 h-3 mr-1" />Lifted
                           </Badge>
                           {deletingChitId === chit.id ? (
@@ -779,7 +738,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                       <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                         <div>
                           <p className="text-xs text-muted-foreground">Pot received</p>
-                          <p className="font-semibold text-emerald-600">{fmt(chit.liftedAmount ?? chit.totalValue)}</p>
+                          <p className="font-semibold text-positive">{fmt(chit.liftedAmount ?? chit.totalValue)}</p>
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground">Lifted in</p>
@@ -807,10 +766,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
           )}
 
           {unliftedChits.length === 0 && liftedChits.length === 0 && (
-            <div className="text-center py-16 text-muted-foreground">
-              <TrendingUp className="w-10 h-10 mx-auto mb-3 text-muted-foreground/40" />
-              <p className="text-sm">No chit funds yet.</p>
-            </div>
+            <EmptyState icon={TrendingUp} title="No chit funds yet" />
           )}
         </div>
       )}
@@ -825,7 +781,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                 onClick={() => setRecvTab(t)}
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-2.5 rounded-md text-sm font-medium transition-colors",
-                  recvTab === t ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                  recvTab === t ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
                 )}
               >
                 {t === "pending" ? <><Clock className="w-3.5 h-3.5" />Pending</> : <><CheckCircle2 className="w-3.5 h-3.5" />Received</>}
@@ -851,7 +807,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                         <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                           <div>
                             <p className="text-xs text-muted-foreground">Expected</p>
-                            <p className="font-semibold text-emerald-600">{fmt(r.expectedAmount)}</p>
+                            <p className="font-semibold text-positive">{fmt(r.expectedAmount)}</p>
                           </div>
                           <div>
                             <p className="text-xs text-muted-foreground">Due By</p>
@@ -871,10 +827,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-16 text-muted-foreground">
-                  <Wallet className="w-10 h-10 mx-auto mb-3 text-muted-foreground/40" />
-                  <p className="text-sm">No pending receivables.</p>
-                </div>
+                <EmptyState icon={Wallet} title="No pending receivables" />
               )}
             </div>
           )}
@@ -888,7 +841,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                       <CardHeader className="pb-2 px-4 pt-4">
                         <div className="flex items-center justify-between gap-2">
                           <CardTitle className="text-sm font-semibold truncate">{r.description}</CardTitle>
-                          <Badge className="text-xs bg-emerald-50 text-emerald-600 border border-emerald-200 shrink-0">
+                          <Badge className="text-xs bg-positive-bg text-positive border border-positive-border shrink-0">
                             <CheckCircle2 className="w-3 h-3 mr-1" />Received
                           </Badge>
                         </div>
@@ -897,7 +850,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                         <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                           <div>
                             <p className="text-xs text-muted-foreground">Received</p>
-                            <p className="font-semibold text-emerald-600">{fmt(r.receivedAmount ?? r.expectedAmount)}</p>
+                            <p className="font-semibold text-positive">{fmt(r.receivedAmount ?? r.expectedAmount)}</p>
                           </div>
                           <div>
                             <p className="text-xs text-muted-foreground">On</p>
@@ -917,10 +870,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-16 text-muted-foreground">
-                  <CheckCircle2 className="w-10 h-10 mx-auto mb-3 text-muted-foreground/40" />
-                  <p className="text-sm">Nothing received yet.</p>
-                </div>
+                <EmptyState icon={CheckCircle2} title="Nothing received yet" />
               )}
             </div>
           )}
