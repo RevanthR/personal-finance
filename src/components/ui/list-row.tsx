@@ -19,7 +19,7 @@ export function ListRow({ avatarLabel, title, subtitle, trailing, onClick, class
     <Comp
       onClick={onClick}
       className={cn(
-        "w-full flex items-center gap-3 rounded-2xl border border-border bg-card p-3 text-left",
+        "w-full flex items-center gap-3 rounded-lg border border-border bg-card p-3 text-left",
         onClick && "transition-colors hover:bg-accent",
         className,
       )}

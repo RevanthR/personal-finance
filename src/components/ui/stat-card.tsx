@@ -21,7 +21,7 @@ const TONE_CLASSES: Record<NonNullable<StatCardProps["tone"]>, string> = {
 // that mixed p-3/p-4 padding and rounded-lg/rounded-xl inconsistently.
 export function StatCard({ label, value, hint, tone = "default", icon: Icon, className }: StatCardProps) {
   return (
-    <div className={cn("rounded-2xl border border-border bg-card p-4", className)}>
+    <div className={cn("rounded-lg border border-border bg-card p-4", className)}>
       <div className="flex items-center justify-between mb-1">
         <span className="fin-label">{label}</span>
         {Icon && <Icon className="w-3.5 h-3.5 text-muted-foreground" />}

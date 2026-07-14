@@ -20,7 +20,7 @@ interface EmptyStateProps {
 export function EmptyState({ icon: Icon, title, description, action, className, titleClassName }: EmptyStateProps) {
   return (
     <div className={cn("flex flex-col items-center justify-center text-center py-14 px-4", className)}>
-      <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-3">
+      <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3">
         <Icon className="w-5 h-5 text-muted-foreground" />
       </div>
       <p className={cn("text-sm font-medium text-foreground", titleClassName)}>{title}</p>

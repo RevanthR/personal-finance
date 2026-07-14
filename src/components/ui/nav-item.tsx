@@ -9,15 +9,19 @@ interface NavItemProps {
   icon: LucideIcon;
   active: boolean;
   variant: "desktop" | "mobile";
-  collapsed?: boolean;
   badge?: number;
   trailing?: ReactNode;
+  /** Per-destination icon circle colors (Coin by Zerodha gives each nav
+   * item its own hue rather than tinting everything with one accent) —
+   * e.g. "bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400". */
+  iconClass?: string;
 }
 
-// Single source of truth for a nav link's active/hover/badge treatment —
-// desktop and mobile bottom-nav previously hand-maintained two separate
-// blocks that had drifted apart in radius, gap, and gradient direction.
-export function NavItem({ href, label, icon: Icon, active, variant, collapsed, badge, trailing }: NavItemProps) {
+// Single source of truth for a nav link's active/hover/badge treatment.
+// Desktop renders as a vertical tile (icon-in-circle above label, bordered
+// box when active) matching Coin's sidebar; mobile stays a compact bottom
+// bar item (icon above label, no border box, screen space doesn't allow it).
+export function NavItem({ href, label, icon: Icon, active, variant, badge, trailing, iconClass }: NavItemProps) {
   const showBadge = !!badge && badge > 0;
   const badgeText = badge && badge > 9 ? "9+" : badge;
 
@@ -26,8 +30,8 @@ export function NavItem({ href, label, icon: Icon, active, variant, collapsed, b
       <Link
         href={href}
         className={cn(
-          "flex-1 flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-xs transition-colors",
-          active ? "bg-primary/10 text-primary" : "text-muted-foreground",
+          "flex-1 flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-md text-xs transition-colors",
+          active ? "text-primary" : "text-muted-foreground",
         )}
       >
         <span className="relative">
@@ -47,29 +51,22 @@ export function NavItem({ href, label, icon: Icon, active, variant, collapsed, b
     <Link
       href={href}
       className={cn(
-        "flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors",
-        active ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+        "flex flex-col items-center gap-1 px-1 py-2.5 rounded-md border text-center transition-colors",
+        active ? "border-primary/40 bg-accent" : "border-transparent hover:bg-muted",
       )}
     >
-      <span className="relative shrink-0">
-        <Icon className="w-4 h-4" />
-        {collapsed && showBadge && (
-          <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold flex items-center justify-center">
-            {badgeText}
-          </span>
-        )}
+      <span className={cn("w-8 h-8 rounded-full flex items-center justify-center", iconClass ?? "bg-muted text-muted-foreground")}>
+        <Icon className="w-3.5 h-3.5" />
       </span>
-      {!collapsed && (
-        <span className="flex-1 flex items-center justify-between">
-          {label}
-          {showBadge && (
-            <span className="text-[10px] font-semibold text-primary bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded-full">
-              {badge}
-            </span>
-          )}
-          {trailing}
+      <span className={cn("text-[11px] leading-tight", active ? "font-semibold text-foreground" : "font-medium text-muted-foreground")}>
+        {label}
+      </span>
+      {showBadge && (
+        <span className="text-[10px] font-semibold text-primary bg-accent px-1.5 py-0.5 rounded-full -mt-1">
+          {badge}
         </span>
       )}
+      {trailing}
     </Link>
   );
 }

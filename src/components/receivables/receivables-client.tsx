@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
+import { TabsUnderline, type TabsUnderlineOption } from "@/components/ui/tabs-underline";
 import { formatCurrency, cn, MONTHS } from "@/lib/utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { Plus, TrendingUp, TrendingDown, Wallet, Clock, CheckCircle2, Trash2, CreditCard, Pencil } from "lucide-react";
@@ -74,11 +75,14 @@ const BANKS = [
   "Bandhan Bank", "HSBC", "Other",
 ] as const;
 const RECV_LABELS: Record<string, string> = { INVESTMENT: "Investment", PERSONAL_LOAN: "Personal Loan", CUSTOM: "Custom" };
+// Color reserved for actual gain/loss (matching the reference app's
+// restraint) — categories that aren't inherently positive/negative stay
+// neutral instead of borrowing the warning/amber token.
 const RECV_COLORS: Record<string, string> = {
   INVESTMENT: "bg-positive-bg text-positive border border-positive-border",
-  PERSONAL_LOAN: "bg-warning-bg text-warning border border-warning-border",
+  PERSONAL_LOAN: "bg-muted text-muted-foreground border border-border",
   CUSTOM: "bg-muted text-muted-foreground border border-border",
-  CHIT_FUND: "bg-warning-bg text-warning border border-warning-border",
+  CHIT_FUND: "bg-muted text-muted-foreground border border-border",
 };
 
 type MainTab = "cards" | "chits" | "receivables";
@@ -127,7 +131,7 @@ function AddCardDialog({ open, onOpenChange, onAdd }: {
             <Label className="text-xs">Card name *</Label>
             <Input value={name} onChange={e => setName(e.target.value)} placeholder="Axis Bank CC" className="mt-1" required />
           </div>
-          <p className="text-xs text-warning bg-warning-bg border border-warning-border rounded-md px-2.5 py-1.5">
+          <p className="text-xs text-muted-foreground bg-muted border border-border rounded-md px-2.5 py-1.5">
             Filling in bank, network, and last 4 digits below (all optional) helps Gmail Imports automatically match transactions to this card.
           </p>
           <div className="grid grid-cols-2 gap-3">
@@ -354,7 +358,7 @@ function CCCardTile({ card, fmt, onEntryUpdate, onDelete, onMetaUpdate }: {
         {!card.last4 && (
           <button
             onClick={() => setEditingCard(true)}
-            className="text-xs text-warning bg-warning-bg border border-warning-border rounded-full px-2 py-0.5 hover:bg-warning-bg transition-colors"
+            className="text-xs text-accent-foreground bg-accent border border-primary/20 rounded-full px-2 py-0.5 hover:bg-accent/70 transition-colors"
           >
             Add last 4 digits for better matching
           </button>
@@ -570,10 +574,10 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
-  const tabs: { key: MainTab; label: string; icon: React.ReactNode }[] = [
-    { key: "cards",       label: "Cards",       icon: <CreditCard className="w-3.5 h-3.5" /> },
-    { key: "chits",       label: "Chits",       icon: <TrendingUp className="w-3.5 h-3.5" /> },
-    { key: "receivables", label: "Receivables", icon: <Wallet className="w-3.5 h-3.5" /> },
+  const tabs: TabsUnderlineOption<MainTab>[] = [
+    { value: "cards",       label: "Cards",       icon: CreditCard },
+    { value: "chits",       label: "Chits",       icon: TrendingUp },
+    { value: "receivables", label: "Receivables", icon: Wallet },
   ];
 
   return (
@@ -592,28 +596,14 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
         action={
           <>
             {mainTab === "cards"       && <Button size="sm" onClick={() => setShowAddCard(true)}       className="h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm"><Plus className="w-3.5 h-3.5 mr-1" />Add Card</Button>}
-            {mainTab === "chits"       && <Button size="sm" variant="outline" onClick={() => setShowAddChit(true)}       className="h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm"><Plus className="w-3.5 h-3.5 mr-1" />Add Chit</Button>}
+            {mainTab === "chits"       && <Button size="sm" onClick={() => setShowAddChit(true)}       className="h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm"><Plus className="w-3.5 h-3.5 mr-1" />Add Chit</Button>}
             {mainTab === "receivables" && <Button size="sm" onClick={() => setShowAddReceivable(true)} className="h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm"><Plus className="w-3.5 h-3.5 mr-1" />Add</Button>}
           </>
         }
         className="mb-0"
       />
 
-      {/* Main tabs */}
-      <div className="flex gap-1 bg-muted p-1 rounded-lg w-fit">
-        {tabs.map(t => (
-          <button
-            key={t.key}
-            onClick={() => setMainTab(t.key)}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-2.5 rounded-md text-sm font-medium transition-colors",
-              mainTab === t.key ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            {t.icon}{t.label}
-          </button>
-        ))}
-      </div>
+      <TabsUnderline value={mainTab} onChange={setMainTab} options={tabs} />
 
       {/* ── Cards tab ─────────────────────────────────────────────────────── */}
       {mainTab === "cards" && (
@@ -644,7 +634,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
           {unliftedChits.length > 0 && (
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Active</p>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {unliftedChits.map(chit => {
                   const sd = new Date(chit.startDate);
                   const smIdx = sd.getUTCMonth();
@@ -656,7 +646,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                       <CardHeader className="pb-2 px-4 pt-4">
                         <div className="flex items-center justify-between gap-2">
                           <CardTitle className="text-sm font-semibold truncate">{chit.template.name}</CardTitle>
-                          <Badge className="text-xs shrink-0 bg-warning-bg text-warning border border-warning-border">
+                          <Badge className="text-xs shrink-0 bg-accent text-accent-foreground border border-primary/20">
                             <TrendingUp className="w-3 h-3 mr-1" />Active
                           </Badge>
                         </div>
@@ -692,7 +682,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                             onClick={() => setEditingChit(chit)}>
                             <Pencil className="w-3 h-3 mr-1" />Edit
                           </Button>
-                          <Button size="sm" className="flex-1 h-8 text-xs bg-warning hover:bg-warning/90"
+                          <Button size="sm" className="flex-1 h-8 text-xs"
                             onClick={() => setLiftingChit(chit)}>
                             Mark as Lifted
                           </Button>
@@ -709,7 +699,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
           {liftedChits.length > 0 && (
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Lifted</p>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {liftedChits.map(chit => (
                   <Card key={chit.id} className="opacity-75">
                     <CardHeader className="pb-2 px-4 pt-4">
@@ -774,25 +764,19 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
       {/* ── Receivables tab ────────────────────────────────────────────────── */}
       {mainTab === "receivables" && (
         <div className="space-y-4">
-          <div className="flex gap-1 bg-muted p-1 rounded-lg w-fit">
-            {(["pending", "received"] as RecvTab[]).map(t => (
-              <button
-                key={t}
-                onClick={() => setRecvTab(t)}
-                className={cn(
-                  "flex items-center gap-1.5 px-3 py-2.5 rounded-md text-sm font-medium transition-colors",
-                  recvTab === t ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {t === "pending" ? <><Clock className="w-3.5 h-3.5" />Pending</> : <><CheckCircle2 className="w-3.5 h-3.5" />Received</>}
-              </button>
-            ))}
-          </div>
+          <TabsUnderline
+            value={recvTab}
+            onChange={setRecvTab}
+            options={[
+              { value: "pending", label: "Pending", icon: Clock },
+              { value: "received", label: "Received", icon: CheckCircle2 },
+            ]}
+          />
 
           {recvTab === "pending" && (
             <div>
               {pendingReceivables.length > 0 ? (
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                   {pendingReceivables.map(r => (
                     <Card key={r.id}>
                       <CardHeader className="pb-2 px-4 pt-4">
@@ -835,7 +819,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
           {recvTab === "received" && (
             <div>
               {receivedReceivables.length > 0 ? (
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                   {receivedReceivables.map(r => (
                     <Card key={r.id} className="opacity-75">
                       <CardHeader className="pb-2 px-4 pt-4">

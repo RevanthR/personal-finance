@@ -16,11 +16,12 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Wallet, TrendingDown, CheckCircle2, AlertCircle, TrendingUp, Plus, Pencil, ChevronDown, Trash2, CreditCard, ChevronLeft, ChevronRight, IndianRupee, Check, Calendar,
+  CheckCircle2, Plus, Pencil, ChevronDown, Trash2, ChevronLeft, ChevronRight, IndianRupee, Check, Calendar,
 } from "lucide-react";
 import { toast } from "sonner";
 import { EntryRow } from "./entry-row";
 import { EmptyState } from "@/components/ui/empty-state";
+import { SummaryCard } from "@/components/ui/summary-card";
 import { PaymentDialog } from "./payment-dialog";
 import { usePaymentTick } from "@/hooks/use-payment-tick";
 import { DashboardTour } from "@/components/coach/dashboard-tour";
@@ -222,7 +223,7 @@ function CCCardBlock({
     : txItems;
 
   return (
-    <div className="rounded-xl border border-border overflow-hidden">
+    <div className="rounded-lg border border-border overflow-hidden">
       {/* Card header — click to expand/collapse the whole card.
           A plain div (not a button) since it hosts the nested tick button below. */}
       <div
@@ -288,7 +289,7 @@ function CCCardBlock({
         <>
           {/* Billed vs paying indicator — only when they differ */}
           {entry.billedAmount != null && entry.billedAmount > entry.amount && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-warning-border bg-warning-bg/60">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border">
               <span className="text-xs text-warning">
                 Statement <span className="font-semibold">{fmt(entry.billedAmount)}</span>
                 {" · "}Rolling <span className="font-semibold">{fmt(entry.billedAmount - entry.amount)}</span> to next month
@@ -303,9 +304,11 @@ function CCCardBlock({
             </div>
           )}
 
-          {/* Next cycle charges — its own collapse, independent of the card's */}
+          {/* Next cycle charges — its own collapse, independent of the card's.
+              Restrained to a plain neutral block with just the label/amount
+              in amber, not a full tinted background wash over every row. */}
           {nextBillTotal > 0 && (
-            <div className="border-t border-warning-border bg-warning-bg/50 px-3 py-2">
+            <div className="border-t border-border px-3 py-2">
               <div
                 onClick={postCloseTxs.length > 0 ? () => setNextCycleCollapsed(v => !v) : undefined}
                 className={cn(
@@ -314,7 +317,7 @@ function CCCardBlock({
                   postCloseTxs.length > 0 && !nextCycleCollapsed && "mb-1.5"
                 )}
               >
-                <span className="text-xs font-semibold text-warning uppercase tracking-wider flex items-center gap-1">
+                <span className="text-xs font-semibold text-warning tracking-wide flex items-center gap-1">
                   → {nextMonthName} bill
                   {postCloseTxs.length > 0 && (
                     <ChevronDown className={cn("w-3 h-3 text-warning/60 transition-transform duration-200", !nextCycleCollapsed && "rotate-180")} />
@@ -325,7 +328,7 @@ function CCCardBlock({
                   {postCloseTxs.length === 0 && (
                     <button
                       onClick={() => onClearStatement(entry.id)}
-                      className="text-xs font-medium text-warning border border-warning-border bg-card px-2.5 py-1.5 rounded-full hover:border-warning transition-colors"
+                      className="text-xs font-medium text-muted-foreground border border-border bg-card px-2.5 py-1 rounded-md hover:border-foreground/30 transition-colors"
                     >
                       Clear
                     </button>
@@ -982,86 +985,57 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
         )}
       </div>
 
-      {/* Metric cards */}
-      <div className={cn("grid gap-1.5", hasCCCards ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2 sm:grid-cols-3")}>
-        {/* Income */}
-        {isProjected ? (
-          <MetricCard label="Est. Income" value={fmt(dispIncome)} icon={<Wallet className="w-3.5 h-3.5" />} color="text-positive" sub="projected" />
-        ) : (
-          <button onClick={openIncomeEdit} className="text-left">
-            <Card className="hover:border-border transition-colors cursor-pointer h-full">
-              <CardContent className="px-2 py-1.5">
-                <div className="flex items-center justify-between mb-0.5">
-                  <p className="text-xs text-muted-foreground tracking-wide">Income</p>
-                  <div className="flex items-center gap-1">
-                    <span className="text-positive opacity-60"><Wallet className="w-3.5 h-3.5" /></span>
-                    <Pencil className="w-2.5 h-2.5 text-muted-foreground" />
-                  </div>
-                </div>
-                <p className="text-base sm:text-lg font-semibold tabular-nums tracking-tight">{fmt(grandIncome)}</p>
-                {adHocIncome > 0 && <p className="text-xs text-positive mt-0.5 leading-tight">+{fmt(adHocIncome)} one-time</p>}
-              </CardContent>
-            </Card>
-          </button>
-        )}
-
-        {/* Recurring (non-CC fixed obligations) */}
-        <MetricCard
-          label="Recurring"
-          value={fmt(dispRecurringNonCC)}
-          icon={<TrendingDown className="w-3.5 h-3.5" />}
-          color="text-negative"
-          sub={isProjected ? `${projEntries.filter(e => e.category !== "CREDIT_CARD").length} items` : nonCCPendingCount > 0 ? `${nonCCPendingCount} pending` : "all paid"}
-        />
-
-        {/* CC bill this month + next month upcoming — only when user has CC cards */}
-        {hasCCCards && (
-          <MetricCard
-            label="CC Bill"
-            value={dispCCBills > 0 ? fmt(dispCCBills) : "—"}
-            icon={<CreditCard className="w-3.5 h-3.5" />}
-            color="text-primary"
-            sub={isProjected ? "last month's bill" : dispCCBills > 0 ? "from last month" : "no CC bills"}
-            upcoming={!isProjected ? {
-              label: dispCCNextMonth > 0 ? "Next month" : "Next month",
-              value: dispCCNextMonth > 0 ? fmt(dispCCNextMonth) : "—",
-            } : undefined}
-          />
-        )}
-
-        {/* Pending card: outstanding payments + cash balance / deficit */}
-        <div className={!hasCCCards ? "col-span-2 sm:col-span-1" : undefined}>
-          <Card className="h-full">
-            <CardContent className="px-2 py-1.5">
-              <div className="flex items-center justify-between mb-0.5">
-                <p className="text-xs text-muted-foreground">Pending</p>
-                <span className="text-warning opacity-70"><AlertCircle className="w-3.5 h-3.5" /></span>
-              </div>
-              {!isProjected ? (
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <p className="text-sm sm:text-lg font-semibold leading-tight tabular-nums">
-                      {pendingCount > 0 ? fmt(totalPending) : "—"}
-                    </p>
-                    {balance < 0 && (
-                      <p className="text-[11px] font-normal text-negative leading-tight">{fmt(Math.abs(balance))} over income</p>
-                    )}
-                  </div>
-                  <div className="border-l border-border/40 pl-2">
-                    <p className="text-sm sm:text-lg font-semibold tabular-nums text-positive leading-tight">{fmt(Math.max(0, inHandNow))}</p>
-                    <p className="text-[11px] text-muted-foreground leading-tight">Cash in Hand</p>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <p className="text-base sm:text-lg font-semibold leading-tight tabular-nums">{fmt(dispPending)}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5 leading-tight">projected</p>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+      {/* Overview — Coin's compound summary-card pattern: one card, every
+          top-line figure as a stat in the same row, instead of four
+          separate bordered tiles. */}
+      <SummaryCard
+        tag={isProjected ? "Projected" : "This month"}
+        stats={[
+          {
+            label: isProjected ? "Income" : <>Income<Pencil className="w-2.5 h-2.5 text-muted-foreground" /></>,
+            value: isProjected ? fmt(dispIncome) : fmt(grandIncome),
+            valueClass: "text-positive",
+            onClick: isProjected ? undefined : openIncomeEdit,
+            hint: isProjected
+              ? <span className="text-xs text-muted-foreground">projected</span>
+              : adHocIncome > 0
+                ? <span className="text-xs text-positive">+{fmt(adHocIncome)} one-time</span>
+                : undefined,
+          },
+          {
+            label: "Recurring",
+            value: fmt(dispRecurringNonCC),
+            valueClass: "text-negative",
+            hint: <span className="text-xs text-muted-foreground">
+              {isProjected ? `${projEntries.filter(e => e.category !== "CREDIT_CARD").length} items` : nonCCPendingCount > 0 ? `${nonCCPendingCount} pending` : "all paid"}
+            </span>,
+          },
+          ...(hasCCCards ? [{
+            label: "CC Bill",
+            value: dispCCBills > 0 ? fmt(dispCCBills) : "—",
+            hint: <span className="text-xs text-muted-foreground">{isProjected ? "last month's bill" : dispCCBills > 0 ? "from last month" : "no CC bills"}</span>,
+          }] : []),
+          ...(hasCCCards && !isProjected ? [{
+            label: "Next month",
+            value: dispCCNextMonth > 0 ? fmt(dispCCNextMonth) : "—",
+            valueClass: "text-warning",
+          }] : []),
+          {
+            label: "Pending",
+            value: isProjected ? fmt(dispPending) : (pendingCount > 0 ? fmt(totalPending) : "—"),
+            hint: isProjected
+              ? <span className="text-xs text-muted-foreground">projected</span>
+              : balance < 0
+                ? <span className="text-xs text-negative">{fmt(Math.abs(balance))} over income</span>
+                : undefined,
+          },
+          ...(!isProjected ? [{
+            label: "Cash in Hand",
+            value: fmt(Math.max(0, inHandNow)),
+            valueClass: "text-positive",
+          }] : []),
+        ]}
+      />
 
       {/* Progress — recurring + CC bill this month */}
       <div className="space-y-1.5">
@@ -1445,40 +1419,6 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
         />
       )}
     </div>
-  );
-}
-
-function MetricCard({ label, value, icon, color, sub, upcoming }: {
-  label: string; value: string; icon: React.ReactNode; color: string;
-  sub?: string;
-  upcoming?: { label: string; value: string };
-}) {
-  return (
-    <Card>
-      <CardContent className="px-2 py-1.5">
-        <div className="flex items-center justify-between mb-0.5">
-          <p className="text-xs text-muted-foreground tracking-wide">{label}</p>
-          <span className={cn(color, "opacity-60")}>{icon}</span>
-        </div>
-        {upcoming ? (
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <p className="text-sm sm:text-lg font-semibold leading-tight tabular-nums tracking-tight">{value}</p>
-              {sub && <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{sub}</p>}
-            </div>
-            <div className="border-l border-border/40 pl-2">
-              <p className="text-sm sm:text-lg font-semibold text-warning tabular-nums tracking-tight leading-tight">{upcoming.value}</p>
-              <p className="text-[11px] text-muted-foreground leading-tight">{upcoming.label}</p>
-            </div>
-          </div>
-        ) : (
-          <>
-            <p className="text-base sm:text-lg font-semibold leading-tight tabular-nums tracking-tight">{value}</p>
-            {sub && <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{sub}</p>}
-          </>
-        )}
-      </CardContent>
-    </Card>
   );
 }
 
