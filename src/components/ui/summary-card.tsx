@@ -21,6 +21,10 @@ interface SummaryCardProps {
 // card body, and an optional secondary muted-bg "toolbar" band holds
 // quick-action links along the bottom, all inside one visual unit.
 export function SummaryCard({ tag, stats, toolbar, className }: SummaryCardProps) {
+  // Only reserve hint-line height when at least one stat actually has a
+  // hint — reserving it unconditionally left a dead strip of empty space
+  // at the bottom of cards where no stat uses hints at all.
+  const anyHint = stats.some(s => s.hint);
   return (
     <div className={cn("relative rounded-lg border border-border bg-card", className)}>
       <span className="absolute -top-3 left-4 text-xs font-medium text-muted-foreground bg-muted px-2.5 py-1 rounded-full">
@@ -33,9 +37,7 @@ export function SummaryCard({ tag, stats, toolbar, className }: SummaryCardProps
             <Comp key={i} onClick={s.onClick} className={s.onClick ? "text-left" : undefined}>
               <p className="text-xs text-muted-foreground flex items-center gap-1">{s.label}</p>
               <p className={cn("text-lg font-bold tabular-nums mt-0.5", s.valueClass ?? "text-foreground")}>{s.value}</p>
-              {/* Reserved height even when empty so every stat's baseline lines
-                  up within its row — a missing hint used to leave a ragged edge. */}
-              <div className="mt-0.5 min-h-[1.25rem]">{s.hint}</div>
+              {anyHint && <div className="mt-0.5 min-h-[1.25rem]">{s.hint}</div>}
             </Comp>
           );
         })}

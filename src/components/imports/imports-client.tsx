@@ -4,7 +4,9 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Mail, RefreshCw, Check, X, Landmark, Plus, Loader2 } from "lucide-react";
+import { PageHeader } from "@/components/ui/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Mail, RefreshCw, Check, X, Landmark, Plus, Loader2, Inbox } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -174,10 +176,7 @@ export function ImportsClient({ gmail }: ImportsClientProps) {
 
   return (
     <div className="space-y-6 max-w-2xl">
-      <div>
-        <h1 className="text-2xl font-bold">Sync</h1>
-        <p className="text-sm text-muted-foreground">Transactions found in your Gmail, ready to review</p>
-      </div>
+      <PageHeader title="Sync" subtitle="Transactions found in your Gmail, ready to review" />
 
       <Card>
         <CardHeader>
@@ -211,7 +210,7 @@ export function ImportsClient({ gmail }: ImportsClientProps) {
                 <div className="space-y-1">
                   <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-zinc-900 transition-all duration-300 ease-out"
+                      className="h-full bg-primary transition-all duration-300 ease-out"
                       style={{
                         width: syncProgress
                           ? `${Math.round((syncProgress.processed / Math.max(syncProgress.total, 1)) * 100)}%`
@@ -237,7 +236,7 @@ export function ImportsClient({ gmail }: ImportsClientProps) {
       </Card>
 
       {gmail.connected && grouped.length === 0 && (
-        <p className="text-sm text-muted-foreground text-center py-8">Nothing pending, you&apos;re all caught up.</p>
+        <EmptyState icon={Inbox} title="Nothing pending" description="You're all caught up." />
       )}
 
       {grouped.map(([day, items]) => (
@@ -403,8 +402,8 @@ function AddForm({ item, ccCards, customCategories, onDone, showBack, onBack }: 
                   className={cn(
                     "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
                     ccTemplateId === card.templateId
-                      ? "bg-zinc-900 text-white border-zinc-900"
-                      : "border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground",
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground",
                   )}
                 >
                   {card.name}
@@ -421,8 +420,8 @@ function AddForm({ item, ccCards, customCategories, onDone, showBack, onBack }: 
                 className={cn(
                   "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
                   spendCat === sub
-                    ? "bg-zinc-900 text-white border-zinc-900"
-                    : "border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground",
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground",
                 )}
               >
                 {sub}
@@ -440,8 +439,8 @@ function AddForm({ item, ccCards, customCategories, onDone, showBack, onBack }: 
               className={cn(
                 "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
                 category === c.value && !customLabel
-                  ? "bg-zinc-900 text-white border-zinc-900"
-                  : "border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground",
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground",
               )}
             >
               {c.label}
@@ -455,8 +454,8 @@ function AddForm({ item, ccCards, customCategories, onDone, showBack, onBack }: 
               className={cn(
                 "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
                 customLabel === c.name
-                  ? "bg-zinc-900 text-white border-zinc-900"
-                  : "border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground",
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground",
               )}
             >
               {c.name}

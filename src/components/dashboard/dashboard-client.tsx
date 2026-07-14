@@ -425,7 +425,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   );
   const {
     totalCommitted, totalPaid, totalPending, paidPercent, pendingCount,
-    ccBillsThisMonth, recurringNonCC, ccNextMonth,
+    ccBillsThisMonth, recurringNonCC,
   } = metrics;
 
   const balance   = grandIncome - totalCommitted - adHocExpense;
@@ -644,7 +644,6 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   const dispSavings         = dispIncome > 0 ? Math.round(((dispIncome - dispCommitted - dispAdHoc) / dispIncome) * 100) : 0;
   const dispRecurringNonCC  = isProjected ? projEntries.filter(e => e.category !== "CREDIT_CARD").reduce((s, e) => s + e.amount, 0) : recurringNonCC;
   const dispCCBills         = isProjected ? projEntries.filter(e => e.category === "CREDIT_CARD").reduce((s, e) => s + e.amount, 0) : ccBillsThisMonth;
-  const dispCCNextMonth     = isProjected ? 0 : ccNextMonth;
   const dispNonCCPaidPct    = isProjected ? 0 : nonCCPaidPercent;
   const dispNonCCPending    = isProjected ? dispRecurringNonCC : (recurringNonCC - nonCCPaidAmount);
 
@@ -1014,11 +1013,6 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             label: "CC Bill",
             value: dispCCBills > 0 ? fmt(dispCCBills) : "—",
             hint: <span className="text-xs text-muted-foreground">{isProjected ? "last month's bill" : dispCCBills > 0 ? "from last month" : "no CC bills"}</span>,
-          }] : []),
-          ...(hasCCCards && !isProjected ? [{
-            label: "Next month",
-            value: dispCCNextMonth > 0 ? fmt(dispCCNextMonth) : "—",
-            valueClass: "text-warning",
           }] : []),
           {
             label: "Pending",

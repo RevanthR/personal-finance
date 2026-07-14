@@ -8,6 +8,15 @@ import { YearOverviewClient, type MonthData } from "@/components/months/year-ove
 import { CATEGORY_LABELS, CATEGORY_COLORS, MONTHS } from "@/lib/utils";
 import type { AnalyticsData } from "@/components/months/stats-breakdown";
 
+// Must match CC_SUBCATEGORIES in dashboard-client.tsx — used to pick the
+// real subcategory out of a CC ad-hoc item's notes field regardless of
+// where in the "·"-joined string it lands (manual entries via the ad-hoc
+// dialog format it as "CardName · Subcategory · userNotes"; Gmail-approved
+// entries format it as "Subcategory · Imported from Gmail" — different
+// positions, so a positional a.notes.split("·")[1] picked up the literal
+// "Imported from Gmail" marker for the latter instead of the real category).
+const CC_SPEND_SUBCATEGORIES = ["Food", "Coffee", "Groceries", "Fuel", "Shopping", "Travel", "Health", "Bills", "Entertainment", "Other"];
+
 function getFY(month: number, year: number) {
   const fyStart = month >= 4 ? year : year - 1;
   return {
@@ -37,7 +46,7 @@ export default async function MonthsPage() {
   const [allMonths, allTemplates, currentMonthFull, pendingReceivables, analyticsMonths] = await Promise.all([
     db.month.findMany({
       where: { userId },
-      include: { entries: true, adHocItems: true },
+      include: { entries: { include: { template: true } }, adHocItems: true },
       orderBy: [{ year: "asc" }, { month: "asc" }],
     }),
     getActiveTemplates(userId),
@@ -162,12 +171,21 @@ export default async function MonthsPage() {
     if (actual) {
       const income = computeMonthIncome(actual.adHocItems, incomeTemplates, month, year);
       const isActualCurrentMonth = month === todayMonth && year === todayYear;
-      const expenses = actual.entries
-        .filter(e => !isActualCurrentMonth || !pendingCCBillIds.has(e.id))
-        .reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
+      const billableEntries = actual.entries.filter(e => !isActualCurrentMonth || !pendingCCBillIds.has(e.id));
+      const expenses = billableEntries.reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
         + actual.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0);
+      const ccEntries = billableEntries.filter(e => e.template.category === "CREDIT_CARD");
+      const ccTotal = ccEntries.reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0);
+      const ccByCardMap = new Map<string, { name: string; amount: number }>();
+      for (const e of ccEntries) {
+        const amt = e.amount - (e.cashbackAmount ?? 0);
+        const existing = ccByCardMap.get(e.templateId);
+        if (existing) existing.amount += amt;
+        else ccByCardMap.set(e.templateId, { name: e.template.name, amount: amt });
+      }
+      const ccByCard = [...ccByCardMap.entries()].map(([templateId, v]) => ({ templateId, ...v }));
       return {
-        id: actual.id, month, year, income, expenses,
+        id: actual.id, month, year, income, expenses, ccTotal, ccByCard,
         balance: income - expenses,
         paid: actual.entries.filter(e => e.isPaid).length,
         total: actual.entries.length,
@@ -183,6 +201,8 @@ export default async function MonthsPage() {
       isTemplateActiveInMonth(t, month, year)
     );
     const isImmediateNext = month === nextM && year === nextY;
+    let projCCTotal = 0;
+    const projCCByCard: { templateId: string; name: string; amount: number }[] = [];
     const projExpenses = activeThisMonth.reduce((s, t) => {
       let amount = t.amount;
       if (t.chitFund) {
@@ -191,6 +211,10 @@ export default async function MonthsPage() {
           : t.chitFund.monthlyUnliftedAmount;
       } else if (t.category === "CREDIT_CARD" && isImmediateNext && ccStatements.has(t.id)) {
         amount = ccStatements.get(t.id)!;
+      }
+      if (t.category === "CREDIT_CARD") {
+        projCCTotal += amount;
+        projCCByCard.push({ templateId: t.id, name: t.name, amount });
       }
       return s + amount;
     }, 0);
@@ -221,7 +245,7 @@ export default async function MonthsPage() {
 
     return {
       id: null, month, year,
-      income: projIncome, expenses: projExpenses,
+      income: projIncome, expenses: projExpenses, ccTotal: projCCTotal, ccByCard: projCCByCard,
       balance: projIncome - projExpenses,
       paid: null, total: null,
       isPopulated: false,
@@ -290,12 +314,12 @@ export default async function MonthsPage() {
         color: CATEGORY_COLORS[key] ?? "#94a3b8",
       }));
 
-    // CC sub-category breakdown from adHocItems notes ("CardName · Subcategory")
+    // CC sub-category breakdown from adHocItems notes
     const ccMap = new Map<string, number>();
     for (const a of cm.adHocItems) {
       if (a.type === "EXPENSE" && a.category === "CREDIT_CARD" && a.notes) {
-        const parts = a.notes.split("·");
-        const subcat = parts.length > 1 ? parts[1].trim() : "Other";
+        const parts = a.notes.split("·").map(p => p.trim());
+        const subcat = parts.find(p => CC_SPEND_SUBCATEGORIES.includes(p)) ?? "Other";
         ccMap.set(subcat, (ccMap.get(subcat) ?? 0) + a.amount);
       }
     }

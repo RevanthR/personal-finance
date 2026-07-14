@@ -13,10 +13,10 @@ interface PageHeaderProps {
 // responsive step in nearly every page.
 export function PageHeader({ title, subtitle, action, className }: PageHeaderProps) {
   return (
-    <div className={cn("flex items-start justify-between gap-4 mb-6", className)}>
+    <div className={cn("flex flex-wrap items-start justify-between gap-x-4 gap-y-2 mb-8", className)}>
       <div>
         <h1 className="text-xl font-bold sm:text-2xl text-foreground">{title}</h1>
-        {subtitle && <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>}
+        {subtitle && <p className="text-sm text-muted-foreground mt-1.5">{subtitle}</p>}
       </div>
       {action}
     </div>

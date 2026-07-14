@@ -103,7 +103,7 @@ function pct(a: number, b: number) {
 
 function Bar({ value, max, color }: { value: number; max: number; color: string }) {
   return (
-    <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden flex-1">
+    <div className="h-1.5 rounded-full bg-muted overflow-hidden flex-1">
       <div className="h-full rounded-full transition-all duration-500" style={{ width: `${max > 0 ? (value / max) * 100 : 0}%`, backgroundColor: color, opacity: 0.7 }} />
     </div>
   );
@@ -115,7 +115,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
-    <div className="rounded-xl border bg-card p-3">
+    <div className="rounded-lg border bg-card p-3">
       <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">{label}</p>
       <p className={cn("text-lg font-bold tabular-nums", color ?? "text-foreground")}>{value}</p>
       {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
@@ -140,7 +140,7 @@ function CategorySection({ data, totalExpenses, fmt }: {
             onClick={() => setExpanded(expanded === cat.key ? null : cat.key)}
             className="w-full text-left"
           >
-            <div className="flex items-center gap-2 py-2 px-3 rounded-xl hover:bg-zinc-50 transition-colors group">
+            <div className="flex items-center gap-2 py-2 px-3 rounded-lg hover:bg-muted transition-colors group">
               <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
               <span className="text-sm font-medium flex-1 min-w-0 truncate">{cat.name}</span>
               <span className="text-xs text-muted-foreground shrink-0">{cat.pct}%</span>
@@ -192,7 +192,7 @@ function SavingsRateBar({ trends }: {
           <p className="text-xs text-muted-foreground">{t.label}</p>
           <p className={cn(
             "text-xs font-bold tabular-nums",
-            t.savingsRate >= 20 ? "text-emerald-600" : t.savingsRate >= 0 ? "text-amber-600" : "text-red-500"
+            t.savingsRate >= 20 ? "text-positive" : t.savingsRate >= 0 ? "text-warning" : "text-negative"
           )}>
             {t.savingsRate}%
           </p>
@@ -203,7 +203,7 @@ function SavingsRateBar({ trends }: {
 }
 
 function RelativeTime({ months }: { months: number }) {
-  if (months === 0) return <span className="text-amber-600 font-medium">this month</span>;
+  if (months === 0) return <span className="text-warning font-medium">this month</span>;
   if (months < 12) return <span>{months}mo away</span>;
   const y = Math.floor(months / 12), m = months % 12;
   return <span>{y}yr{m > 0 ? ` ${m}mo` : ""} away</span>;
@@ -223,16 +223,16 @@ function ReliefTimeline({ data, fmt }: {
     <div className="space-y-3">
       {/* Current committed header */}
       <div className="grid grid-cols-2 gap-2">
-        <div className="rounded-xl border bg-red-50 border-red-200 p-3">
-          <p className="text-xs text-red-500 uppercase tracking-widest font-medium mb-0.5">Monthly committed</p>
-          <p className="text-lg font-bold text-red-500 tabular-nums">{fmt(currentMonthlyCommitted)}</p>
-          <p className="text-xs text-red-500">{loans.length} loan{loans.length !== 1 ? "s" : ""} · {chits.filter(c => c.remainingMonths > 0).length} chit{chits.filter(c => c.remainingMonths > 0).length !== 1 ? "s" : ""}</p>
+        <div className="rounded-lg border bg-negative-bg border-negative-border p-3">
+          <p className="text-xs text-negative uppercase tracking-widest font-medium mb-0.5">Monthly committed</p>
+          <p className="text-lg font-bold text-negative tabular-nums">{fmt(currentMonthlyCommitted)}</p>
+          <p className="text-xs text-negative">{loans.length} loan{loans.length !== 1 ? "s" : ""} · {chits.filter(c => c.remainingMonths > 0).length} chit{chits.filter(c => c.remainingMonths > 0).length !== 1 ? "s" : ""}</p>
         </div>
         {lastMilestone && (
-          <div className="rounded-xl border bg-emerald-50 border-emerald-200 p-3">
-            <p className="text-xs text-emerald-600 uppercase tracking-widest font-medium mb-0.5">After all clear</p>
-            <p className="text-lg font-bold text-emerald-600 tabular-nums">{fmt(Math.max(0, lastMilestone.committedAfter))}</p>
-            <p className="text-xs text-emerald-600">by {lastMilestone.label}</p>
+          <div className="rounded-lg border bg-positive-bg border-positive-border p-3">
+            <p className="text-xs text-positive uppercase tracking-widest font-medium mb-0.5">After all clear</p>
+            <p className="text-lg font-bold text-positive tabular-nums">{fmt(Math.max(0, lastMilestone.committedAfter))}</p>
+            <p className="text-xs text-positive">by {lastMilestone.label}</p>
           </div>
         )}
       </div>
@@ -244,13 +244,13 @@ function ReliefTimeline({ data, fmt }: {
             const a = l.amortization;
             const iPct = a && l.monthlyAmount > 0 ? Math.round((a.interestThisMonth / l.monthlyAmount) * 100) : 0;
             return (
-              <div key={l.name} className="rounded-xl border bg-card px-4 py-3 space-y-2.5">
+              <div key={l.name} className="rounded-lg border bg-card px-4 py-3 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                    <span className="w-2 h-2 rounded-full bg-negative shrink-0" />
                     <p className="text-sm font-semibold truncate">{l.name}</p>
                     {l.rateType === "FLOATING" && (
-                      <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium shrink-0">floating</span>
+                      <span className="text-xs px-1.5 py-0.5 rounded-full bg-warning-bg text-warning font-medium shrink-0">floating</span>
                     )}
                   </div>
                   <span className="text-xs text-muted-foreground shrink-0 ml-2">
@@ -261,28 +261,28 @@ function ReliefTimeline({ data, fmt }: {
                 {a ? (
                   <>
                     <div className="grid grid-cols-2 gap-2">
-                      <div className="rounded-lg bg-zinc-50 px-3 py-2">
+                      <div className="rounded-lg bg-muted px-3 py-2">
                         <p className="text-xs text-muted-foreground mb-0.5">Principal left</p>
                         <p className="text-sm font-bold tabular-nums">{fmt(a.outstandingPrincipal)}</p>
                       </div>
-                      <div className="rounded-lg bg-red-50 px-3 py-2">
-                        <p className="text-xs text-red-500 mb-0.5">Interest left</p>
-                        <p className="text-sm font-bold text-red-500 tabular-nums">{fmt(a.totalInterestRemaining)}</p>
+                      <div className="rounded-lg bg-negative-bg px-3 py-2">
+                        <p className="text-xs text-negative mb-0.5">Interest left</p>
+                        <p className="text-sm font-bold text-negative tabular-nums">{fmt(a.totalInterestRemaining)}</p>
                       </div>
                     </div>
                     <div className="space-y-1">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-emerald-600 font-medium">{fmt(a.principalThisMonth)} principal this month</span>
-                        <span className="text-red-500 font-medium">{fmt(a.interestThisMonth)} interest</span>
+                        <span className="text-positive font-medium">{fmt(a.principalThisMonth)} principal this month</span>
+                        <span className="text-negative font-medium">{fmt(a.interestThisMonth)} interest</span>
                       </div>
-                      <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden flex">
-                        <div className="h-full bg-emerald-400" style={{ width: `${100 - iPct}%` }} />
-                        <div className="h-full bg-red-500 flex-1" />
+                      <div className="h-1.5 rounded-full bg-muted overflow-hidden flex">
+                        <div className="h-full bg-positive" style={{ width: `${100 - iPct}%` }} />
+                        <div className="h-full bg-negative flex-1" />
                       </div>
                       {a.monthsRemaining > 0 && l.endsMonth && l.endsYear && (
                         <p className="text-xs text-muted-foreground">
                           {a.monthsRemaining} months left · clears {MONTHS[l.endsMonth - 1]} {l.endsYear}
-                          <span className="text-emerald-600 ml-1">· saves {fmt(l.monthlyAmount)}/mo</span>
+                          <span className="text-positive ml-1">· saves {fmt(l.monthlyAmount)}/mo</span>
                         </p>
                       )}
                     </div>
@@ -308,8 +308,8 @@ function ReliefTimeline({ data, fmt }: {
             .map((ms, i) => {
               const chitItems = ms.items.filter(x => x.type === "CHIT");
               return (
-                <div key={ms.label} className="relative rounded-xl border bg-card px-4 py-3">
-                  <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl bg-amber-400" />
+                <div key={ms.label} className="relative rounded-lg border bg-card px-4 py-3">
+                  <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl bg-warning" />
                   <div className="flex items-start justify-between gap-3 pl-1">
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
@@ -319,21 +319,21 @@ function ReliefTimeline({ data, fmt }: {
                       <div className="mt-1 space-y-0.5">
                         {chitItems.map(item => (
                           <div key={item.name} className="flex items-center gap-1.5">
-                            <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-amber-400" />
+                            <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-warning" />
                             <span className="text-xs text-muted-foreground">{item.name}</span>
                           </div>
                         ))}
                       </div>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="text-sm font-bold text-emerald-600">saves {fmt(ms.totalRelief)}/mo</p>
+                      <p className="text-sm font-bold text-positive">saves {fmt(ms.totalRelief)}/mo</p>
                       <p className="text-xs text-muted-foreground">down to {fmt(Math.max(0, ms.committedAfter))}/mo</p>
                     </div>
                   </div>
                   {ms.monthsFromNow > 0 && i === 0 && (
                     <div className="mt-2 pl-1">
-                      <div className="h-1 rounded-full bg-gray-100 overflow-hidden">
-                        <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${Math.min(100, Math.round((1 - ms.monthsFromNow / (data.chits.find(c => ms.items.some(x => x.name === c.name))?.durationMonths ?? 24)) * 100))}%` }} />
+                      <div className="h-1 rounded-full bg-muted overflow-hidden">
+                        <div className="h-full rounded-full bg-positive transition-all" style={{ width: `${Math.min(100, Math.round((1 - ms.monthsFromNow / (data.chits.find(c => ms.items.some(x => x.name === c.name))?.durationMonths ?? 24)) * 100))}%` }} />
                       </div>
                     </div>
                   )}
@@ -369,12 +369,12 @@ function YoYSection({ current, prev, prevLabel, fmt }: {
         <span className="text-right">This FY</span>
       </div>
       {cats.map(c => (
-        <div key={c.key} className="grid grid-cols-4 items-center gap-1 px-1 py-1.5 rounded-lg hover:bg-zinc-50">
+        <div key={c.key} className="grid grid-cols-4 items-center gap-1 px-1 py-1.5 rounded-lg hover:bg-muted">
           <div className="col-span-2 flex items-center gap-1.5 min-w-0">
             <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: c.color }} />
             <span className="text-xs truncate">{c.name}</span>
             {c.delta !== null && (
-              <span className={cn("text-xs font-semibold px-1 py-0.5 rounded", c.delta > 10 ? "text-red-500 bg-red-50" : c.delta < -10 ? "text-emerald-600 bg-emerald-50" : "text-gray-400 bg-gray-100")}>
+              <span className={cn("text-xs font-semibold px-1 py-0.5 rounded", c.delta > 10 ? "text-negative bg-negative-bg" : c.delta < -10 ? "text-positive bg-positive-bg" : "text-muted-foreground bg-muted")}>
                 {c.delta > 0 ? "+" : ""}{c.delta}%
               </span>
             )}
@@ -413,10 +413,10 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
 
       {/* Summary cards — always full width */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <StatCard label="Spend to date" value={fmt(data.fyExpenses)} sub={`${data.actualMonthCount} mo · proj ${fmt(data.fyExpensesProjected)}`} color="text-red-500" />
+        <StatCard label="Spend to date" value={fmt(data.fyExpenses)} sub={`${data.actualMonthCount} mo · proj ${fmt(data.fyExpensesProjected)}`} color="text-negative" />
         <StatCard label="Avg / month" value={fmt(avgMonthlySpend)} />
-        <StatCard label="Income to date" value={fmt(data.fyIncome)} sub={`proj ${fmt(data.fyIncomeProjected)}`} color="text-emerald-600" />
-        <StatCard label="Avg savings" value={`${avgSavingsRate}%`} color={avgSavingsRate >= 20 ? "text-emerald-600" : avgSavingsRate >= 10 ? "text-amber-600" : "text-red-500"} />
+        <StatCard label="Income to date" value={fmt(data.fyIncome)} sub={`proj ${fmt(data.fyIncomeProjected)}`} color="text-positive" />
+        <StatCard label="Avg savings" value={`${avgSavingsRate}%`} color={avgSavingsRate >= 20 ? "text-positive" : avgSavingsRate >= 10 ? "text-warning" : "text-negative"} />
       </div>
 
       {/* Monthly overview — full width, above the columns */}
@@ -434,13 +434,13 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
                 <div className="flex gap-4 pt-1 border-t border-border">
                   {data.bestMonth && (
                     <div className="flex items-center gap-1.5">
-                      <TrendingUp className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <TrendingUp className="w-3.5 h-3.5 text-positive shrink-0" />
                       <p className="text-xs"><span className="text-muted-foreground">All-time best </span><span className="font-semibold">{data.bestMonth.label} {data.bestMonth.savingsRate}%</span></p>
                     </div>
                   )}
                   {data.worstMonth && (
                     <div className="flex items-center gap-1.5">
-                      <TrendingDown className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                      <TrendingDown className="w-3.5 h-3.5 text-negative shrink-0" />
                       <p className="text-xs"><span className="text-muted-foreground">All-time worst </span><span className="font-semibold">{data.worstMonth.label} {data.worstMonth.savingsRate}%</span></p>
                     </div>
                   )}
@@ -472,7 +472,7 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
                   ].map(({ label, value, color }) => (
                     <div key={label} className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground w-16 shrink-0">{label}</span>
-                      <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                      <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
                         <div className="h-full rounded-full" style={{ width: `${value}%`, backgroundColor: color, opacity: 0.75 }} />
                       </div>
                       <span className="text-xs font-semibold tabular-nums w-8 text-right shrink-0">{value}%</span>
@@ -495,10 +495,10 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
               <Card>
                 <CardContent className="p-3 sm:p-4">
                   <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-3">
-                    <div><span className="text-xs text-muted-foreground">Salary </span><span className="text-xs font-semibold text-emerald-600">{fmt(data.incomeSources.salary)}</span></div>
-                    {data.incomeSources.freelance > 0 && <div><span className="text-xs text-muted-foreground">Freelance </span><span className="text-xs font-semibold text-emerald-600">{fmt(data.incomeSources.freelance)}</span><span className="text-xs text-muted-foreground ml-1">({data.freelancePct}%)</span></div>}
+                    <div><span className="text-xs text-muted-foreground">Salary </span><span className="text-xs font-semibold text-positive">{fmt(data.incomeSources.salary)}</span></div>
+                    {data.incomeSources.freelance > 0 && <div><span className="text-xs text-muted-foreground">Freelance </span><span className="text-xs font-semibold text-positive">{fmt(data.incomeSources.freelance)}</span><span className="text-xs text-muted-foreground ml-1">({data.freelancePct}%)</span></div>}
                     {data.incomeSources.other > 0 && <div><span className="text-xs text-muted-foreground">Other </span><span className="text-xs font-semibold">{fmt(data.incomeSources.other)}</span></div>}
-                    {data.incomeSources.adHoc > 0 && <div><span className="text-xs text-muted-foreground">One-off </span><span className="text-xs font-semibold text-amber-600">{fmt(data.incomeSources.adHoc)}</span></div>}
+                    {data.incomeSources.adHoc > 0 && <div><span className="text-xs text-muted-foreground">One-off </span><span className="text-xs font-semibold text-warning">{fmt(data.incomeSources.adHoc)}</span></div>}
                   </div>
                   <IncomeChart data={data.monthlyTrends} />
                 </CardContent>
@@ -524,7 +524,7 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
                           </div>
                           <div className="text-right shrink-0">
                             {c.remainingMonths === 0 ? (
-                              <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-600 font-medium">Done</span>
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-positive-bg text-positive font-medium">Done</span>
                             ) : (
                               <>
                                 <p className="text-xs font-semibold">ends {MONTHS[c.endsMonth - 1]} {c.endsYear}</p>
@@ -533,8 +533,8 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
                             )}
                           </div>
                         </div>
-                        <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                          <div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${progressPct}%` }} />
+                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                          <div className="h-full rounded-full bg-warning transition-all" style={{ width: `${progressPct}%` }} />
                         </div>
                         <div className="flex justify-between mt-1">
                           <span className="text-xs text-muted-foreground">month {elapsed} of {c.durationMonths}</span>
@@ -560,34 +560,6 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
             </div>
           )}
 
-          {/* CC annual subcats */}
-          {data.ccAnnualSubcats.length > 0 && (
-            <div>
-              <SectionTitle>Card spend by type</SectionTitle>
-              <Card>
-                <CardContent className="p-3 sm:p-4">
-                  <div className="space-y-2">
-                    {(() => {
-                      const total = data.ccAnnualSubcats.reduce((s, i) => s + i.amount, 0);
-                      const max = data.ccAnnualSubcats[0]?.amount ?? 1;
-                      return data.ccAnnualSubcats.map(item => (
-                        <div key={item.name}>
-                          <div className="flex justify-between mb-0.5">
-                            <span className="text-xs">{item.name}</span>
-                            <div className="flex gap-2">
-                              <span className="text-xs text-muted-foreground">{pct(item.amount, total)}%</span>
-                              <span className="text-xs font-semibold tabular-nums">{fmt(item.amount)}</span>
-                            </div>
-                          </div>
-                          <Bar value={item.amount} max={max} color={CATEGORY_COLORS.CREDIT_CARD} />
-                        </div>
-                      ));
-                    })()}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
         </div>
       </div>
 

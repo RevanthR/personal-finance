@@ -600,7 +600,6 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
             {mainTab === "receivables" && <Button size="sm" onClick={() => setShowAddReceivable(true)} className="h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm"><Plus className="w-3.5 h-3.5 mr-1" />Add</Button>}
           </>
         }
-        className="mb-0"
       />
 
       <TabsUnderline value={mainTab} onChange={setMainTab} options={tabs} />

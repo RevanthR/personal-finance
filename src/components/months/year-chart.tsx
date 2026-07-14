@@ -6,11 +6,13 @@ import {
 } from "recharts";
 import { formatCurrency, MONTHS } from "@/lib/utils";
 import { usePrivacy } from "@/contexts/privacy-context";
+import { compactAxisFmt } from "./compact-axis-fmt";
 import type { MonthData } from "./year-overview-client";
 
 export function YearChart({ months }: { months: MonthData[] }) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
+  const axisFmt = (v: number) => compactAxisFmt(v, hidden);
   const lastActualIdx = months.reduce((last, m, i) => (m.isPopulated ? i : last), -1);
 
   const data = months.map((m, i) => ({
@@ -26,12 +28,12 @@ export function YearChart({ months }: { months: MonthData[] }) {
   }));
 
   return (
-    <div className="rounded-xl border bg-card p-3">
+    <div className="rounded-lg border bg-card p-3">
       <p className="text-xs font-semibold text-muted-foreground mb-3">Income vs Expenses</p>
       <ResponsiveContainer width="100%" height={190}>
         <ComposedChart data={data} barGap={1} barCategoryGap="22%" margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
           <XAxis dataKey="name" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
-          <YAxis hide />
+          <YAxis tick={{ fontSize: 9 }} axisLine={false} tickLine={false} width={36} tickFormatter={axisFmt} />
           <ReferenceLine y={0} stroke="#e4e4e7" strokeWidth={1} />
           <Tooltip
             formatter={(v: unknown, name: unknown) => [fmt(Number(v)), String(name)]}
@@ -50,14 +52,14 @@ export function YearChart({ months }: { months: MonthData[] }) {
           </Bar>
           <Line
             dataKey="balanceActual" name="Balance"
-            stroke="#6366f1" strokeWidth={2}
-            dot={{ r: 2.5, fill: "#6366f1", strokeWidth: 0 }}
+            stroke="#2563eb" strokeWidth={2}
+            dot={{ r: 2.5, fill: "#2563eb", strokeWidth: 0 }}
             connectNulls={false}
           />
           <Line
             dataKey="balanceProj" name="Projected balance"
-            stroke="#6366f1" strokeWidth={2} strokeDasharray="4 3"
-            dot={{ r: 2, fill: "#a5b4fc", strokeWidth: 0 }}
+            stroke="#2563eb" strokeWidth={2} strokeDasharray="4 3"
+            dot={{ r: 2, fill: "#93b8f5", strokeWidth: 0 }}
             connectNulls
           />
         </ComposedChart>
@@ -85,7 +87,7 @@ function LegendLine({ label, solid }: { label: string; solid?: boolean }) {
   return (
     <div className="flex items-center gap-1">
       <svg width="16" height="8" viewBox="0 0 16 8">
-        <line x1="0" y1="4" x2="16" y2="4" stroke="#6366f1" strokeWidth="2"
+        <line x1="0" y1="4" x2="16" y2="4" stroke="#2563eb" strokeWidth="2"
           strokeDasharray={solid ? undefined : "4 3"} />
       </svg>
       <span className="text-xs text-muted-foreground">{label}</span>

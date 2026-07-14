@@ -32,7 +32,8 @@ export function TabsUnderline<T extends string>({ value, onChange, options, clas
             type="button"
             onClick={() => onChange(opt.value)}
             className={cn(
-              "relative flex items-center gap-1.5 pb-3 text-sm transition-colors",
+              "relative flex items-center gap-1.5 pb-3 text-sm transition-colors rounded-sm",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2",
               active ? "font-semibold text-primary" : "font-medium text-muted-foreground hover:text-foreground",
             )}
           >
