@@ -464,7 +464,7 @@ export default async function MonthsPage() {
       if (t.loanInterestRate != null) {
         const r = t.loanInterestRate / 12 / 100;
         let outstanding = t.loanOutstandingOverride ?? 0;
-        let isOverride = t.loanOutstandingOverride != null && t.loanOutstandingOverride > 0;
+        const isOverride = t.loanOutstandingOverride != null && t.loanOutstandingOverride > 0;
         if (!isOverride && t.loanOriginalPrincipal && t.loanStartDate) {
           const start = new Date(t.loanStartDate);
           const k = Math.max(0, (now2.getFullYear() - start.getFullYear()) * 12 + (now2.getMonth() - start.getMonth()));
@@ -557,18 +557,18 @@ export default async function MonthsPage() {
       eventMap.get(key)!.push({ name: c.name, type: "CHIT", monthlyRelief: c.monthlyAmount });
     }
   }
-  let runningCommitted = loans.reduce((s, l) => s + l.monthlyAmount, 0)
+  const currentMonthlyCommitted = loans.reduce((s, l) => s + l.monthlyAmount, 0)
     + chits.reduce((s, c) => s + (c.isLifted && c.remainingMonths > 0 ? c.monthlyAmount : 0), 0);
-  const currentMonthlyCommitted = runningCommitted;
-  const reliefMilestones = [...eventMap.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, items]) => {
-      const [y, m] = key.split("-").map(Number);
-      const monthsFromNow = Math.max(0, (y - todayY2) * 12 + (m - todayM2));
-      const totalRelief = items.reduce((s, i) => s + i.monthlyRelief, 0);
-      runningCommitted -= totalRelief;
-      return { month: m, year: y, label: `${MONTHS[m - 1]} ${y}`, monthsFromNow, items, totalRelief, committedAfter: runningCommitted };
-    });
+  const sortedReliefEvents = [...eventMap.entries()].sort(([a], [b]) => a.localeCompare(b));
+  const reliefMilestones: { month: number; year: number; label: string; monthsFromNow: number; items: ReliefItem[]; totalRelief: number; committedAfter: number }[] = [];
+  let runningCommitted = currentMonthlyCommitted;
+  for (const [key, items] of sortedReliefEvents) {
+    const [y, m] = key.split("-").map(Number);
+    const monthsFromNow = Math.max(0, (y - todayY2) * 12 + (m - todayM2));
+    const totalRelief = items.reduce((s, i) => s + i.monthlyRelief, 0);
+    runningCommitted -= totalRelief;
+    reliefMilestones.push({ month: m, year: y, label: `${MONTHS[m - 1]} ${y}`, monthsFromNow, items, totalRelief, committedAfter: runningCommitted });
+  }
 
   // CC annual subcats
   const ccAnnualSubcatMap = new Map<string, number>();
