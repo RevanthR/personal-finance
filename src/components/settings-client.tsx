@@ -1,13 +1,49 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTheme } from "next-themes";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Bell, BellOff, User } from "lucide-react";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { Bell, BellOff, User, Sun, Moon, Monitor } from "lucide-react";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
+const APPEARANCE_OPTIONS = [
+  { value: "light", label: "Light", icon: Sun },
+  { value: "dark", label: "Dark", icon: Moon },
+  { value: "system", label: "System", icon: Monitor },
+] as const;
+
+function AppearanceCard() {
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Sun className="w-4 h-4" /> Appearance
+        </CardTitle>
+        <CardDescription>Choose how FinanceOS looks on this device.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {mounted ? (
+          <SegmentedControl
+            value={(theme ?? "system") as "light" | "dark" | "system"}
+            onChange={setTheme}
+            options={[...APPEARANCE_OPTIONS]}
+          />
+        ) : (
+          <div className="h-8 w-56 rounded-full bg-muted animate-pulse" />
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 interface SettingsClientProps {
   user: { name?: string | null; email?: string | null; image?: string | null; role?: string };
@@ -81,10 +117,13 @@ export function SettingsClient({ user }: SettingsClientProps) {
   const initials = user.name?.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() ?? "U";
 
   return (
-    <div className="space-y-6 max-w-lg">
-      <h1 className="text-2xl font-bold">Settings</h1>
-      <p className="text-sm text-muted-foreground -mt-4">Profile and account preferences</p>
+    <div className="max-w-lg">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold">Settings</h1>
+        <p className="text-sm text-muted-foreground">Profile and account preferences</p>
+      </div>
 
+      <div className="space-y-6">
       {/* Profile */}
       <Card>
         <CardHeader>
@@ -104,6 +143,8 @@ export function SettingsClient({ user }: SettingsClientProps) {
           </div>
         </CardContent>
       </Card>
+
+      <AppearanceCard />
 
       {/* Push Notifications */}
       <Card>
@@ -164,6 +205,7 @@ export function SettingsClient({ user }: SettingsClientProps) {
           </Button>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

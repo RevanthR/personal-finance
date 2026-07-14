@@ -36,11 +36,11 @@ export function Header({ user }: HeaderProps) {
 
   return (
     <>
-    <header className="border-b border-gray-100 bg-white/90 backdrop-blur-sm flex flex-col justify-end px-4 md:px-6 shrink-0" style={{ paddingTop: "env(safe-area-inset-top)", minHeight: "calc(3.5rem + env(safe-area-inset-top))" }}>
+    <header className="border-b border-border bg-card/90 backdrop-blur-sm flex flex-col justify-end px-4 md:px-6 shrink-0" style={{ paddingTop: "env(safe-area-inset-top)", minHeight: "calc(3.5rem + env(safe-area-inset-top))" }}>
       <div className="h-14 flex items-center justify-between">
         <div className="md:hidden flex items-center gap-2">
-          <div className="w-7 h-7 bg-amber-500 rounded-lg flex items-center justify-center shrink-0">
-            <IndianRupee className="w-3.5 h-3.5 text-white" />
+          <div className="w-7 h-7 bg-primary rounded-xl flex items-center justify-center shrink-0">
+            <IndianRupee className="w-3.5 h-3.5 text-primary-foreground" />
           </div>
           <span className="font-bold text-foreground">FinanceOS</span>
         </div>
@@ -51,7 +51,7 @@ export function Header({ user }: HeaderProps) {
           <button
             onClick={toggleHidden}
             title={hidden ? "Show numbers" : "Hide numbers"}
-            className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors"
+            className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           >
             {hidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>
@@ -76,16 +76,16 @@ export function Header({ user }: HeaderProps) {
 
               {/* Guide */}
               <DropdownMenuItem onSelect={() => setGuideOpen(true)} className="cursor-pointer">
-                <BookOpen className="w-4 h-4 mr-2 text-gray-400" />
+                <BookOpen className="w-4 h-4 mr-2 text-muted-foreground" />
                 App guide
               </DropdownMenuItem>
 
-              {/* Go Pro — subtle amber accent */}
+              {/* Go Pro — subtle accent */}
               <DropdownMenuItem asChild>
                 <Link href="/pricing" className="cursor-pointer">
-                  <Sparkles className="w-4 h-4 mr-2 text-amber-500" />
+                  <Sparkles className="w-4 h-4 mr-2 text-primary" />
                   <span className="flex-1">Subscription</span>
-                  <span className="ml-2 text-xs font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">Pro</span>
+                  <span className="ml-2 text-xs font-semibold text-primary bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded-full">Pro</span>
                 </Link>
               </DropdownMenuItem>
 
@@ -93,14 +93,14 @@ export function Header({ user }: HeaderProps) {
 
               <DropdownMenuItem asChild>
                 <Link href="/settings" className="cursor-pointer">
-                  <Settings className="w-4 h-4 mr-2 text-gray-400" />
+                  <Settings className="w-4 h-4 mr-2 text-muted-foreground" />
                   Settings
                 </Link>
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                className="text-red-600 cursor-pointer"
+                className="text-negative cursor-pointer"
                 onClick={() => signOut({ callbackUrl: "/login" })}
               >
                 <LogOut className="w-4 h-4 mr-2" />

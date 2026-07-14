@@ -16,10 +16,11 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Wallet, TrendingDown, CheckCircle2, AlertCircle, TrendingUp, Plus, Pencil, ChevronDown, Trash2, CreditCard, ChevronLeft, ChevronRight, IndianRupee, Check,
+  Wallet, TrendingDown, CheckCircle2, AlertCircle, TrendingUp, Plus, Pencil, ChevronDown, Trash2, CreditCard, ChevronLeft, ChevronRight, IndianRupee, Check, Calendar,
 } from "lucide-react";
 import { toast } from "sonner";
 import { EntryRow } from "./entry-row";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PaymentDialog } from "./payment-dialog";
 import { usePaymentTick } from "@/hooks/use-payment-tick";
 import { DashboardTour } from "@/components/coach/dashboard-tour";
@@ -246,15 +247,15 @@ function CCCardBlock({
             <div className={cn(
               "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all pointer-events-none",
               tick.isPaid
-                ? "bg-emerald-600 border-emerald-600"
+                ? "bg-positive border-positive"
                 : isBillPending
                   ? "border-sky-300 bg-sky-50"
                   : tick.isPartial
-                    ? "border-amber-500 bg-amber-50"
-                    : "border-amber-400/70 bg-amber-50/40"
+                    ? "border-warning bg-warning-bg"
+                    : "border-warning/70 bg-warning-bg/40"
             )}>
               {tick.isPaid && <Check className="w-3 h-3 text-white" />}
-              {tick.isPartial && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
+              {tick.isPartial && <span className="w-1.5 h-1.5 rounded-full bg-warning" />}
             </div>
           </button>
           <div className="flex flex-col items-start min-w-0 text-left">
@@ -268,13 +269,13 @@ function CCCardBlock({
           {/* Amount, due date — permanently in the header, not a separate row */}
           <div className="flex flex-col items-end">
             <span className={cn("flex items-center gap-1.5 text-xs font-semibold tabular-nums", tick.isPaid && "text-muted-foreground line-through")}>
-              {nextBillTotal > 0 && <span className="text-amber-600 font-normal">↗ {fmt(nextBillTotal)} ·</span>}
+              {nextBillTotal > 0 && <span className="text-warning font-normal">↗ {fmt(nextBillTotal)} ·</span>}
               {tick.isPartial ? fmt(tick.outstanding) : tick.cashback > 0 && !tick.isPaid ? fmt(tick.netBill) : fmt(billedTotal)}
             </span>
             {tick.isPartial ? (
-              <span className="text-[10px] text-amber-600">{fmt(tick.paidAmount!)} paid so far</span>
+              <span className="text-[10px] text-warning">{fmt(tick.paidAmount!)} paid so far</span>
             ) : entry.template.dueDateDay && (
-              <span className="text-[10px] text-amber-600">
+              <span className="text-[10px] text-warning">
                 due {ordinal(entry.template.dueDateDay)}{isDueNextMonth ? ` ${nextMonthName}` : ""}
               </span>
             )}
@@ -287,8 +288,8 @@ function CCCardBlock({
         <>
           {/* Billed vs paying indicator — only when they differ */}
           {entry.billedAmount != null && entry.billedAmount > entry.amount && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-amber-100 bg-amber-50/60">
-              <span className="text-xs text-amber-700">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-warning-border bg-warning-bg/60">
+              <span className="text-xs text-warning">
                 Statement <span className="font-semibold">{fmt(entry.billedAmount)}</span>
                 {" · "}Rolling <span className="font-semibold">{fmt(entry.billedAmount - entry.amount)}</span> to next month
               </span>
@@ -304,7 +305,7 @@ function CCCardBlock({
 
           {/* Next cycle charges — its own collapse, independent of the card's */}
           {nextBillTotal > 0 && (
-            <div className="border-t border-amber-100 bg-amber-50/50 px-3 py-2">
+            <div className="border-t border-warning-border bg-warning-bg/50 px-3 py-2">
               <div
                 onClick={postCloseTxs.length > 0 ? () => setNextCycleCollapsed(v => !v) : undefined}
                 className={cn(
@@ -313,18 +314,18 @@ function CCCardBlock({
                   postCloseTxs.length > 0 && !nextCycleCollapsed && "mb-1.5"
                 )}
               >
-                <span className="text-xs font-semibold text-amber-700 uppercase tracking-wider flex items-center gap-1">
+                <span className="text-xs font-semibold text-warning uppercase tracking-wider flex items-center gap-1">
                   → {nextMonthName} bill
                   {postCloseTxs.length > 0 && (
-                    <ChevronDown className={cn("w-3 h-3 text-amber-700/60 transition-transform duration-200", !nextCycleCollapsed && "rotate-180")} />
+                    <ChevronDown className={cn("w-3 h-3 text-warning/60 transition-transform duration-200", !nextCycleCollapsed && "rotate-180")} />
                   )}
                 </span>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-amber-800 tracking-tight">{fmt(nextBillTotal)}</span>
+                  <span className="text-xs font-semibold text-warning tracking-tight">{fmt(nextBillTotal)}</span>
                   {postCloseTxs.length === 0 && (
                     <button
                       onClick={() => onClearStatement(entry.id)}
-                      className="text-xs font-medium text-amber-700 border border-amber-200 bg-white px-2.5 py-1.5 rounded-full hover:border-amber-400 transition-colors"
+                      className="text-xs font-medium text-warning border border-warning-border bg-card px-2.5 py-1.5 rounded-full hover:border-warning transition-colors"
                     >
                       Clear
                     </button>
@@ -899,11 +900,17 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             </button>
           </div>
         )}
-        <h2 className="text-2xl font-bold">{formatMonthYear(viewMonth, viewYear)}</h2>
-        <p className="text-muted-foreground">Set up this month to start tracking</p>
-        <Button onClick={() => setShowSetup(true)}>
-          <Plus className="w-4 h-4 mr-2" /> Set Up {formatMonthYear(viewMonth, viewYear)}
-        </Button>
+        <EmptyState
+          icon={Calendar}
+          title={formatMonthYear(viewMonth, viewYear)}
+          titleClassName="text-2xl font-bold"
+          description="Set up this month to start tracking"
+          action={
+            <Button onClick={() => setShowSetup(true)}>
+              <Plus className="w-4 h-4 mr-2" /> Set Up {formatMonthYear(viewMonth, viewYear)}
+            </Button>
+          }
+        />
         <SetupMonthDialog open={showSetup} onOpenChange={setShowSetup} month={viewMonth} year={viewYear} suggestedIncome={templateIncome} onConfirm={handleSetupMonth} />
       </div>
     );
@@ -919,7 +926,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
         <div className="flex items-center gap-2">
           {/* Month navigation pill */}
           {prevUrl && nextUrl ? (
-            <div className={cn("flex items-center flex-1 rounded-xl border bg-muted/40 overflow-hidden transition-opacity", isPending && "opacity-50")}>
+            <div className={cn("flex items-center flex-1 rounded-xl border bg-card overflow-hidden transition-opacity", isPending && "opacity-50")}>
               <button
                 onClick={() => navigate(prevUrl)}
                 onMouseEnter={() => router.prefetch(prevUrl)}
@@ -933,7 +940,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
               <div className="flex-1 flex items-center justify-center gap-2 py-2">
                 <span className="text-base font-bold">{formatMonthYear(viewMonth, viewYear)}</span>
                 {isProjected && (
-                  <span className="text-xs font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full">
+                  <span className="text-xs font-semibold text-warning bg-warning-bg px-1.5 py-0.5 rounded-full">
                     Projected
                   </span>
                 )}
@@ -954,7 +961,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
               <div className="flex items-center gap-2">
                 <span className="text-base font-bold">{formatMonthYear(viewMonth, viewYear)}</span>
                 {isProjected && (
-                  <span className="text-xs font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full">
+                  <span className="text-xs font-semibold text-warning bg-warning-bg px-1.5 py-0.5 rounded-full">
                     Projected
                   </span>
                 )}
@@ -976,23 +983,23 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       </div>
 
       {/* Metric cards */}
-      <div className={cn("grid gap-2", hasCCCards ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2 sm:grid-cols-3")}>
+      <div className={cn("grid gap-1.5", hasCCCards ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2 sm:grid-cols-3")}>
         {/* Income */}
         {isProjected ? (
-          <MetricCard label="Est. Income" value={fmt(dispIncome)} icon={<Wallet className="w-3.5 h-3.5" />} color="text-emerald-600" sub="projected" gradient="linear-gradient(135deg, rgba(5,150,105,0.08) 0%, transparent 100%)" />
+          <MetricCard label="Est. Income" value={fmt(dispIncome)} icon={<Wallet className="w-3.5 h-3.5" />} color="text-positive" sub="projected" />
         ) : (
           <button onClick={openIncomeEdit} className="text-left">
-            <Card className="hover:border-zinc-300 transition-colors cursor-pointer h-full" style={{ background: "linear-gradient(135deg, rgba(5,150,105,0.08) 0%, transparent 100%)" }}>
-              <CardContent className="px-2.5 py-2">
+            <Card className="hover:border-border transition-colors cursor-pointer h-full">
+              <CardContent className="px-2 py-1.5">
                 <div className="flex items-center justify-between mb-0.5">
                   <p className="text-xs text-muted-foreground tracking-wide">Income</p>
                   <div className="flex items-center gap-1">
-                    <span className="text-emerald-600 opacity-60"><Wallet className="w-3.5 h-3.5" /></span>
+                    <span className="text-positive opacity-60"><Wallet className="w-3.5 h-3.5" /></span>
                     <Pencil className="w-2.5 h-2.5 text-muted-foreground" />
                   </div>
                 </div>
-                <p className="text-sm font-bold tabular-nums tracking-tight">{fmt(grandIncome)}</p>
-                {adHocIncome > 0 && <p className="text-xs text-emerald-600 mt-0.5 leading-tight">+{fmt(adHocIncome)} one-time</p>}
+                <p className="text-base sm:text-lg font-semibold tabular-nums tracking-tight">{fmt(grandIncome)}</p>
+                {adHocIncome > 0 && <p className="text-xs text-positive mt-0.5 leading-tight">+{fmt(adHocIncome)} one-time</p>}
               </CardContent>
             </Card>
           </button>
@@ -1003,9 +1010,8 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
           label="Recurring"
           value={fmt(dispRecurringNonCC)}
           icon={<TrendingDown className="w-3.5 h-3.5" />}
-          color="text-red-500"
+          color="text-negative"
           sub={isProjected ? `${projEntries.filter(e => e.category !== "CREDIT_CARD").length} items` : nonCCPendingCount > 0 ? `${nonCCPendingCount} pending` : "all paid"}
-          gradient="linear-gradient(135deg, rgba(239,68,68,0.07) 0%, transparent 100%)"
         />
 
         {/* CC bill this month + next month upcoming — only when user has CC cards */}
@@ -1014,9 +1020,8 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             label="CC Bill"
             value={dispCCBills > 0 ? fmt(dispCCBills) : "—"}
             icon={<CreditCard className="w-3.5 h-3.5" />}
-            color="text-purple-600"
+            color="text-primary"
             sub={isProjected ? "last month's bill" : dispCCBills > 0 ? "from last month" : "no CC bills"}
-            gradient="linear-gradient(135deg, rgba(234,88,12,0.07) 0%, transparent 100%)"
             upcoming={!isProjected ? {
               label: dispCCNextMonth > 0 ? "Next month" : "Next month",
               value: dispCCNextMonth > 0 ? fmt(dispCCNextMonth) : "—",
@@ -1026,31 +1031,32 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
 
         {/* Pending card: outstanding payments + cash balance / deficit */}
         <div className={!hasCCCards ? "col-span-2 sm:col-span-1" : undefined}>
-          <Card className="h-full" style={{ background: "linear-gradient(135deg, rgba(217,119,6,0.07) 0%, transparent 100%)" }}>
-            <CardContent className="px-2.5 py-2">
+          <Card className="h-full">
+            <CardContent className="px-2 py-1.5">
               <div className="flex items-center justify-between mb-0.5">
                 <p className="text-xs text-muted-foreground">Pending</p>
-                <span className="text-amber-500 opacity-70"><AlertCircle className="w-3.5 h-3.5" /></span>
+                <span className="text-warning opacity-70"><AlertCircle className="w-3.5 h-3.5" /></span>
               </div>
-              <p className="text-sm font-bold leading-tight tabular-nums">
-                {isProjected ? fmt(dispPending) : (pendingCount > 0 ? fmt(totalPending) : "—")}
-              </p>
-              <p className="text-xs text-muted-foreground mt-0.5 leading-tight">
-                {isProjected ? "projected" : pendingCount > 0 ? `${pendingCount} bills left` : "all settled"}
-              </p>
-              {!isProjected && (
-                <div className="mt-1.5 pt-1.5 border-t border-border/40 space-y-0.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs text-muted-foreground">In hand</span>
-                    <span className="text-xs font-semibold tabular-nums text-emerald-600">{fmt(Math.max(0, inHandNow))}</span>
+              {!isProjected ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <p className="text-sm sm:text-lg font-semibold leading-tight tabular-nums">
+                      {pendingCount > 0 ? fmt(totalPending) : "—"}
+                    </p>
+                    {balance < 0 && (
+                      <p className="text-[11px] font-normal text-negative leading-tight">{fmt(Math.abs(balance))} over income</p>
+                    )}
                   </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs text-muted-foreground">Deficit (Over Income)</span>
-                    <span className={cn("text-xs font-semibold tabular-nums", balance < 0 ? "text-red-500" : "text-muted-foreground")}>
-                      {balance < 0 ? fmt(Math.abs(balance)) : "—"}
-                    </span>
+                  <div className="border-l border-border/40 pl-2">
+                    <p className="text-sm sm:text-lg font-semibold tabular-nums text-positive leading-tight">{fmt(Math.max(0, inHandNow))}</p>
+                    <p className="text-[11px] text-muted-foreground leading-tight">Cash in Hand</p>
                   </div>
                 </div>
+              ) : (
+                <>
+                  <p className="text-base sm:text-lg font-semibold leading-tight tabular-nums">{fmt(dispPending)}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 leading-tight">projected</p>
+                </>
               )}
             </CardContent>
           </Card>
@@ -1118,7 +1124,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                       {catLabel}
                     </span>
                     {allPaid && collapsed && (
-                      <span className="text-xs text-emerald-600 font-medium ml-1">✓</span>
+                      <span className="text-xs text-positive font-medium ml-1">✓</span>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
@@ -1137,7 +1143,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                     ) : isCC ? (
                       <span className="text-xs text-muted-foreground">
                         {fmt(catTotal)} billed
-                        {catCarry > 0 && <span className="text-amber-600"> · ↗ {fmt(catCarry)} {nextMonthName}</span>}
+                        {catCarry > 0 && <span className="text-warning"> · ↗ {fmt(catCarry)} {nextMonthName}</span>}
                       </span>
                     ) : (
                       <span className="text-xs text-muted-foreground">
@@ -1248,7 +1254,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             <div className="rounded-xl bg-muted/30 border px-3 py-3 space-y-2">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Recurring</p>
-                <span className="text-xs font-semibold text-emerald-600">{fmt(templateIncome)}</span>
+                <span className="text-xs font-semibold text-positive">{fmt(templateIncome)}</span>
               </div>
               {incomeTemplates.length === 0 ? (
                 <p className="text-xs text-muted-foreground">No recurring income configured.</p>
@@ -1284,7 +1290,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                               type="button"
                               disabled={incomeOverrideLoading || !editingIncomeAmount || parseFloat(editingIncomeAmount) <= 0}
                               onClick={() => { const v = parseFloat(editingIncomeAmount); if (v > 0) handleIncomeOverride(t, v); }}
-                              className="text-xs font-medium text-emerald-600 hover:text-emerald-600 disabled:opacity-40"
+                              className="text-xs font-medium text-positive hover:text-positive disabled:opacity-40"
                             >
                               Save
                             </button>
@@ -1304,7 +1310,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                                 <button
                                   type="button"
                                   onClick={() => handleIncomeOverrideReset(t.id)}
-                                  className="text-xs text-muted-foreground active:text-red-500 p-1 -mr-1"
+                                  className="text-xs text-muted-foreground active:text-negative p-1 -mr-1"
                                   title="Reset to template amount"
                                 >
                                   ↺
@@ -1313,7 +1319,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                               <button
                                 type="button"
                                 onClick={() => { setEditingIncomeTemplateId(t.id); setEditingIncomeAmount(String(effectiveAmt)); }}
-                                className={cn("text-sm font-medium tabular-nums px-1.5 py-0.5 rounded active:bg-muted transition-colors", override ? "text-amber-600" : "text-emerald-600")}
+                                className={cn("text-sm font-medium tabular-nums px-1.5 py-0.5 rounded active:bg-muted transition-colors", override ? "text-warning" : "text-positive")}
                               >
                                 {fmt(effectiveAmt)}
                               </button>
@@ -1343,7 +1349,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                     "flex items-center gap-2.5 px-3 py-2 rounded-xl border bg-card transition-all duration-150",
                     removingIds.has(item.id) && "opacity-0 scale-95 pointer-events-none"
                   )}>
-                    <div className="w-0.5 h-7 rounded-full bg-emerald-600 shrink-0" />
+                    <div className="w-0.5 h-7 rounded-full bg-positive shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{item.name}</p>
                       <p className="text-xs text-muted-foreground">
@@ -1351,8 +1357,8 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                         {item.notes && item.notes !== "carry_forward" ? ` · ${item.notes}` : ""}
                       </p>
                     </div>
-                    <span className="text-sm font-semibold text-emerald-600 shrink-0">+{fmt(item.amount)}</span>
-                    <Button variant="ghost" size="sm" disabled={removingIds.has(item.id)} onClick={() => handleAdHocDelete(item.id)} className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500 shrink-0">
+                    <span className="text-sm font-semibold text-positive shrink-0">+{fmt(item.amount)}</span>
+                    <Button variant="ghost" size="sm" disabled={removingIds.has(item.id)} onClick={() => handleAdHocDelete(item.id)} className="h-7 w-7 p-0 text-muted-foreground hover:text-negative shrink-0">
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
                   </div>
@@ -1372,7 +1378,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                       onClick={() => setAddIncomeSource(s.value)}
                       className={cn(
                         "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
-                        addIncomeSource === s.value ? "bg-zinc-900 text-white border-zinc-900" : "border-border text-muted-foreground hover:border-zinc-500"
+                        addIncomeSource === s.value ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-muted-foreground"
                       )}
                     >
                       {s.label}
@@ -1405,7 +1411,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                   </Button>
                   <Button
                     size="sm"
-                    className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                    className="flex-1 bg-positive hover:bg-positive"
                     disabled={!addIncomeAmount || addIncomeLoading}
                     onClick={handleAddOneTimeIncome}
                   >
@@ -1442,25 +1448,34 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   );
 }
 
-function MetricCard({ label, value, icon, color, sub, gradient, upcoming }: {
+function MetricCard({ label, value, icon, color, sub, upcoming }: {
   label: string; value: string; icon: React.ReactNode; color: string;
-  sub?: string; gradient?: string;
+  sub?: string;
   upcoming?: { label: string; value: string };
 }) {
   return (
-    <Card style={gradient ? { background: gradient } : undefined}>
-      <CardContent className="px-2.5 py-2">
+    <Card>
+      <CardContent className="px-2 py-1.5">
         <div className="flex items-center justify-between mb-0.5">
           <p className="text-xs text-muted-foreground tracking-wide">{label}</p>
           <span className={cn(color, "opacity-60")}>{icon}</span>
         </div>
-        <p className="text-sm font-bold leading-tight tabular-nums tracking-tight">{value}</p>
-        {sub && <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{sub}</p>}
-        {upcoming && (
-          <div className="mt-1.5 pt-1.5 border-t border-border/40">
-            <p className="text-xs text-muted-foreground">{upcoming.label}</p>
-            <p className="text-xs font-semibold text-amber-600 tabular-nums tracking-tight">{upcoming.value}</p>
+        {upcoming ? (
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <p className="text-sm sm:text-lg font-semibold leading-tight tabular-nums tracking-tight">{value}</p>
+              {sub && <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{sub}</p>}
+            </div>
+            <div className="border-l border-border/40 pl-2">
+              <p className="text-sm sm:text-lg font-semibold text-warning tabular-nums tracking-tight leading-tight">{upcoming.value}</p>
+              <p className="text-[11px] text-muted-foreground leading-tight">{upcoming.label}</p>
+            </div>
           </div>
+        ) : (
+          <>
+            <p className="text-base sm:text-lg font-semibold leading-tight tabular-nums tracking-tight">{value}</p>
+            {sub && <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{sub}</p>}
+          </>
         )}
       </CardContent>
     </Card>
@@ -1472,7 +1487,7 @@ function ProjectedEntryRow({ entry }: { entry: ProjectedEntry }) {
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   return (
     <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl border bg-card opacity-75">
-      <div className="w-0.5 h-7 rounded-full shrink-0 bg-zinc-300" />
+      <div className="w-0.5 h-7 rounded-full shrink-0 bg-border" />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium">{entry.name}</p>
         <p className="text-xs text-muted-foreground">
@@ -1495,27 +1510,27 @@ function FYSummaryCard({ recentMonths, fyIncome, fyExpenses, fyBalance, trendDat
 }) {
   const [expanded, setExpanded] = useState(false);
   return (
-    <Card className="overflow-hidden border-gray-100">
-      <div className="h-0.5 bg-gradient-to-r from-amber-400 via-orange-400 to-rose-400" />
+    <Card className="overflow-hidden border-border">
+      <div className="h-0.5 bg-primary/60" />
       <button
         type="button"
         onClick={() => setExpanded(e => !e)}
         className="w-full text-left"
       >
         <CardContent className="p-3">
-          <p className="text-xs text-gray-400 uppercase tracking-widest font-medium mb-2.5">Last {recentMonths.length} months</p>
+          <p className="text-xs text-muted-foreground uppercase tracking-widest font-medium mb-2.5">Last {recentMonths.length} months</p>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <p className="text-xs text-gray-400 mb-0.5">Income</p>
-              <p className="text-sm font-bold text-emerald-600 tracking-tight">{fmt(fyIncome)}</p>
+              <p className="text-xs text-muted-foreground mb-0.5">Income</p>
+              <p className="text-sm font-bold text-positive tracking-tight">{fmt(fyIncome)}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-400 mb-0.5">Expenses</p>
-              <p className="text-sm font-bold text-red-500 tracking-tight">{fmt(fyExpenses)}</p>
+              <p className="text-xs text-muted-foreground mb-0.5">Expenses</p>
+              <p className="text-sm font-bold text-negative tracking-tight">{fmt(fyExpenses)}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-400 mb-0.5">{fyBalance >= 0 ? "In hand" : "Deficit"}</p>
-              <p className={cn("text-sm font-bold tracking-tight", fyBalance >= 0 ? "text-emerald-600" : "text-red-500")}>
+              <p className="text-xs text-muted-foreground mb-0.5">{fyBalance >= 0 ? "In hand" : "Deficit"}</p>
+              <p className={cn("text-sm font-bold tracking-tight", fyBalance >= 0 ? "text-positive" : "text-negative")}>
                 {fyBalance >= 0 ? "+" : "-"}{fmt(Math.abs(fyBalance))}
               </p>
             </div>
@@ -1523,18 +1538,18 @@ function FYSummaryCard({ recentMonths, fyIncome, fyExpenses, fyBalance, trendDat
         </CardContent>
       </button>
       {expanded && (
-        <div className="border-t border-gray-100 px-3 pb-3 pt-2 space-y-1.5">
-          <div className="grid grid-cols-4 gap-1 text-xs text-gray-400 uppercase tracking-widest font-medium mb-1 px-1">
+        <div className="border-t border-border px-3 pb-3 pt-2 space-y-1.5">
+          <div className="grid grid-cols-4 gap-1 text-xs text-muted-foreground uppercase tracking-widest font-medium mb-1 px-1">
             <span>Month</span><span className="text-right">Income</span><span className="text-right">Expenses</span><span className="text-right">Net</span>
           </div>
           {trendData.map(m => {
             const net = m.Income - m.Expenses;
             return (
               <div key={m.name} className="grid grid-cols-4 gap-1 text-xs px-1">
-                <span className="text-gray-700 font-medium">{m.name}</span>
-                <span className="text-right text-emerald-600 tabular-nums tracking-tight">{fmt(m.Income)}</span>
-                <span className="text-right text-red-500 tabular-nums tracking-tight">{fmt(m.Expenses)}</span>
-                <span className={cn("text-right font-semibold tabular-nums tracking-tight", net >= 0 ? "text-emerald-600" : "text-red-500")}>
+                <span className="text-foreground font-medium">{m.name}</span>
+                <span className="text-right text-positive tabular-nums tracking-tight">{fmt(m.Income)}</span>
+                <span className="text-right text-negative tabular-nums tracking-tight">{fmt(m.Expenses)}</span>
+                <span className={cn("text-right font-semibold tabular-nums tracking-tight", net >= 0 ? "text-positive" : "text-negative")}>
                   {net >= 0 ? "+" : "-"}{fmt(Math.abs(net))}
                 </span>
               </div>
@@ -1591,13 +1606,13 @@ function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, 
         className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/40 transition-colors text-left"
       >
         <div className="flex items-center gap-2 min-w-0">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <CheckCircle2 className="w-4 h-4 text-positive shrink-0" />
           <div className="min-w-0">
             <p className="text-sm font-semibold leading-tight">Settlement Summary</p>
             <p className="text-xs text-muted-foreground tabular-nums mt-0.5">
               {fmt(totalPaidOut)} of {fmt(totalCommitted)}
               {partialEntries.length > 0 && (
-                <span className="text-amber-600 ml-1.5">· {partialEntries.length} partial</span>
+                <span className="text-warning ml-1.5">· {partialEntries.length} partial</span>
               )}
             </p>
           </div>
@@ -1625,12 +1640,12 @@ function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, 
                         <div className="flex items-center gap-1.5 min-w-0">
                           <span className="text-xs text-muted-foreground truncate">{e.template.name}</span>
                           {isPartial && (
-                            <span className="text-xs font-semibold text-amber-600 bg-amber-50 px-1 py-0.5 rounded shrink-0">partial payment</span>
+                            <span className="text-xs font-semibold text-warning bg-warning-bg px-1 py-0.5 rounded shrink-0">partial payment</span>
                           )}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           {e.cashbackAmount ? (
-                            <span className="text-xs text-emerald-600">-{fmt(e.cashbackAmount)} cb</span>
+                            <span className="text-xs text-positive">-{fmt(e.cashbackAmount)} cb</span>
                           ) : null}
                           {isPartial && (
                             <span className="text-xs text-muted-foreground">{fmt(remaining)} left</span>
@@ -1638,7 +1653,7 @@ function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, 
                           {!isPartial && e.paidOn && (
                             <span className="text-xs text-muted-foreground/70">{format(new Date(e.paidOn), "do MMM")}</span>
                           )}
-                          <span className={cn("text-xs font-semibold tabular-nums", isPartial && "text-amber-600")}>
+                          <span className={cn("text-xs font-semibold tabular-nums", isPartial && "text-warning")}>
                             {fmt(effectivePaid(e))}
                           </span>
                         </div>
@@ -1652,7 +1667,7 @@ function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, 
           {/* Cash / UPI spend this month — total only, items visible in main feed */}
           {cashItems.length > 0 && (
             <div className="flex items-center gap-1.5 px-4 py-2.5 border-b border-border/50">
-              <IndianRupee className="w-3 h-3 text-orange-500 shrink-0" />
+              <IndianRupee className="w-3 h-3 text-warning shrink-0" />
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex-1">Cash / UPI spend</span>
               <span className="text-xs font-semibold tabular-nums">{fmt(adHocExpense)}</span>
             </div>
@@ -1672,15 +1687,15 @@ function TransactionRow({ item, onDelete, onEditRequest, isRemoving }: { item: A
   return (
     <div className={cn(
       "flex items-center gap-3 px-3 py-2.5 rounded-xl border bg-card transition-all duration-150",
-      isCarryForward && "border-amber-200 bg-amber-50/40",
+      isCarryForward && "border-warning-border bg-warning-bg/40",
       isRemoving && "opacity-0 scale-95 pointer-events-none"
     )}>
-      <div className={cn("w-0.5 h-7 rounded-full shrink-0", item.type === "INCOME" ? "bg-emerald-600" : "bg-red-500")} />
+      <div className={cn("w-0.5 h-7 rounded-full shrink-0", item.type === "INCOME" ? "bg-positive" : "bg-negative")} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           <p className="text-sm font-medium">{item.name}</p>
           {isCarryForward && (
-            <span className="text-xs font-semibold text-amber-700 bg-amber-100 px-1 py-0.5 rounded">carried fwd</span>
+            <span className="text-xs font-semibold text-warning bg-warning-bg px-1 py-0.5 rounded">carried fwd</span>
           )}
           {item.customCategory && (
             <span className="text-xs font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{item.customCategory}</span>
@@ -1691,7 +1706,7 @@ function TransactionRow({ item, onDelete, onEditRequest, isRemoving }: { item: A
           {item.notes && !isCarryForward ? ` · ${item.notes}` : ""}
         </p>
       </div>
-      <span className={cn("text-sm font-semibold shrink-0", item.type === "INCOME" ? "text-emerald-600" : "text-red-500")}>
+      <span className={cn("text-sm font-semibold shrink-0", item.type === "INCOME" ? "text-positive" : "text-negative")}>
         {item.type === "INCOME" ? "+" : "-"}{fmt(item.amount)}
       </span>
       {onEditRequest && !isCarryForward && (
@@ -1699,7 +1714,7 @@ function TransactionRow({ item, onDelete, onEditRequest, isRemoving }: { item: A
           <Pencil className="w-4 h-4" />
         </Button>
       )}
-      <Button variant="ghost" size="sm" disabled={isRemoving} onClick={() => onDelete(item.id)} className="h-10 w-10 p-0 text-muted-foreground hover:text-red-500 shrink-0">
+      <Button variant="ghost" size="sm" disabled={isRemoving} onClick={() => onDelete(item.id)} className="h-10 w-10 p-0 text-muted-foreground hover:text-negative shrink-0">
         <Trash2 className="w-4 h-4" />
       </Button>
     </div>

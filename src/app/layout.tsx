@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { ServiceWorkerRegister } from "@/components/shared/sw-register";
+import { ThemeProvider } from "@/components/theme-provider";
 
 const inter = Inter({ variable: "--font-geist-sans", subsets: ["latin"], display: "swap" });
 
@@ -27,7 +28,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#ffffff",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fdf9f4" },
+    { media: "(prefers-color-scheme: dark)", color: "#221812" },
+  ],
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -35,10 +39,12 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} h-full`}>
+    <html lang="en" className={`${inter.variable} h-full`} suppressHydrationWarning>
       <body className="min-h-full">
-        {children}
-        <Toaster richColors position="top-right" />
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          {children}
+          <Toaster richColors position="top-right" />
+        </ThemeProvider>
         <ServiceWorkerRegister />
       </body>
     </html>
