@@ -2,15 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import webpush from "web-push";
-
-function initVapid() {
-  const subject = process.env.VAPID_SUBJECT;
-  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-  const privateKey = process.env.VAPID_PRIVATE_KEY;
-  if (subject && publicKey && privateKey) {
-    webpush.setVapidDetails(subject, publicKey, privateKey);
-  }
-}
+import { initVapid } from "@/lib/push";
 
 // POST — save push subscription
 export async function POST(req: NextRequest) {

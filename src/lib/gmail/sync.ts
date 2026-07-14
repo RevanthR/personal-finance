@@ -3,6 +3,7 @@ import { getGmailClientForUser } from "./client";
 import { extractTransaction, type ExtractedTransaction } from "./extract";
 import { matchCard } from "./card-match";
 import { getInrRate } from "./fx-rate";
+import { sendPushToUser } from "@/lib/push";
 import type { gmail_v1 } from "googleapis";
 import type { ParsedTransactionPaymentMethod } from "@/generated/prisma/client";
 
@@ -140,6 +141,10 @@ export async function syncGmailForUser(userId: string, onProgress?: ProgressCall
   let skipped = 0;
   let failed = 0;
   let processed = 0;
+  // Collected for the summary push notification below — a plain array
+  // push is synchronous, so it's safe to share across the concurrent
+  // processOne() workers same as the counters above.
+  const newlySynced: { merchant: string | null; bank: string; amount: number }[] = [];
 
   async function processOne(id: string): Promise<void> {
     if (seenIds.has(id)) { skipped++; processed++; onProgress?.(processed, candidateIds.length); return; }
@@ -196,6 +201,7 @@ export async function syncGmailForUser(userId: string, onProgress?: ProgressCall
       // being silently and permanently lost.
       await db.gmailSeenMessage.create({ data: { userId, gmailMessageId: id } });
       synced++;
+      newlySynced.push({ merchant: extracted.merchant, bank: extracted.bank ?? "Unknown", amount });
     } catch (err) {
       // A transient failure (Gmail/Gemini timeout, network error) on one
       // message must not abort the rest of the batch — and deliberately
@@ -211,6 +217,29 @@ export async function syncGmailForUser(userId: string, onProgress?: ProgressCall
   await runPool(candidateIds, CONCURRENCY, processOne);
 
   await db.gmailConnection.update({ where: { userId }, data: { lastSyncAt: new Date() } });
+
+  // One summary notification per sync run, not one per transaction — a
+  // single real-world purchase can show up as several separate bank
+  // emails (seen firsthand: one charge, three alert emails), which would
+  // otherwise fire a burst of near-identical notifications.
+  if (newlySynced.length > 0) {
+    const payload = newlySynced.length === 1
+      ? {
+          title: "New transaction detected",
+          body: `₹${newlySynced[0].amount.toLocaleString("en-IN")} at ${newlySynced[0].merchant ?? newlySynced[0].bank}`,
+          url: "/imports",
+        }
+      : {
+          title: "New transactions synced",
+          body: `${newlySynced.length} new transactions synced`,
+          url: "/imports",
+        };
+    try {
+      await sendPushToUser(userId, payload);
+    } catch (err) {
+      console.error(`[gmail-sync] push notification failed for user ${userId}:`, err instanceof Error ? err.message : err);
+    }
+  }
 
   return { synced, skipped, failed };
 }
