@@ -16,6 +16,18 @@ interface SummaryCardProps {
   className?: string;
 }
 
+// Column count follows the number of stats instead of a fixed 6, so a
+// card with only 3 stats (e.g. Year View's Balance/Income/Expenses) fills
+// its row at 3-wide instead of getting stretched across 6 narrow columns
+// with dead space on the right and the values getting truncated.
+const GRID_COLS_BY_COUNT: Record<number, string> = {
+  1: "grid-cols-1",
+  2: "grid-cols-2",
+  3: "grid-cols-2 sm:grid-cols-3",
+  4: "grid-cols-2 sm:grid-cols-4",
+  5: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5",
+};
+
 // Coin by Zerodha's compound overview-card pattern: a small pill label
 // floats overlapping the card's top edge, a stat row sits on the white
 // card body, and an optional secondary muted-bg "toolbar" band holds
@@ -25,12 +37,13 @@ export function SummaryCard({ tag, stats, toolbar, className }: SummaryCardProps
   // hint — reserving it unconditionally left a dead strip of empty space
   // at the bottom of cards where no stat uses hints at all.
   const anyHint = stats.some(s => s.hint);
+  const colsClass = GRID_COLS_BY_COUNT[stats.length] ?? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6";
   return (
     <div className={cn("relative rounded-lg border border-border bg-card", className)}>
       <span className="absolute -top-3 left-4 text-xs font-medium text-muted-foreground bg-muted px-2.5 py-1 rounded-full">
         {tag}
       </span>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-6 gap-y-4 px-4 pt-6 pb-4">
+      <div className={cn("grid gap-x-6 gap-y-4 px-4 pt-6 pb-4", colsClass)}>
         {stats.map((s, i) => {
           const Comp = s.onClick ? "button" : "div";
           return (

@@ -47,7 +47,7 @@ export function DashboardCharts({
             <span
               className={cn(
                 "text-sm font-semibold",
-                savingsRate >= 20 ? "text-emerald-600" : savingsRate >= 10 ? "text-amber-500" : "text-rose-500"
+                savingsRate >= 20 ? "text-positive" : savingsRate >= 10 ? "text-warning" : "text-negative"
               )}
             >
               {savingsRate}%
@@ -59,9 +59,9 @@ export function DashboardCharts({
               <span className="text-xs text-muted-foreground">vs {prevMonthName}</span>
               <div className="flex items-center gap-1">
                 {expensesDelta > 0
-                  ? <TrendingUp className="w-3 h-3 text-rose-400" />
-                  : <TrendingDown className="w-3 h-3 text-emerald-500" />}
-                <span className={cn("text-xs font-medium tabular-nums", expensesDelta > 0 ? "text-rose-500" : "text-emerald-600")}>
+                  ? <TrendingUp className="w-3 h-3 text-negative" />
+                  : <TrendingDown className="w-3 h-3 text-positive" />}
+                <span className={cn("text-xs font-medium tabular-nums", expensesDelta > 0 ? "text-negative" : "text-positive")}>
                   {expensesDelta > 0 ? "+" : "-"}{fmt(Math.abs(expensesDelta))}
                 </span>
               </div>

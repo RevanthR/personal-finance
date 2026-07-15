@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -80,7 +80,7 @@ function FxEstimateNote({ item }: { item: ParsedTransactionItem }) {
   if (!item.originalCurrency || item.originalCurrency === "INR" || !item.originalAmount) return null;
   const symbol = CURRENCY_SYMBOLS[item.originalCurrency] ?? `${item.originalCurrency} `;
   return (
-    <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-md px-2 py-1 mt-1">
+    <p className="text-xs text-warning bg-warning-bg border border-warning-border rounded-md px-2 py-1 mt-1">
       {symbol}{item.originalAmount.toLocaleString()} {item.originalCurrency} → ≈ ₹{item.amount.toLocaleString("en-IN")} (estimated, confirm against your statement)
     </p>
   );
@@ -175,62 +175,71 @@ export function ImportsClient({ gmail }: ImportsClientProps) {
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6">
       <PageHeader title="Sync" subtitle="Transactions found in your Gmail, ready to review" />
 
+      {/* A horizontal bar, not a narrow stacked card — the connection status,
+          last-synced note, and actions all sit in one row so the card uses
+          the page's full width instead of being capped at a fixed width
+          with the rest of the row left blank. */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Mail className="w-4 h-4" /> Gmail connection
-          </CardTitle>
-          <CardDescription>
-            Reads bank transaction alerts and suggests entries, nothing is added automatically.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {gmail.connected ? (
-            <div className="space-y-3">
-              <div>
-                <p className="text-sm font-medium">Connected{gmail.connectedEmail ? ` as ${gmail.connectedEmail}` : ""}</p>
-                <p className="text-xs text-muted-foreground">
-                  {gmail.lastSyncAt ? `Last synced ${format(new Date(gmail.lastSyncAt), "d MMM, h:mm a")}` : "Not synced yet"}
+        <CardContent className="p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 rounded-full bg-accent flex items-center justify-center shrink-0">
+                <Mail className="w-4 h-4 text-primary" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium truncate">
+                  {gmail.connected ? `Connected${gmail.connectedEmail ? ` as ${gmail.connectedEmail}` : ""}` : "Gmail not connected"}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {gmail.connected
+                    ? gmail.lastSyncAt ? `Last synced ${format(new Date(gmail.lastSyncAt), "d MMM, h:mm a")}` : "Not synced yet"
+                    : "Reads bank transaction alerts and suggests entries, nothing is added automatically."}
                 </p>
               </div>
-              <div className="flex gap-2">
-                <Button size="sm" onClick={handleSync} disabled={syncing}>
-                  <RefreshCw className={cn("w-3.5 h-3.5 mr-1.5", syncing && "animate-spin")} />
-                  {syncing ? "Syncing..." : "Sync now"}
+            </div>
+
+            <div className="flex flex-wrap gap-2 shrink-0">
+              {gmail.connected ? (
+                <>
+                  <Button size="sm" onClick={handleSync} disabled={syncing}>
+                    <RefreshCw className={cn("w-3.5 h-3.5 mr-1.5", syncing && "animate-spin")} />
+                    {syncing ? "Syncing..." : "Sync now"}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={handleDisconnect} disabled={disconnecting}>
+                    {disconnecting && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
+                    {disconnecting ? "Disconnecting..." : "Disconnect"}
+                  </Button>
+                </>
+              ) : (
+                <Button size="sm" onClick={() => { window.location.href = "/api/gmail/connect"; }}>
+                  <Mail className="w-3.5 h-3.5 mr-1.5" />
+                  Connect Gmail
                 </Button>
-                <Button size="sm" variant="outline" onClick={handleDisconnect} disabled={disconnecting}>
-                  {disconnecting && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
-                  {disconnecting ? "Disconnecting..." : "Disconnect"}
-                </Button>
-              </div>
-              {syncing && (
-                <div className="space-y-1">
-                  <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-primary transition-all duration-300 ease-out"
-                      style={{
-                        width: syncProgress
-                          ? `${Math.round((syncProgress.processed / Math.max(syncProgress.total, 1)) * 100)}%`
-                          : "6%",
-                      }}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {syncProgress
-                      ? `Checking email ${syncProgress.processed} of ${syncProgress.total}...`
-                      : "Searching your inbox..."}
-                  </p>
-                </div>
               )}
             </div>
-          ) : (
-            <Button size="sm" onClick={() => { window.location.href = "/api/gmail/connect"; }}>
-              <Mail className="w-3.5 h-3.5 mr-1.5" />
-              Connect Gmail
-            </Button>
+          </div>
+
+          {syncing && (
+            <div className="space-y-1 mt-3">
+              <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-primary transition-all duration-300 ease-out"
+                  style={{
+                    width: syncProgress
+                      ? `${Math.round((syncProgress.processed / Math.max(syncProgress.total, 1)) * 100)}%`
+                      : "6%",
+                  }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {syncProgress
+                  ? `Checking email ${syncProgress.processed} of ${syncProgress.total}...`
+                  : "Searching your inbox..."}
+              </p>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -244,15 +253,17 @@ export function ImportsClient({ gmail }: ImportsClientProps) {
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1">
             {format(new Date(day), "EEEE, d MMM")}
           </p>
-          {items.map(item => (
-            <TransactionRow
-              key={item.id}
-              item={item}
-              ccCards={gmail.ccCards}
-              customCategories={gmail.customCategories}
-              onDone={() => router.refresh()}
-            />
-          ))}
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
+            {items.map(item => (
+              <TransactionRow
+                key={item.id}
+                item={item}
+                ccCards={gmail.ccCards}
+                customCategories={gmail.customCategories}
+                onDone={() => router.refresh()}
+              />
+            ))}
+          </div>
         </div>
       ))}
     </div>
@@ -283,28 +294,30 @@ function TransactionRow({ item, ccCards, customCategories, onDone }: {
 
   if (item.possibleMatch && !addAnyway) {
     return (
-      <div className="border border-border rounded-lg p-3 space-y-2 bg-muted/30">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <p className="text-sm font-medium">{item.merchant ?? item.bank}</p>
-            <p className="text-xs text-muted-foreground">{item.bank} · {METHOD_LABEL[item.paymentMethod]}{item.last4 && ` · •• ${item.last4}`}<TimeNote item={item} /></p>
+      <Card className="bg-muted/30">
+        <CardContent className="p-3 space-y-2">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-sm font-medium truncate">{item.merchant ?? item.bank}</p>
+              <p className="text-xs text-muted-foreground">{item.bank} · {METHOD_LABEL[item.paymentMethod]}{item.last4 && ` · •• ${item.last4}`}<TimeNote item={item} /></p>
+            </div>
+            <p className="text-sm font-semibold shrink-0">₹{item.amount.toLocaleString("en-IN")}</p>
           </div>
-          <p className="text-sm font-semibold">₹{item.amount.toLocaleString("en-IN")}</p>
-        </div>
-        <FxEstimateNote item={item} />
-        <div className="text-xs text-muted-foreground bg-background rounded-md p-2 border border-border">
-          Looks like you already added this: <span className="font-medium text-foreground">{item.possibleMatch.name}</span>, ₹{item.possibleMatch.amount.toLocaleString("en-IN")} on {format(new Date(item.possibleMatch.date), "d MMM")}
-        </div>
-        <div className="flex gap-2">
-          <Button size="sm" variant="default" onClick={() => setAddAnyway(true)} disabled={dismissing}>
-            <Plus className="w-3.5 h-3.5 mr-1" /> Not the same, add anyway
-          </Button>
-          <Button size="sm" variant="destructive" onClick={handleDismiss} disabled={dismissing}>
-            {dismissing ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <X className="w-3.5 h-3.5 mr-1" />}
-            {dismissing ? "Dismissing..." : "Dismiss"}
-          </Button>
-        </div>
-      </div>
+          <FxEstimateNote item={item} />
+          <div className="text-xs text-muted-foreground bg-background rounded-md p-2 border border-border break-words">
+            Looks like you already added this: <span className="font-medium text-foreground">{item.possibleMatch.name}</span>, ₹{item.possibleMatch.amount.toLocaleString("en-IN")} on {format(new Date(item.possibleMatch.date), "d MMM")}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="default" onClick={() => setAddAnyway(true)} disabled={dismissing}>
+              <Plus className="w-3.5 h-3.5 mr-1" /> Not the same, add anyway
+            </Button>
+            <Button size="sm" variant="destructive" onClick={handleDismiss} disabled={dismissing}>
+              {dismissing ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <X className="w-3.5 h-3.5 mr-1" />}
+              {dismissing ? "Dismissing..." : "Dismiss"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     );
   }
 
@@ -372,113 +385,115 @@ function AddForm({ item, ccCards, customCategories, onDone, showBack, onBack }: 
   }
 
   return (
-    <div className="border border-border rounded-lg p-3 space-y-2">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-sm font-medium">{item.merchant ?? item.bank}</p>
-          <p className="text-xs text-muted-foreground flex items-center gap-1">
-            <Landmark className="w-3 h-3" /> {item.bank} · {METHOD_LABEL[item.paymentMethod]}{item.last4 && ` · •• ${item.last4}`}<TimeNote item={item} />
-          </p>
+    <Card>
+      <CardContent className="p-3 space-y-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-sm font-medium truncate">{item.merchant ?? item.bank}</p>
+            <p className="text-xs text-muted-foreground flex items-start gap-1">
+              <Landmark className="w-3 h-3 shrink-0 mt-0.5" /> <span>{item.bank} · {METHOD_LABEL[item.paymentMethod]}{item.last4 && ` · •• ${item.last4}`}<TimeNote item={item} /></span>
+            </p>
+          </div>
+          <input
+            type="number"
+            value={amount}
+            onChange={e => setAmount(e.target.value)}
+            className="w-20 sm:w-24 shrink-0 text-right text-sm font-semibold border border-border rounded-md px-2 py-1 bg-background"
+          />
         </div>
-        <input
-          type="number"
-          value={amount}
-          onChange={e => setAmount(e.target.value)}
-          className="w-24 text-right text-sm font-semibold border border-border rounded-md px-2 py-1 bg-background"
-        />
-      </div>
 
-      <FxEstimateNote item={item} />
+        <FxEstimateNote item={item} />
 
-      {isCC ? (
-        <>
-          {ccCards.length > 0 && (
+        {isCC ? (
+          <>
+            {ccCards.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {ccCards.map(card => (
+                  <button
+                    key={card.templateId}
+                    type="button"
+                    onClick={() => setCCTemplateId(card.templateId)}
+                    className={cn(
+                      "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
+                      ccTemplateId === card.templateId
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {card.name}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="flex flex-wrap gap-1.5">
-              {ccCards.map(card => (
+              {CC_SUBCATEGORIES.map(sub => (
                 <button
-                  key={card.templateId}
+                  key={sub}
                   type="button"
-                  onClick={() => setCCTemplateId(card.templateId)}
+                  onClick={() => setSpendCat(c => c === sub ? "" : sub)}
                   className={cn(
                     "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
-                    ccTemplateId === card.templateId
+                    spendCat === sub
                       ? "bg-primary text-primary-foreground border-primary"
                       : "border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground",
                   )}
                 >
-                  {card.name}
+                  {sub}
                 </button>
               ))}
             </div>
-          )}
+          </>
+        ) : (
           <div className="flex flex-wrap gap-1.5">
-            {CC_SUBCATEGORIES.map(sub => (
+            {EXPENSE_CATEGORIES.map(c => (
               <button
-                key={sub}
+                key={c.value}
                 type="button"
-                onClick={() => setSpendCat(c => c === sub ? "" : sub)}
+                onClick={() => { setCategory(c.value); setCustomLabel(""); }}
                 className={cn(
                   "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
-                  spendCat === sub
+                  category === c.value && !customLabel
                     ? "bg-primary text-primary-foreground border-primary"
                     : "border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground",
                 )}
               >
-                {sub}
+                {c.label}
+              </button>
+            ))}
+            {customCategories.map(c => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setCustomLabel(c.name)}
+                className={cn(
+                  "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
+                  customLabel === c.name
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground",
+                )}
+              >
+                {c.name}
               </button>
             ))}
           </div>
-        </>
-      ) : (
-        <div className="flex flex-wrap gap-1.5">
-          {EXPENSE_CATEGORIES.map(c => (
-            <button
-              key={c.value}
-              type="button"
-              onClick={() => { setCategory(c.value); setCustomLabel(""); }}
-              className={cn(
-                "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
-                category === c.value && !customLabel
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground",
-              )}
-            >
-              {c.label}
-            </button>
-          ))}
-          {customCategories.map(c => (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => setCustomLabel(c.name)}
-              className={cn(
-                "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
-                customLabel === c.name
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground",
-              )}
-            >
-              {c.name}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="flex gap-2 pt-1">
-        <Button size="sm" onClick={() => act("approve")} disabled={loading || (isCC && !ccTemplateId)}>
-          {pendingAction === "approve" ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Check className="w-3.5 h-3.5 mr-1" />}
-          {pendingAction === "approve" ? "Adding..." : "Add"}
-        </Button>
-        <Button size="sm" variant="destructive" onClick={() => act("reject")} disabled={loading}>
-          {pendingAction === "reject" ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <X className="w-3.5 h-3.5 mr-1" />}
-          {pendingAction === "reject" ? "Rejecting..." : "Reject"}
-        </Button>
-        {showBack && (
-          <Button size="sm" variant="ghost" onClick={onBack} disabled={loading}>
-            Back to match
-          </Button>
         )}
-      </div>
-    </div>
+
+        <div className="flex flex-wrap gap-2 pt-1">
+          <Button size="sm" onClick={() => act("approve")} disabled={loading || (isCC && !ccTemplateId)}>
+            {pendingAction === "approve" ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Check className="w-3.5 h-3.5 mr-1" />}
+            {pendingAction === "approve" ? "Adding..." : "Add"}
+          </Button>
+          <Button size="sm" variant="destructive" onClick={() => act("reject")} disabled={loading}>
+            {pendingAction === "reject" ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <X className="w-3.5 h-3.5 mr-1" />}
+            {pendingAction === "reject" ? "Rejecting..." : "Reject"}
+          </Button>
+          {showBack && (
+            <Button size="sm" variant="ghost" onClick={onBack} disabled={loading}>
+              Back to match
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

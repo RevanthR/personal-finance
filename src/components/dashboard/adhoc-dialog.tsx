@@ -151,8 +151,8 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
                   "py-3 rounded-md text-sm font-semibold transition-all",
                   type === t
                     ? t === "INCOME"
-                      ? "bg-emerald-700 text-white shadow-sm"
-                      : "bg-white text-zinc-900 shadow-sm"
+                      ? "bg-positive text-white shadow-sm"
+                      : "bg-card text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground",
                   isEditing && "opacity-60 cursor-not-allowed"
                 )}
@@ -182,8 +182,8 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
                   className={cn(
                     "px-3 py-2 rounded-full text-sm font-medium border transition-colors",
                     category === c.value
-                      ? "bg-zinc-900 text-white border-zinc-900"
-                      : "border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"
+                      ? "bg-foreground text-background border-foreground"
+                      : "border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground"
                   )}
                 >
                   {c.label}
@@ -197,8 +197,8 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
                   className={cn(
                     "px-3 py-2 rounded-full text-sm font-medium border transition-colors",
                     isCustom && customLabel === c.name
-                      ? "bg-zinc-900 text-white border-zinc-900"
-                      : "border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"
+                      ? "bg-foreground text-background border-foreground"
+                      : "border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground"
                   )}
                 >
                   {c.name}
@@ -211,8 +211,8 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
                   className={cn(
                     "px-3 py-2 rounded-full text-sm font-medium border transition-colors",
                     isCustom && !customLabel
-                      ? "bg-zinc-900 text-white border-zinc-900"
-                      : "border-dashed border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"
+                      ? "bg-foreground text-background border-foreground"
+                      : "border-dashed border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground"
                   )}
                 >
                   + Custom
@@ -246,8 +246,8 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
                         className={cn(
                           "px-3 py-2 rounded-full text-sm font-medium border transition-colors",
                           ccCard?.templateId === card.templateId
-                            ? "bg-zinc-900 text-white border-zinc-900"
-                            : "border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"
+                            ? "bg-foreground text-background border-foreground"
+                            : "border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground"
                         )}
                       >
                         {card.name}
@@ -269,8 +269,8 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
                       className={cn(
                         "px-3 py-2 rounded-full text-sm font-medium border transition-colors",
                         ccSpendCat === cat
-                          ? "bg-zinc-900 text-white border-zinc-900"
-                          : "border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"
+                          ? "bg-foreground text-background border-foreground"
+                          : "border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground"
                       )}
                     >
                       {cat}

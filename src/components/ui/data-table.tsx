@@ -15,25 +15,27 @@ interface DataTableProps<T> {
   columns: DataTableColumn<T>[];
   rows: T[];
   rowKey: (row: T) => string;
-  /** Rendered as the first, unlabeled column — the row's identity (icon,
-   * name, tags), matching the "Fund" column in Coin's holdings table. */
+  /** Rendered as the first column — the row's identity (icon, name, tags),
+   * matching the "Fund" column in Coin's holdings table. */
   leading: (row: T) => ReactNode;
+  /** Header label for the leading column, e.g. "Fund" or "User". */
+  leadingHeader?: string;
   trailing?: (row: T) => ReactNode;
   className?: string;
 }
 
-// Aligned-column table for dense financial data at desktop width (Coin's
-// fund holdings table: Fund | Avg NAV | Curr NAV | Invested | Current |
-// P&L | Day Chg), falling back to a stacked hairline-divider row per
-// record on mobile, where columns wouldn't fit.
-export function DataTable<T>({ columns, rows, rowKey, leading, trailing, className }: DataTableProps<T>) {
+// Aligned-column table for dense data at desktop width (Coin's fund
+// holdings table: Fund | Avg NAV | Curr NAV | Invested | Current | P&L |
+// Day Chg), falling back to a stacked hairline-divider row per record on
+// mobile, where columns wouldn't fit.
+export function DataTable<T>({ columns, rows, rowKey, leading, leadingHeader = "", trailing, className }: DataTableProps<T>) {
   return (
     <div className={cn("rounded-lg border border-border bg-card overflow-hidden", className)}>
       {/* Desktop: real table */}
       <table className="hidden md:table w-full text-sm">
         <thead>
           <tr className="border-b border-border">
-            <th className="text-left font-medium text-muted-foreground text-xs px-4 py-3">Fund</th>
+            <th className="text-left font-medium text-muted-foreground text-xs px-4 py-3">{leadingHeader}</th>
             {columns.map(c => (
               <th key={c.key} className={cn("font-medium text-muted-foreground text-xs px-3 py-3", c.align === "right" ? "text-right" : "text-left")}>
                 {c.header}

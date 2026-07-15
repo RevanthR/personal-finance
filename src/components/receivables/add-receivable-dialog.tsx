@@ -73,8 +73,8 @@ export function AddReceivableDialog({ open, onOpenChange, onAdd }: AddReceivable
                   onClick={() => setCategory(c.value)}
                   className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
                     category === c.value
-                      ? "bg-amber-500 text-white border-amber-500"
-                      : "border-gray-200 text-gray-500 hover:border-gray-400"
+                      ? "bg-warning text-white border-warning"
+                      : "border-border text-muted-foreground hover:border-muted-foreground"
                   }`}
                 >
                   {c.label}

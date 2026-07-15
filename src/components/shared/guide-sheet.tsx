@@ -7,8 +7,8 @@ const sections = [
   {
     icon: LayoutDashboard,
     title: "Dashboard",
-    color: "text-indigo-500",
-    bg: "bg-indigo-50",
+    color: "text-indigo-600 dark:text-indigo-400",
+    bg: "bg-indigo-100 dark:bg-indigo-500/15",
     lines: [
       "A full-year view of income, expenses, and balance across all months.",
       "Mark each recurring item as paid once you settle it.",
@@ -19,8 +19,8 @@ const sections = [
   {
     icon: Calendar,
     title: "Statistics",
-    color: "text-blue-500",
-    bg: "bg-blue-50",
+    color: "text-blue-600 dark:text-blue-400",
+    bg: "bg-blue-100 dark:bg-blue-500/15",
     lines: [
       "Shows your full financial year from April to March.",
       "Solid months are real data. Dashed months are estimates based on your active items.",
@@ -31,8 +31,8 @@ const sections = [
   {
     icon: SlidersHorizontal,
     title: "Configuration",
-    color: "text-violet-500",
-    bg: "bg-violet-50",
+    color: "text-violet-600 dark:text-violet-400",
+    bg: "bg-violet-100 dark:bg-violet-500/15",
     lines: [
       "Set up recurring items that auto-fill every month: salary, EMIs, rent, credit card bills, chit contributions.",
       "Add your income sources first so the app can calculate your monthly leftover correctly.",
@@ -44,8 +44,8 @@ const sections = [
   {
     icon: TrendingUp,
     title: "Receivables",
-    color: "text-emerald-500",
-    bg: "bg-emerald-50",
+    color: "text-emerald-600 dark:text-emerald-400",
+    bg: "bg-emerald-100 dark:bg-emerald-500/15",
     lines: [
       "Track money that others owe you. This includes personal loans and chit fund lifts.",
       "Set an expected date and that month's forecast will include this amount as income.",
@@ -55,8 +55,8 @@ const sections = [
   {
     icon: Coins,
     title: "Chit Funds",
-    color: "text-amber-500",
-    bg: "bg-amber-50",
+    color: "text-amber-600 dark:text-amber-400",
+    bg: "bg-amber-100 dark:bg-amber-500/15",
     lines: [
       "A group savings scheme where every member pays in monthly and takes turns receiving the full pot.",
       "Before you lift: your monthly payment is treated as savings, not an expense.",
@@ -67,8 +67,8 @@ const sections = [
   {
     icon: Plus,
     title: "Add Transaction",
-    color: "text-rose-500",
-    bg: "bg-rose-50",
+    color: "text-rose-600 dark:text-rose-400",
+    bg: "bg-rose-100 dark:bg-rose-500/15",
     lines: [
       "Logs a one-off item for the current month only. It will not carry over to next month.",
       "Expense types: House, Loan, Credit Card, Personal, Misc.",

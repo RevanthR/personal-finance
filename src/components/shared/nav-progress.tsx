@@ -46,7 +46,7 @@ export function NavProgress() {
 
   return (
     <div
-      className="fixed top-0 left-0 z-50 h-0.5 bg-zinc-900 transition-all duration-300 ease-out"
+      className="fixed top-0 left-0 z-50 h-0.5 bg-primary transition-all duration-300 ease-out"
       style={{ width: `${width}%`, opacity: width === 100 ? 0 : 1 }}
     />
   );

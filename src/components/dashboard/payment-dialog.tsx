@@ -38,13 +38,13 @@ export function PaymentDialog({ tick, entryName, amount, fmt }: PaymentDialogPro
             </div>
             {isCC && (
               <div className="flex items-center justify-between gap-3">
-                <span className="text-sm text-emerald-600">Cashback</span>
+                <span className="text-sm text-positive">Cashback</span>
                 <Input
                   type="number"
                   value={cashbackVal}
                   onChange={e => setCashbackVal(e.target.value)}
                   placeholder="0"
-                  className="h-7 w-28 text-right text-sm text-emerald-600 border-emerald-200 focus:border-emerald-400"
+                  className="h-7 w-28 text-right text-sm text-positive border-positive-border focus:border-positive"
                 />
               </div>
             )}
@@ -57,17 +57,17 @@ export function PaymentDialog({ tick, entryName, amount, fmt }: PaymentDialogPro
             {isPartial && (
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Already paid</span>
-                <span className="text-amber-600 font-semibold">{fmt(paidAmount!)}</span>
+                <span className="text-warning font-semibold">{fmt(paidAmount!)}</span>
               </div>
             )}
           </div>
 
-          <div className="flex gap-2 bg-zinc-100 rounded-lg p-1">
+          <div className="flex gap-2 bg-muted rounded-lg p-1">
             <button
               onClick={() => setPayMode("full")}
               className={cn(
                 "flex-1 py-3 rounded-md text-sm font-medium transition-colors",
-                payMode === "full" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground"
+                payMode === "full" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
               )}
             >
               Pay in full
@@ -79,7 +79,7 @@ export function PaymentDialog({ tick, entryName, amount, fmt }: PaymentDialogPro
               }}
               className={cn(
                 "flex-1 py-3 rounded-md text-sm font-medium transition-colors",
-                payMode === "partial" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground"
+                payMode === "partial" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
               )}
             >
               Partial

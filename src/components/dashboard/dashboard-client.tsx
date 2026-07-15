@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { EntryRow } from "./entry-row";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SummaryCard } from "@/components/ui/summary-card";
+import { PageHeader } from "@/components/ui/page-header";
 import { PaymentDialog } from "./payment-dialog";
 import { usePaymentTick } from "@/hooks/use-payment-tick";
 import { DashboardTour } from "@/components/coach/dashboard-tour";
@@ -250,7 +251,7 @@ function CCCardBlock({
               tick.isPaid
                 ? "bg-positive border-positive"
                 : isBillPending
-                  ? "border-sky-300 bg-sky-50"
+                  ? "border-primary/40 bg-accent"
                   : tick.isPartial
                     ? "border-warning bg-warning-bg"
                     : "border-warning/70 bg-warning-bg/40"
@@ -891,7 +892,9 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
 
   if (!currentMonth && !isProjected) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+      <div className="space-y-4">
+      <PageHeader title="Dashboard" subtitle="This month's income, expenses, and bills" />
+      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
         {prevUrl && nextUrl && (
           <div className="flex items-center gap-3 mb-2">
             <button onClick={() => navigate(prevUrl)} disabled={isPending} className="p-1.5 rounded-lg border hover:bg-muted transition-colors disabled:opacity-40">
@@ -915,16 +918,16 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
         />
         <SetupMonthDialog open={showSetup} onOpenChange={setShowSetup} month={viewMonth} year={viewYear} suggestedIncome={templateIncome} onConfirm={handleSetupMonth} />
       </div>
+      </div>
     );
   }
 
   return (
     <div className="space-y-4">
       <DashboardTour />
+      <PageHeader title="Dashboard" subtitle="This month's income, expenses, and bills" />
       {/* Header */}
       <div className="space-y-2">
-        <p className="text-xs text-muted-foreground uppercase tracking-wider">This Month</p>
-
         <div className="flex items-center gap-2">
           {/* Month navigation pill */}
           {prevUrl && nextUrl ? (
@@ -1004,7 +1007,6 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
           {
             label: "Recurring",
             value: fmt(dispRecurringNonCC),
-            valueClass: "text-negative",
             hint: <span className="text-xs text-muted-foreground">
               {isProjected ? `${projEntries.filter(e => e.category !== "CREDIT_CARD").length} items` : nonCCPendingCount > 0 ? `${nonCCPendingCount} pending` : "all paid"}
             </span>,
@@ -1017,6 +1019,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
           {
             label: "Pending",
             value: isProjected ? fmt(dispPending) : fmt(totalPending),
+            valueClass: "text-negative",
             hint: isProjected
               ? <span className="text-xs text-muted-foreground">projected</span>
               : balance < 0

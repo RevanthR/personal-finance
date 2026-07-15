@@ -109,7 +109,7 @@ export function MarkReceivedDialog({ open, onOpenChange, receivable, onConfirm }
           </div>
 
           <DialogFooter>
-            <Button type="submit" disabled={loading} className="w-full bg-emerald-600 hover:bg-emerald-700">
+            <Button type="submit" disabled={loading} className="w-full bg-positive text-white hover:bg-positive/90">
               {loading ? "Saving..." : "Mark as Received"}
             </Button>
           </DialogFooter>

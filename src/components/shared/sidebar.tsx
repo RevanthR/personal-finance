@@ -59,14 +59,14 @@ export function Sidebar({ isAdmin, importsBadge = 0 }: SidebarProps) {
       {/* Desktop sidebar — vertical icon-tile nav, matching Coin's sidebar.
           No collapse toggle: at this width there's nothing worth reclaiming
           by collapsing, and Coin's own sidebar doesn't have one either. */}
-      <aside className="hidden md:flex flex-col border-r border-border bg-card shrink-0 w-28">
-        <div className="flex items-center justify-center p-4 pb-3">
+      <aside className="hidden md:flex flex-col border-r border-border bg-card shrink-0 w-20">
+        <div className="flex items-center justify-center p-3 pb-5">
           <Link href="/dashboard" className="w-8 h-8 bg-primary rounded-xl flex items-center justify-center shrink-0">
             <IndianRupee className="w-4 h-4 text-primary-foreground" />
           </Link>
         </div>
 
-        <nav className="flex-1 p-2 space-y-1">
+        <nav className="flex-1 p-1.5 space-y-0.5">
           {navItems.map(({ href, label, icon, badge, iconClass }) => (
             <NavItem
               key={href}
@@ -88,23 +88,18 @@ export function Sidebar({ isAdmin, importsBadge = 0 }: SidebarProps) {
             variant="desktop"
             active={pathname === "/pricing"}
             iconClass="bg-primary/10 text-primary"
-            trailing={<span className="text-[10px] font-semibold text-primary bg-accent px-1.5 py-0.5 rounded-full -mt-0.5">Pro</span>}
+            badge="Pro"
           />
 
           {isAdmin && (
-            <>
-              <div className="px-3 pt-3 pb-1">
-                <p className="text-xs text-muted-foreground uppercase tracking-wider">Admin</p>
-              </div>
-              <NavItem
-                href="/admin"
-                label="Admin Portal"
-                icon={ShieldCheck}
-                variant="desktop"
-                active={pathname.startsWith("/admin")}
-                iconClass="bg-muted text-muted-foreground"
-              />
-            </>
+            <NavItem
+              href="/admin"
+              label="Admin"
+              icon={ShieldCheck}
+              variant="desktop"
+              active={pathname.startsWith("/admin")}
+              iconClass="bg-muted text-muted-foreground"
+            />
           )}
         </nav>
       </aside>

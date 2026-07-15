@@ -98,10 +98,10 @@ export function LiftChitDialog({ open, onOpenChange, chit, onLift }: LiftChitDia
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-4 space-y-1">
-              <p className="text-xs font-medium text-emerald-600 uppercase tracking-widest">Income to be recorded</p>
-              <p className="text-2xl font-bold text-emerald-600">{fmt(parseFloat(liftedAmount) || 0)}</p>
-              <p className="text-sm text-emerald-600">{monthName} {liftYear}</p>
+            <div className="rounded-lg bg-positive-bg border border-positive-border p-4 space-y-1">
+              <p className="text-xs font-medium text-positive uppercase tracking-widest">Income to be recorded</p>
+              <p className="text-2xl font-bold text-positive">{fmt(parseFloat(liftedAmount) || 0)}</p>
+              <p className="text-sm text-positive">{monthName} {liftYear}</p>
             </div>
             <p className="text-xs text-muted-foreground">
               From next month, your monthly payment becomes {fmt(parseFloat(monthlyAmt) || 0)}.
@@ -110,7 +110,7 @@ export function LiftChitDialog({ open, onOpenChange, chit, onLift }: LiftChitDia
               <Button variant="outline" className="flex-1" onClick={() => setStep(1)} disabled={loading}>
                 Back
               </Button>
-              <Button className="flex-1 bg-amber-600 hover:bg-amber-700" onClick={handleConfirm} disabled={loading}>
+              <Button className="flex-1" onClick={handleConfirm} disabled={loading}>
                 {loading ? "Recording..." : "Confirm & Lift"}
               </Button>
             </div>

@@ -10,7 +10,7 @@ export default function MonthsLoading() {
           <Skeleton className="h-6 w-40" />
           <Skeleton className="h-4 w-32" />
         </div>
-        <div className="flex gap-1 bg-zinc-100 rounded-xl p-1 w-fit">
+        <div className="flex gap-1 bg-muted rounded-xl p-1 w-fit">
           <Skeleton className="h-8 w-20 rounded-lg" />
           <Skeleton className="h-8 w-24 rounded-lg" />
         </div>
@@ -19,7 +19,7 @@ export default function MonthsLoading() {
       <div className="flex flex-col lg:flex-row gap-6 max-w-5xl lg:items-start">
         <div className="flex-1 min-w-0 space-y-5">
           {/* Year-end projection card */}
-          <Card className="border-2 border-emerald-200">
+          <Card className="border-2 border-positive-border">
             <CardContent className="p-4 space-y-2">
               <Skeleton className="h-3 w-32" />
               <Skeleton className="h-9 w-40" />

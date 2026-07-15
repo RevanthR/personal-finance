@@ -15,13 +15,13 @@ export default async function BillingLayout({ children }: { children: React.Reac
 
   return (
     <PrivacyProvider>
-      <div className="flex h-screen overflow-hidden bg-zinc-50">
+      <div className="flex h-screen overflow-hidden bg-background">
         <Suspense><NavProgress /></Suspense>
         <Sidebar isAdmin={isAdmin} />
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
           <Header user={session.user} />
-          <main className="flex-1 overflow-y-auto p-4 md:p-6 pb-28 md:pb-6">
-            {children}
+          <main className="flex-1 overflow-y-auto p-4 md:p-6 pb-28 md:pb-6 flex flex-col">
+            <div className="flex-1">{children}</div>
             <LegalFooter />
           </main>
         </div>

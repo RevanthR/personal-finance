@@ -91,11 +91,11 @@ export function PullToRefresh() {
       }}
     >
       <div
-        className="w-9 h-9 rounded-full bg-white shadow-lg border border-border flex items-center justify-center"
+        className="w-9 h-9 rounded-full bg-card shadow-lg border border-border flex items-center justify-center"
         style={{ opacity: refreshing ? 1 : Math.max(0.25, progress) }}
       >
         <RefreshCw
-          className="w-4 h-4 text-emerald-600"
+          className="w-4 h-4 text-positive"
           style={{
             transform: refreshing ? undefined : `rotate(${progress * 240}deg)`,
             animation: refreshing ? "spin 0.7s linear infinite" : undefined,

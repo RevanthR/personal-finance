@@ -9,7 +9,7 @@ export function TrialBanner({ trialEndsAt }: { trialEndsAt: string }) {
   const urgent = days <= 1;
 
   return (
-    <div className={`flex items-center justify-between gap-3 px-4 py-2 text-xs ${urgent ? "bg-red-600 text-white" : "bg-amber-500 text-zinc-900"}`}>
+    <div className={`flex items-center justify-between gap-3 px-4 py-2 text-xs ${urgent ? "bg-negative text-white" : "bg-warning text-white dark:text-background"}`}>
       <div className="flex items-center gap-2">
         <Clock className="w-3.5 h-3.5 shrink-0" />
         <span className="font-medium">
@@ -20,7 +20,7 @@ export function TrialBanner({ trialEndsAt }: { trialEndsAt: string }) {
       </div>
       <Link
         href="/pricing"
-        className={`shrink-0 font-semibold underline underline-offset-2 ${urgent ? "text-white" : "text-zinc-900"}`}
+        className={`shrink-0 font-semibold underline underline-offset-2 ${urgent ? "text-white" : "text-white dark:text-background"}`}
       >
         Subscribe now
       </Link>

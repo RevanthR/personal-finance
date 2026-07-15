@@ -100,7 +100,7 @@ export function AddChitDialog({ open, onOpenChange, onAdd }: AddChitDialogProps)
               {MONTHS.map((m, i) => (
                 <button key={m} type="button" onClick={() => setStartMonth(i + 1)}
                   className={cn("px-2 py-0.5 rounded text-xs font-medium border transition-colors",
-                    startMonth === i + 1 ? "bg-amber-500 text-white border-amber-500" : "border-gray-200 text-gray-500 hover:border-gray-400"
+                    startMonth === i + 1 ? "bg-warning text-white border-warning" : "border-border text-muted-foreground hover:border-muted-foreground"
                   )}>
                   {m}
                 </button>

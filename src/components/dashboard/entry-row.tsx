@@ -85,15 +85,15 @@ export function EntryRow({ entry, onUpdate, isBillPending = false, tick: externa
           <div className={cn(
             "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all pointer-events-none",
             isPaid
-              ? "bg-emerald-600 border-emerald-600"
+              ? "bg-positive border-positive"
               : isBillPending
-                ? "border-sky-300 bg-sky-50"
+                ? "border-primary/40 bg-accent"
                 : isPartial
-                  ? "border-amber-500 bg-amber-50"
-                  : "border-amber-400/70 bg-amber-50/40"
+                  ? "border-warning bg-warning-bg"
+                  : "border-warning/70 bg-warning-bg/40"
           )}>
             {isPaid && <Check className="w-3 h-3 text-white" />}
-            {isPartial && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
+            {isPartial && <span className="w-1.5 h-1.5 rounded-full bg-warning" />}
           </div>
         </button>
 
@@ -116,12 +116,12 @@ export function EntryRow({ entry, onUpdate, isBillPending = false, tick: externa
                 </span>
               )}
               {entry.template.category !== "CREDIT_CARD" && entry.template.dueDateDay && !isPaid && (
-                <span className="flex items-center gap-0.5 text-amber-600">
+                <span className="flex items-center gap-0.5 text-warning">
                   <Clock className="w-2.5 h-2.5" />{ordinal(entry.template.dueDateDay)}
                 </span>
               )}
               {isPaid && entry.paidOn && (
-                <span className="text-emerald-600">{format(new Date(entry.paidOn), "dd MMM")}</span>
+                <span className="text-positive">{format(new Date(entry.paidOn), "dd MMM")}</span>
               )}
               {isLoan && entry.template.loanInterestRate && (
                 <span className="text-muted-foreground/70">{entry.template.loanInterestRate}%</span>
@@ -130,9 +130,9 @@ export function EntryRow({ entry, onUpdate, isBillPending = false, tick: externa
           )}
           {loanAmort && !isPaid && (
             <p className="text-xs mt-0.5 flex items-center gap-1">
-              <span className="text-emerald-600">{fmt(loanAmort.principalThisMonth)} principal</span>
+              <span className="text-positive">{fmt(loanAmort.principalThisMonth)} principal</span>
               <span className="text-muted-foreground">·</span>
-              <span className="text-red-500">{fmt(loanAmort.interestThisMonth)} interest</span>
+              <span className="text-negative">{fmt(loanAmort.interestThisMonth)} interest</span>
             </p>
           )}
         </div>
@@ -140,7 +140,7 @@ export function EntryRow({ entry, onUpdate, isBillPending = false, tick: externa
         <div className="shrink-0 text-right">
           {isPartial && !editingAmount ? (
             <>
-              <p className="text-xs text-amber-600 font-semibold">{fmt(paidAmount!)} paid</p>
+              <p className="text-xs text-warning font-semibold">{fmt(paidAmount!)} paid</p>
               <p className="text-xs text-muted-foreground">{fmt(outstanding)} left</p>
             </>
           ) : editingAmount ? (
@@ -151,12 +151,12 @@ export function EntryRow({ entry, onUpdate, isBillPending = false, tick: externa
               onChange={e => setAmountVal(e.target.value)}
               onBlur={handleAmountBlur}
               onKeyDown={handleAmountKey}
-              className="w-24 text-right text-sm font-semibold bg-transparent border-b border-zinc-400 outline-none"
+              className="w-24 text-right text-sm font-semibold bg-transparent border-b border-border outline-none"
             />
           ) : cashback > 0 && !isPaid ? (
             <>
               <p className="text-sm font-semibold">{fmt(netBill)}</p>
-              <p className="text-xs text-emerald-600">-{fmt(cashback)} cashback</p>
+              <p className="text-xs text-positive">-{fmt(cashback)} cashback</p>
             </>
           ) : (
             <>
@@ -164,13 +164,13 @@ export function EntryRow({ entry, onUpdate, isBillPending = false, tick: externa
                 onClick={handleAmountClick}
                 className={cn(
                   "text-sm font-semibold",
-                  !entry.template.isFixed && !isPaid && "cursor-pointer hover:text-zinc-600 underline decoration-dotted underline-offset-2"
+                  !entry.template.isFixed && !isPaid && "cursor-pointer hover:text-muted-foreground underline decoration-dotted underline-offset-2"
                 )}
               >
                 {fmt(entry.amount)}
               </span>
               {isCC && !isPaid && !isBillPending && entry.template.dueDateDay && (
-                <p className="text-xs text-amber-600">due {ordinal(entry.template.dueDateDay)}</p>
+                <p className="text-xs text-warning">due {ordinal(entry.template.dueDateDay)}</p>
               )}
             </>
           )}
@@ -188,7 +188,7 @@ export function EntryRow({ entry, onUpdate, isBillPending = false, tick: externa
         <DialogContent className="max-w-xs">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <span className="w-5 h-5 rounded-full bg-emerald-600 flex items-center justify-center shrink-0">
+              <span className="w-5 h-5 rounded-full bg-positive flex items-center justify-center shrink-0">
                 <Check className="w-3 h-3 text-white" />
               </span>
               Loan payment recorded
@@ -198,7 +198,7 @@ export function EntryRow({ entry, onUpdate, isBillPending = false, tick: externa
             <div className="space-y-3 pt-1">
               <p className="text-sm font-medium">{entry.template.name}</p>
 
-              <div className="rounded-xl bg-zinc-50 p-3 space-y-2">
+              <div className="rounded-xl bg-muted p-3 space-y-2">
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">This month&apos;s payment</p>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">EMI paid</span>
@@ -206,27 +206,27 @@ export function EntryRow({ entry, onUpdate, isBillPending = false, tick: externa
                 </div>
                 <div className="h-px bg-border" />
                 <div className="flex justify-between text-xs">
-                  <span className="text-emerald-600">↓ Principal</span>
-                  <span className="font-medium text-emerald-600 tabular-nums">{fmt(loanPaidSnapshot.principalThisMonth)}</span>
+                  <span className="text-positive">↓ Principal</span>
+                  <span className="font-medium text-positive tabular-nums">{fmt(loanPaidSnapshot.principalThisMonth)}</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-red-500">Interest paid</span>
-                  <span className="font-medium text-red-500 tabular-nums">{fmt(loanPaidSnapshot.interestThisMonth)}</span>
+                  <span className="text-negative">Interest paid</span>
+                  <span className="font-medium text-negative tabular-nums">{fmt(loanPaidSnapshot.interestThisMonth)}</span>
                 </div>
               </div>
 
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 space-y-1.5">
-                <p className="text-xs text-emerald-700 uppercase tracking-wide">After this payment</p>
+              <div className="rounded-xl border border-positive-border bg-positive-bg p-3 space-y-1.5">
+                <p className="text-xs text-positive uppercase tracking-wide">After this payment</p>
                 <div className="flex justify-between items-baseline">
-                  <span className="text-sm text-emerald-800">Outstanding balance</span>
-                  <span className="text-base font-bold text-emerald-700 tabular-nums">{fmt(loanPaidSnapshot.outstandingAfter)}</span>
+                  <span className="text-sm text-positive/80">Outstanding balance</span>
+                  <span className="text-base font-bold text-positive tabular-nums">{fmt(loanPaidSnapshot.outstandingAfter)}</span>
                 </div>
-                <div className="flex justify-between text-xs text-emerald-600">
+                <div className="flex justify-between text-xs text-positive">
                   <span>Interest remaining</span>
                   <span className="tabular-nums">{fmt(loanPaidSnapshot.totalInterestRemaining)}</span>
                 </div>
                 {loanPaidSnapshot.monthsRemaining > 0 && (
-                  <p className="text-xs text-emerald-600">{loanPaidSnapshot.monthsRemaining} month{loanPaidSnapshot.monthsRemaining !== 1 ? "s" : ""} to go</p>
+                  <p className="text-xs text-positive">{loanPaidSnapshot.monthsRemaining} month{loanPaidSnapshot.monthsRemaining !== 1 ? "s" : ""} to go</p>
                 )}
               </div>
             </div>

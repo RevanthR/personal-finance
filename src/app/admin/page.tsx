@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
 import { AdminUsersClient } from "@/components/admin/admin-users-client";
 import { Users, Calendar, Activity, CreditCard, Clock, AlertTriangle } from "lucide-react";
 
@@ -25,63 +25,60 @@ export default async function AdminPage() {
   }).length;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Admin Portal</h1>
-        <p className="text-sm text-muted-foreground">Manage users and view platform stats</p>
-      </div>
+    <div className="space-y-4">
+      <PageHeader className="mb-0" title="Admin" subtitle="Manage users and view platform stats" />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <Users className="w-7 h-7 text-zinc-500 shrink-0" />
+          <CardContent className="p-3 flex items-center gap-2.5">
+            <Users className="w-5 h-5 text-muted-foreground shrink-0" />
             <div>
-              <p className="text-2xl font-bold">{users.length}</p>
+              <p className="text-lg font-bold tabular-nums">{users.length}</p>
               <p className="text-xs text-muted-foreground">Total</p>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <Activity className="w-7 h-7 text-green-600 shrink-0" />
+          <CardContent className="p-3 flex items-center gap-2.5">
+            <Activity className="w-5 h-5 text-positive shrink-0" />
             <div>
-              <p className="text-2xl font-bold">{activeUsers}</p>
+              <p className="text-lg font-bold tabular-nums">{activeUsers}</p>
               <p className="text-xs text-muted-foreground">Active</p>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <CreditCard className="w-7 h-7 text-indigo-500 shrink-0" />
+          <CardContent className="p-3 flex items-center gap-2.5">
+            <CreditCard className="w-5 h-5 text-primary shrink-0" />
             <div>
-              <p className="text-2xl font-bold">{paidUsers}</p>
+              <p className="text-lg font-bold tabular-nums">{paidUsers}</p>
               <p className="text-xs text-muted-foreground">Paid</p>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <Clock className="w-7 h-7 text-blue-500 shrink-0" />
+          <CardContent className="p-3 flex items-center gap-2.5">
+            <Clock className="w-5 h-5 text-warning shrink-0" />
             <div>
-              <p className="text-2xl font-bold">{trialUsers}</p>
+              <p className="text-lg font-bold tabular-nums">{trialUsers}</p>
               <p className="text-xs text-muted-foreground">In Trial</p>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <AlertTriangle className="w-7 h-7 text-red-500 shrink-0" />
+          <CardContent className="p-3 flex items-center gap-2.5">
+            <AlertTriangle className="w-5 h-5 text-negative shrink-0" />
             <div>
-              <p className="text-2xl font-bold">{expiredUsers}</p>
+              <p className="text-lg font-bold tabular-nums">{expiredUsers}</p>
               <p className="text-xs text-muted-foreground">Expired</p>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <Calendar className="w-7 h-7 text-amber-500 shrink-0" />
+          <CardContent className="p-3 flex items-center gap-2.5">
+            <Calendar className="w-5 h-5 text-muted-foreground shrink-0" />
             <div>
-              <p className="text-2xl font-bold">{totalMonths}</p>
+              <p className="text-lg font-bold tabular-nums">{totalMonths}</p>
               <p className="text-xs text-muted-foreground">Months</p>
             </div>
           </CardContent>

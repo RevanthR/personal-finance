@@ -46,15 +46,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <WelcomeModal />
       <PwaInstallBanner />
       <PullToRefresh />
-      <div className="flex flex-col h-screen overflow-hidden bg-white">
+      <div className="flex flex-col h-screen overflow-hidden bg-background">
         {showTrialBanner && <TrialBanner trialEndsAt={user.trialEndsAt!} />}
         <div className="flex flex-1 min-h-0 overflow-hidden">
           <Suspense><NavProgress /></Suspense>
           <Sidebar isAdmin={isAdmin} importsBadge={importsBadge} />
           <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
             <Header user={session.user} />
-            <main className="flex-1 overflow-y-auto p-4 md:p-6 pb-28 md:pb-6">
-              {children}
+            {/* flex-col + a flex-1 wrapper around children is the sticky-footer
+                trick: on a short page the footer sits pinned at the bottom of
+                the viewport instead of floating right under sparse content;
+                on a tall page it scrolls down with everything else as usual. */}
+            <main className="flex-1 overflow-y-auto p-4 md:p-6 pb-28 md:pb-6 flex flex-col">
+              <div className="flex-1">{children}</div>
               <LegalFooter />
             </main>
           </div>

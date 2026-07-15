@@ -7,25 +7,25 @@ import { cn } from "@/lib/utils";
 const steps = [
   {
     icon: BarChart2,
-    color: "text-indigo-500 bg-indigo-50",
+    iconClass: "text-indigo-600 bg-indigo-100 dark:text-indigo-400 dark:bg-indigo-500/15",
     title: "Your monthly snapshot",
     desc: "Income and expenses for the month in one view. The progress bar shows how many bills you've settled.",
   },
   {
     icon: CheckCircle2,
-    color: "text-emerald-500 bg-emerald-50",
+    iconClass: "text-emerald-600 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-500/15",
     title: "Mark items as paid",
     desc: "Tap ✓ on any row once you've paid it. Loan entries show the principal vs interest split for that payment.",
   },
   {
     icon: Plus,
-    color: "text-rose-500 bg-rose-50",
+    iconClass: "text-rose-600 bg-rose-100 dark:text-rose-400 dark:bg-rose-500/15",
     title: "One-off transactions",
     desc: "Use Add Transaction for spends or income that won't repeat: a restaurant bill, a bonus, a refund.",
   },
   {
     icon: SlidersHorizontal,
-    color: "text-violet-500 bg-violet-50",
+    iconClass: "text-violet-600 bg-violet-100 dark:text-violet-400 dark:bg-violet-500/15",
     title: "Set up recurring items",
     desc: "Go to Configuration to add your salary, EMIs, rent, and subscriptions. They auto-fill every month.",
   },
@@ -38,7 +38,6 @@ export function DashboardTour() {
 
   const current = steps[step];
   const Icon = current.icon;
-  const [iconColor, bgColor] = current.color.split(" ");
   const total = steps.length;
 
   return (
@@ -59,7 +58,7 @@ export function DashboardTour() {
                   key={i}
                   className={cn(
                     "h-1 rounded-full transition-all duration-300",
-                    i === step ? "w-5 bg-zinc-900" : "w-2 bg-zinc-200"
+                    i === step ? "w-5 bg-foreground" : "w-2 bg-muted"
                   )}
                 />
               ))}
@@ -71,8 +70,8 @@ export function DashboardTour() {
 
           {/* Content */}
           <div className="flex gap-3 mb-5">
-            <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center shrink-0", bgColor)}>
-              <Icon className={cn("w-[18px] h-[18px]", iconColor)} />
+            <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center shrink-0", current.iconClass)}>
+              <Icon className="w-[18px] h-[18px]" />
             </div>
             <div>
               <p className="font-semibold text-sm">{current.title}</p>
@@ -90,7 +89,7 @@ export function DashboardTour() {
             </button>
             <button
               onClick={() => next(total)}
-              className="flex-1 bg-zinc-950 text-white text-sm font-medium py-2.5 rounded-xl hover:bg-zinc-800 transition-colors"
+              className="flex-1 bg-foreground text-background text-sm font-medium py-2.5 rounded-xl hover:bg-foreground/90 transition-colors"
             >
               {step === total - 1 ? "Done" : "Next"}
             </button>

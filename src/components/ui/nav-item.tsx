@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
 
 interface NavItemProps {
   href: string;
@@ -9,8 +8,10 @@ interface NavItemProps {
   icon: LucideIcon;
   active: boolean;
   variant: "desktop" | "mobile";
-  badge?: number;
-  trailing?: ReactNode;
+  /** A number renders as a count pill (e.g. pending sync items, capped at
+   * "9+"); a string renders verbatim (e.g. "Pro"). Both sit top-right of
+   * the icon circle, same spot, same treatment. */
+  badge?: number | string;
   /** Per-destination icon circle colors (Coin by Zerodha gives each nav
    * item its own hue rather than tinting everything with one accent) —
    * e.g. "bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400". */
@@ -18,12 +19,12 @@ interface NavItemProps {
 }
 
 // Single source of truth for a nav link's active/hover/badge treatment.
-// Desktop renders as a vertical tile (icon-in-circle above label, bordered
-// box when active) matching Coin's sidebar; mobile stays a compact bottom
-// bar item (icon above label, no border box, screen space doesn't allow it).
-export function NavItem({ href, label, icon: Icon, active, variant, badge, trailing, iconClass }: NavItemProps) {
-  const showBadge = !!badge && badge > 0;
-  const badgeText = badge && badge > 9 ? "9+" : badge;
+// Desktop renders as a vertical tile (icon-in-circle above label, filled
+// background when active) matching Coin's sidebar; mobile stays a compact
+// bottom bar item (icon above label, screen space doesn't allow more).
+export function NavItem({ href, label, icon: Icon, active, variant, badge, iconClass }: NavItemProps) {
+  const showBadge = typeof badge === "string" ? badge.length > 0 : !!badge && badge > 0;
+  const badgeText = typeof badge === "number" && badge > 9 ? "9+" : badge;
 
   if (variant === "mobile") {
     return (
@@ -51,22 +52,23 @@ export function NavItem({ href, label, icon: Icon, active, variant, badge, trail
     <Link
       href={href}
       className={cn(
-        "flex flex-col items-center gap-1 px-1 py-2.5 rounded-md border text-center transition-colors",
-        active ? "border-primary/40 bg-accent" : "border-transparent hover:bg-muted",
+        "flex flex-col items-center gap-1 px-0.5 py-2 rounded-md text-center transition-colors",
+        active ? "bg-accent" : "hover:bg-muted",
       )}
     >
-      <span className={cn("w-8 h-8 rounded-full flex items-center justify-center", iconClass ?? "bg-muted text-muted-foreground")}>
-        <Icon className="w-3.5 h-3.5" />
+      <span className="relative">
+        <span className={cn("w-8 h-8 rounded-full flex items-center justify-center", iconClass ?? "bg-muted text-muted-foreground")}>
+          <Icon className="w-3.5 h-3.5" />
+        </span>
+        {showBadge && (
+          <span className="absolute -top-1 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-primary text-primary-foreground text-[9px] font-semibold flex items-center justify-center">
+            {badgeText}
+          </span>
+        )}
       </span>
-      <span className={cn("text-[11px] leading-tight", active ? "font-semibold text-foreground" : "font-medium text-muted-foreground")}>
+      <span className={cn("text-[11px] leading-tight break-words", active ? "font-semibold text-foreground" : "font-medium text-muted-foreground")}>
         {label}
       </span>
-      {showBadge && (
-        <span className="text-[10px] font-semibold text-primary bg-accent px-1.5 py-0.5 rounded-full -mt-1">
-          {badge}
-        </span>
-      )}
-      {trailing}
     </Link>
   );
 }
