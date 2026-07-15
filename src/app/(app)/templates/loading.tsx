@@ -1,23 +1,13 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
+import { PageHeaderSkeleton } from "@/components/ui/page-header";
+import { TabsUnderlineSkeleton } from "@/components/ui/tabs-underline";
 
 export default function TemplatesLoading() {
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="space-y-1.5">
-          <Skeleton className="h-7 w-28" />
-          <Skeleton className="h-4 w-36" />
-        </div>
-        <Skeleton className="h-9 w-24 rounded-md" />
-      </div>
-
-      {/* Full-width tab bar (Income / Expenses) */}
-      <div className="grid grid-cols-2 gap-0 rounded-lg border bg-muted p-1">
-        <Skeleton className="h-8 rounded-md" />
-        <Skeleton className="h-8 rounded-md" />
-      </div>
+      <PageHeaderSkeleton hasAction className="mb-0" />
+      <TabsUnderlineSkeleton count={2} />
 
       {/* Category groups */}
       {[0, 1, 2].map(cat => (

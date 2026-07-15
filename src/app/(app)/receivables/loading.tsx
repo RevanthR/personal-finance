@@ -1,21 +1,13 @@
-import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeaderSkeleton } from "@/components/ui/page-header";
+import { TabsUnderlineSkeleton } from "@/components/ui/tabs-underline";
 
 export default function ReceivablesLoading() {
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3">
-        <Skeleton className="h-7 w-28" />
-        <Skeleton className="h-8 w-24 rounded-md" />
-      </div>
-
-      {/* 3-tab pill selector */}
-      <div className="flex gap-1 bg-muted p-1 rounded-lg w-fit">
-        {[72, 56, 88].map((w, i) => (
-          <Skeleton key={i} className="h-9 rounded-md" style={{ width: w }} />
-        ))}
-      </div>
+      <PageHeaderSkeleton hasSubtitle={false} hasAction className="mb-0" />
+      <TabsUnderlineSkeleton count={3} />
 
       {/* Card grid (default: Cards tab) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">

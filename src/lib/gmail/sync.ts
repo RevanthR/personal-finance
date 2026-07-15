@@ -324,6 +324,17 @@ export async function syncGmailForUser(userId: string, onProgress?: ProgressCall
         : null;
       if (isReputationBlocked(rep)) {
         await db.gmailSeenMessage.create({ data: { userId, gmailMessageId: id } });
+        // The probe check below is `totalSeen % PROBE_INTERVAL === 0` — if
+        // this counter stopped advancing the moment a sender got blocked,
+        // that check would freeze at whatever remainder it had when
+        // blocking started and could never land on a multiple of the
+        // interval again, silently turning "1-in-20 still gets checked"
+        // into "blocked forever". Keeping it incrementing here is what
+        // actually lets the probe eventually fire.
+        await db.gmailSenderReputation.update({
+          where: { userId_senderEmail: { userId, senderEmail: candidate.senderEmail! } },
+          data: { totalSeen: { increment: 1 } },
+        });
         skipped++;
         processed++;
         onProgress?.(processed, total);

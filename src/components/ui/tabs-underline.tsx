@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { LucideIcon } from "lucide-react";
 
 export interface TabsUnderlineOption<T extends string> {
@@ -48,6 +49,20 @@ export function TabsUnderline<T extends string>({ value, onChange, options, clas
           </button>
         );
       })}
+    </div>
+  );
+}
+
+// Co-located so a real style change to TabsUnderline (padding, border,
+// gap) can't silently drift out of sync with every page's loading state —
+// every loading.tsx uses this instead of guessing at a pill/segmented
+// shape that isn't what tabs actually look like anymore.
+export function TabsUnderlineSkeleton({ count = 2, className }: { count?: number; className?: string }) {
+  return (
+    <div className={cn("flex items-center gap-6 border-b border-border pb-3", className)}>
+      {Array.from({ length: count }).map((_, i) => (
+        <Skeleton key={i} className="h-4" style={{ width: 60 + (i % 3) * 20 }} />
+      ))}
     </div>
   );
 }

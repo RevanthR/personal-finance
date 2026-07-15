@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { ReactNode } from "react";
 
 export interface SummaryStat {
@@ -20,7 +21,10 @@ interface SummaryCardProps {
 // card with only 3 stats (e.g. Year View's Balance/Income/Expenses) fills
 // its row at 3-wide instead of getting stretched across 6 narrow columns
 // with dead space on the right and the values getting truncated.
-const GRID_COLS_BY_COUNT: Record<number, string> = {
+// Exported so SummaryCardSkeleton below stays pixel-for-pixel in sync with
+// the real column logic instead of duplicating (and inevitably drifting
+// from) this lookup.
+export const GRID_COLS_BY_COUNT: Record<number, string> = {
   1: "grid-cols-1",
   2: "grid-cols-2",
   3: "grid-cols-2 sm:grid-cols-3",
@@ -64,6 +68,27 @@ export function SummaryCard({ tag, stats, toolbar, className }: SummaryCardProps
           {toolbar}
         </div>
       )}
+    </div>
+  );
+}
+
+// Co-located with SummaryCard for the same reason as PageHeaderSkeleton —
+// shares its exact column-count logic via GRID_COLS_BY_COUNT so a real
+// layout change (e.g. Year View going from 3 stats to 4) doesn't need a
+// second, separate update somewhere in a loading.tsx.
+export function SummaryCardSkeleton({ statCount = 3, className }: { statCount?: number; className?: string }) {
+  const colsClass = GRID_COLS_BY_COUNT[statCount] ?? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6";
+  return (
+    <div className={cn("relative rounded-lg border border-border bg-card", className)}>
+      <span className="absolute -top-3 left-4 h-6 w-24 rounded-full bg-muted" />
+      <div className={cn("grid gap-x-6 gap-y-4 px-4 pt-6 pb-4", colsClass)}>
+        {Array.from({ length: statCount }).map((_, i) => (
+          <div key={i} className="space-y-1.5">
+            <Skeleton className="h-3 w-14" />
+            <Skeleton className="h-5 w-20" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
