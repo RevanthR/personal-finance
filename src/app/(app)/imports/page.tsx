@@ -29,7 +29,7 @@ export default async function ImportsPage() {
 
   const matches = await findExistingMatches(
     userId,
-    pending.map(p => ({ id: p.id, date: p.date, amount: p.amount })),
+    pending.map(p => ({ id: p.id, date: p.date, amount: p.amount, merchant: p.merchant })),
   );
   const dupes = findParsedTransactionDuplicates(
     pending.map(p => ({ id: p.id, date: p.date, amount: p.amount, last4: p.last4, merchant: p.merchant, bank: p.bank, createdAt: p.createdAt })),

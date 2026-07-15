@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     orderBy: { date: "desc" },
   });
 
-  const matches = await findExistingMatches(userId, items.map(i => ({ id: i.id, date: i.date, amount: i.amount })));
+  const matches = await findExistingMatches(userId, items.map(i => ({ id: i.id, date: i.date, amount: i.amount, merchant: i.merchant })));
   const dupes = findParsedTransactionDuplicates(
     items.map(i => ({ id: i.id, date: i.date, amount: i.amount, last4: i.last4, merchant: i.merchant, bank: i.bank, createdAt: i.createdAt })),
   );
