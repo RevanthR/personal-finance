@@ -1016,7 +1016,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
           }] : []),
           {
             label: "Pending",
-            value: isProjected ? fmt(dispPending) : (pendingCount > 0 ? fmt(totalPending) : "—"),
+            value: isProjected ? fmt(dispPending) : fmt(totalPending),
             hint: isProjected
               ? <span className="text-xs text-muted-foreground">projected</span>
               : balance < 0

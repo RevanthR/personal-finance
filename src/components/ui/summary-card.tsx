@@ -34,9 +34,13 @@ export function SummaryCard({ tag, stats, toolbar, className }: SummaryCardProps
         {stats.map((s, i) => {
           const Comp = s.onClick ? "button" : "div";
           return (
-            <Comp key={i} onClick={s.onClick} className={s.onClick ? "text-left" : undefined}>
+            <Comp key={i} onClick={s.onClick} className={cn("min-w-0", s.onClick && "text-left")}>
               <p className="text-xs text-muted-foreground flex items-center gap-1">{s.label}</p>
-              <p className={cn("text-lg font-bold tabular-nums mt-0.5", s.valueClass ?? "text-foreground")}>{s.value}</p>
+              {/* text-base on mobile, not text-lg — an extra digit at text-lg
+                  was wide enough to overflow a 2-col grid cell on narrow
+                  screens (grid items default to min-width:auto, so the cell
+                  wouldn't shrink and pushed the layout instead of the text). */}
+              <p className={cn("text-base sm:text-lg font-bold tabular-nums mt-0.5 truncate", s.valueClass ?? "text-foreground")} title={s.value}>{s.value}</p>
               {anyHint && <div className="mt-0.5 min-h-[1.25rem]">{s.hint}</div>}
             </Comp>
           );
