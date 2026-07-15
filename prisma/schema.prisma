@@ -80,6 +80,7 @@ model User {
   gmailConnection   GmailConnection?
   parsedTransactions ParsedTransaction[]
   gmailSeenMessages  GmailSeenMessage[]
+  gmailSenderReputations GmailSenderReputation[]
 }
 
 // User-defined expense categories, reused (not retyped) across templates
@@ -393,4 +394,22 @@ model GmailSeenMessage {
   createdAt      DateTime @default(now())
 
   @@unique([userId, gmailMessageId])
+}
+
+// Self-tuning cost control: tracks how often mail from a given sender
+// address turns out to actually be a transaction. A sender with a long
+// enough "not a transaction" streak gets skipped before ever reaching
+// Gemini — a single real transaction from that sender resets the streak,
+// so a sender never gets permanently locked out on a fluke.
+model GmailSenderReputation {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  senderEmail    String
+  notTxnStreak   Int      @default(0)
+  totalSeen      Int      @default(0)
+  totalTxn       Int      @default(0)
+  updatedAt      DateTime @updatedAt
+
+  @@unique([userId, senderEmail])
 }
