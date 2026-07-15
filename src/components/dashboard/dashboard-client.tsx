@@ -426,7 +426,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   );
   const {
     totalCommitted, totalPaid, totalPending, paidPercent, pendingCount,
-    ccBillsThisMonth, recurringNonCC,
+    ccBillsThisMonth, recurringNonCC, ccNextMonth,
   } = metrics;
 
   const balance   = grandIncome - totalCommitted - adHocExpense;
@@ -1015,6 +1015,11 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             label: "CC Bill",
             value: dispCCBills > 0 ? fmt(dispCCBills) : "—",
             hint: <span className="text-xs text-muted-foreground">{isProjected ? "last month's bill" : dispCCBills > 0 ? "from last month" : "no CC bills"}</span>,
+          }] : []),
+          ...(hasCCCards && !isProjected ? [{
+            label: "CC Next Month",
+            value: ccNextMonth > 0 ? fmt(ccNextMonth) : "—",
+            hint: <span className="text-xs text-muted-foreground">{ccNextMonth > 0 ? `building for ${nextMonthName}` : "nothing yet"}</span>,
           }] : []),
           {
             label: "Pending",
