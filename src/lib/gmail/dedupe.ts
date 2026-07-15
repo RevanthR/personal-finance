@@ -91,6 +91,69 @@ export async function findExistingMatches(
       result.set(t.id, { id: match.id, name: match.name, amount: match.amount, date: match.date.toISOString() });
     }
   }
+
+  // A second pass for bills already ticked paid manually — e.g. you mark
+  // this month's EMI paid on the 2nd, the bank's confirmation email only
+  // lands on the 10th. That's too wide a gap for the same-day check above
+  // (built for a near-simultaneous bank-alert/receipt pair), so this
+  // compares by calendar MONTH instead, and doesn't require a merchant
+  // match at all — many EMI/NEFT alerts show the *sender's own name* as
+  // the payee, which shares no vocabulary with the bill's name, so an
+  // exact amount match against a specific paid bill in the right month is
+  // treated as strong enough evidence on its own. Only transactions the
+  // AdHocItem pass above didn't already claim are considered.
+  const unmatched = sorted.filter(t => !result.has(t.id));
+  if (unmatched.length > 0) {
+    const monthKeys = new Set(unmatched.map(t => `${t.date.getFullYear()}-${t.date.getMonth() + 1}`));
+    const monthPairs = [...monthKeys].map(k => {
+      const [year, month] = k.split("-").map(Number);
+      return { year, month };
+    });
+    const paidEntries = await db.monthlyEntry.findMany({
+      where: { isPaid: true, month: { userId, OR: monthPairs.map(p => ({ year: p.year, month: p.month })) } },
+      select: {
+        id: true, amount: true, cashbackAmount: true, paidAmount: true, paidOn: true,
+        template: { select: { name: true } },
+        month: { select: { month: true, year: true } },
+      },
+    });
+    const usedEntryIds = new Set<string>();
+    for (const t of unmatched) {
+      // More than one bill can share an amount in the same month (this user
+      // has three separate ₹15,000 chit contributions) — when several tie
+      // on amount, merchant similarity breaks the tie; if it can't (no
+      // merchant text, or that ties too), skip the match rather than
+      // guessing which bill it was.
+      let best: { entry: typeof paidEntries[number]; score: number } | null = null;
+      let tied = false;
+      for (const e of paidEntries) {
+        if (usedEntryIds.has(e.id)) continue;
+        if (e.month.month !== t.date.getMonth() + 1 || e.month.year !== t.date.getFullYear()) continue;
+        const netAmt = e.amount - (e.cashbackAmount ?? 0);
+        const paid = e.paidAmount != null && e.paidAmount >= netAmt ? e.paidAmount : netAmt;
+        // Amount is the load-bearing signal here (merchant text on an
+        // EMI/NEFT alert is often the sender's own name, not the bill's),
+        // so it's required outright rather than treated as optional.
+        if (Math.abs(paid - t.amount) > AMOUNT_EPSILON) continue;
+        const score = t.merchant ? merchantSimilarity(t.merchant, e.template.name) : 0;
+        if (!best || score > best.score) { best = { entry: e, score }; tied = false; }
+        else if (score === best.score) { tied = true; }
+      }
+      if (best && tied) best = null;
+      if (best) {
+        usedEntryIds.add(best.entry.id);
+        const netAmt = best.entry.amount - (best.entry.cashbackAmount ?? 0);
+        const paid = best.entry.paidAmount != null && best.entry.paidAmount >= netAmt ? best.entry.paidAmount : netAmt;
+        result.set(t.id, {
+          id: best.entry.id,
+          name: best.entry.template.name,
+          amount: paid,
+          date: (best.entry.paidOn ?? t.date).toISOString(),
+        });
+      }
+    }
+  }
+
   return result;
 }
 

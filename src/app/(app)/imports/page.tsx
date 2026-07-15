@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { ImportsClient } from "@/components/imports/imports-client";
 import { findExistingMatches, findParsedTransactionDuplicates } from "@/lib/gmail/dedupe";
+import { findEntryMatches } from "@/lib/gmail/entry-match";
 
 export default async function ImportsPage() {
   const session = await auth();
@@ -34,6 +35,10 @@ export default async function ImportsPage() {
   const dupes = findParsedTransactionDuplicates(
     pending.map(p => ({ id: p.id, date: p.date, amount: p.amount, last4: p.last4, merchant: p.merchant, bank: p.bank, createdAt: p.createdAt })),
   );
+  const entryMatches = await findEntryMatches(
+    userId,
+    pending.map(p => ({ id: p.id, date: p.date, amount: p.amount, merchant: p.merchant, bank: p.bank, paymentMethod: p.paymentMethod })),
+  );
 
   const gmail = {
     connected: !!gmailConnection,
@@ -54,9 +59,11 @@ export default async function ImportsPage() {
       emailReceivedAt: p.emailReceivedAt?.toISOString() ?? null,
       rawSnippet: p.rawSnippet,
       paymentMethod: p.paymentMethod,
+      transactionType: p.transactionType,
       suggestedCcTemplateId: p.suggestedCcTemplateId,
       suggestedSubcategory: p.suggestedSubcategory,
       possibleMatch: matches.get(p.id) ?? dupes.get(p.id) ?? null,
+      matchedEntry: entryMatches.get(p.id) ?? null,
     })),
   };
 

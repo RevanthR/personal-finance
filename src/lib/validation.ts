@@ -169,7 +169,7 @@ export const ChitPostSchema = z.object({
 });
 
 export const ParsedTransactionPatchSchema = z.object({
-  action:         z.enum(["approve", "reject"]),
+  action:         z.enum(["approve", "reject", "settle"]),
   amount:         z.number().finite().positive().optional(),
   date:           zDateStr.optional(),
   ccTemplateId:   z.string().optional(),
@@ -177,6 +177,9 @@ export const ParsedTransactionPatchSchema = z.object({
   customCategory: z.string().trim().max(50).optional().nullable(),
   merchant:       zName.optional(),
   subcategory:    z.enum(["Food", "Coffee", "Groceries", "Fuel", "Shopping", "Travel", "Health", "Bills", "Entertainment", "Other"]).optional(),
+  // "settle" only — the MonthlyEntry this transaction pays down instead of
+  // becoming a new AdHocItem.
+  entryId:        z.string().optional(),
 });
 
 export const PaymentOrderSchema = z.object({

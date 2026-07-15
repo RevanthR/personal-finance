@@ -5,7 +5,7 @@ import { matchCard } from "./card-match";
 import { getInrRate } from "./fx-rate";
 import { sendPushToUser } from "@/lib/push";
 import type { gmail_v1 } from "googleapis";
-import type { ParsedTransactionPaymentMethod } from "@/generated/prisma/client";
+import type { ParsedTransactionPaymentMethod, ParsedTransactionType } from "@/generated/prisma/client";
 
 // Coarse, cheap pre-filter run entirely inside Gmail's search. Narrows
 // down to plausible bank/bill-aggregator emails (credit card, debit card,
@@ -22,6 +22,12 @@ const PAYMENT_METHOD_MAP: Record<string, ParsedTransactionPaymentMethod> = {
   upi: "UPI",
   debitCard: "DEBIT_CARD",
   other: "OTHER",
+};
+
+const TRANSACTION_TYPE_MAP: Record<string, ParsedTransactionType> = {
+  debit: "DEBIT",
+  credit: "CREDIT",
+  refund: "REFUND",
 };
 
 function decodeBase64Url(data: string): string {
@@ -166,6 +172,7 @@ export async function syncGmailForUser(userId: string, onProgress?: ProgressCall
       }
 
       const paymentMethod = PAYMENT_METHOD_MAP[extracted.paymentMethod ?? "other"] ?? "OTHER";
+      const transactionType = TRANSACTION_TYPE_MAP[extracted.transactionType ?? "debit"] ?? "DEBIT";
       const suggestedCcTemplateId = paymentMethod === "CREDIT_CARD"
         ? matchCard({ bank: extracted.bank, last4: extracted.last4 }, cards)
         : null;
@@ -191,6 +198,7 @@ export async function syncGmailForUser(userId: string, onProgress?: ProgressCall
           emailReceivedAt,
           rawSnippet: full.data.snippet ?? text.slice(0, 200),
           paymentMethod,
+          transactionType,
           suggestedCcTemplateId,
           suggestedSubcategory: extracted.subcategory,
         },

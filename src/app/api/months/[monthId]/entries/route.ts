@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { validate, EntryPatchSchema } from "@/lib/validation";
+import { computePaymentUpdate } from "@/lib/entry-payment";
 
 // PATCH /api/months/[monthId]/entries — update a single entry (mark paid, change amount)
 export async function PATCH(
@@ -31,14 +32,7 @@ export async function PATCH(
       ? cashbackAmount
       : (entry.cashbackAmount ?? 0);
     const netAmount = (amount ?? entry.amount) - appliedCashback;
-    if (paidAmount >= netAmount) {
-      paymentData.isPaid = true;
-      paymentData.paidOn = new Date();
-      // Preserve actual amount when user paid more than the template (overpayment)
-      paymentData.paidAmount = paidAmount > netAmount ? paidAmount : null;
-    } else {
-      paymentData.paidAmount = paidAmount > 0 ? paidAmount : null;
-    }
+    Object.assign(paymentData, computePaymentUpdate(netAmount, paidAmount));
   } else if (isPaid !== undefined) {
     paymentData.isPaid = isPaid;
     paymentData.paidOn = isPaid ? new Date() : null;

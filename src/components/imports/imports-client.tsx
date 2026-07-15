@@ -14,7 +14,9 @@ import { format } from "date-fns";
 export type CCCard = { templateId: string; name: string };
 export type CustomCat = { id: string; name: string };
 export type PossibleMatch = { id: string; name: string; amount: number; date: string };
+export type MatchedEntry = { kind: "cc" | "recurring"; entryId: string; templateId: string; templateName: string; owed: number; alreadyPaid: number };
 export type PaymentMethod = "CREDIT_CARD" | "UPI" | "DEBIT_CARD" | "OTHER";
+export type TransactionType = "DEBIT" | "CREDIT" | "REFUND";
 
 export interface ParsedTransactionItem {
   id: string;
@@ -29,9 +31,11 @@ export interface ParsedTransactionItem {
   emailReceivedAt: string | null;
   rawSnippet: string;
   paymentMethod: PaymentMethod;
+  transactionType: TransactionType;
   suggestedCcTemplateId: string | null;
   suggestedSubcategory: string | null;
   possibleMatch: PossibleMatch | null;
+  matchedEntry: MatchedEntry | null;
 }
 
 const EXPENSE_CATEGORIES = [
@@ -278,7 +282,8 @@ function TransactionRow({ item, ccCards, customCategories, onDone }: {
 }) {
   const [addAnyway, setAddAnyway] = useState(false);
   const [dismissing, setDismissing] = useState(false);
-  const showForm = !item.possibleMatch || addAnyway;
+  const [settling, setSettling] = useState(false);
+  const hasSuggestion = !!item.possibleMatch || !!item.matchedEntry;
 
   async function handleDismiss() {
     setDismissing(true);
@@ -289,6 +294,29 @@ function TransactionRow({ item, ccCards, customCategories, onDone }: {
     } catch {
       toast.error("Failed to dismiss");
       setDismissing(false);
+    }
+  }
+
+  async function handleSettle() {
+    if (!item.matchedEntry) return;
+    setSettling(true);
+    try {
+      const res = await fetch(`/api/gmail/parsed/${item.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "settle", entryId: item.matchedEntry.entryId, amount: item.amount }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error ?? "Failed to mark as paid");
+        setSettling(false);
+        return;
+      }
+      toast.success("Marked as paid");
+      onDone();
+    } catch {
+      toast.error("Failed to mark as paid");
+      setSettling(false);
     }
   }
 
@@ -321,7 +349,42 @@ function TransactionRow({ item, ccCards, customCategories, onDone }: {
     );
   }
 
-  return <AddForm item={item} ccCards={ccCards} customCategories={customCategories} onDone={onDone} showBack={showForm && !!item.possibleMatch} onBack={() => setAddAnyway(false)} />;
+  if (item.matchedEntry && !addAnyway) {
+    const { templateName, owed, alreadyPaid } = item.matchedEntry;
+    const outstanding = owed - alreadyPaid;
+    const overBy = item.amount - outstanding;
+    const isOverpayment = overBy > 0.5;
+    const isFullPayment = overBy >= -0.5;
+    return (
+      <Card className="bg-accent/40">
+        <CardContent className="p-3 space-y-2">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-sm font-medium truncate">{item.merchant ?? item.bank}</p>
+              <p className="text-xs text-muted-foreground">{item.bank} · {METHOD_LABEL[item.paymentMethod]}{item.last4 && ` · •• ${item.last4}`}<TimeNote item={item} /></p>
+            </div>
+            <p className="text-sm font-semibold shrink-0">₹{item.amount.toLocaleString("en-IN")}</p>
+          </div>
+          <div className="text-xs text-muted-foreground bg-background rounded-md p-2 border border-border break-words">
+            Looks like a payment toward <span className="font-medium text-foreground">{templateName}</span> — ₹{outstanding.toLocaleString("en-IN")} owed
+            {alreadyPaid > 0 ? `, ₹${alreadyPaid.toLocaleString("en-IN")} already paid` : ""}.
+            {isOverpayment && ` Pays it off with ₹${overBy.toLocaleString("en-IN")} extra, credited toward next month's bill.`}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="default" onClick={handleSettle} disabled={settling}>
+              {settling ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Check className="w-3.5 h-3.5 mr-1" />}
+              {settling ? "Marking..." : isFullPayment ? "Mark as paid" : "Record partial payment"}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setAddAnyway(true)} disabled={settling}>
+              Not this, add as new expense
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return <AddForm item={item} ccCards={ccCards} customCategories={customCategories} onDone={onDone} showBack={hasSuggestion && addAnyway} onBack={() => setAddAnyway(false)} />;
 }
 
 async function reject(id: string) {
@@ -342,6 +405,7 @@ function AddForm({ item, ccCards, customCategories, onDone, showBack, onBack }: 
   onBack: () => void;
 }) {
   const isCC = item.paymentMethod === "CREDIT_CARD";
+  const isIncome = item.transactionType === "CREDIT" || item.transactionType === "REFUND";
   const [ccTemplateId, setCCTemplateId] = useState(item.suggestedCcTemplateId ?? ccCards[0]?.templateId ?? "");
   const [spendCat, setSpendCat] = useState(item.suggestedSubcategory ?? "");
   const [category, setCategory] = useState("MISCELLANEOUS");
@@ -358,11 +422,10 @@ function AddForm({ item, ccCards, customCategories, onDone, showBack, onBack }: 
         body.amount = parseFloat(amount);
         if (isCC) {
           body.ccTemplateId = ccTemplateId;
-          if (spendCat) body.subcategory = spendCat;
-        } else if (customLabel.trim()) {
-          body.customCategory = customLabel.trim();
-        } else {
-          body.category = category;
+          if (!isIncome && spendCat) body.subcategory = spendCat;
+        } else if (!isIncome) {
+          if (customLabel.trim()) body.customCategory = customLabel.trim();
+          else body.category = category;
         }
       }
       const res = await fetch(`/api/gmail/parsed/${item.id}`, {
@@ -425,24 +488,34 @@ function AddForm({ item, ccCards, customCategories, onDone, showBack, onBack }: 
                 ))}
               </div>
             )}
-            <div className="flex flex-wrap gap-1.5">
-              {CC_SUBCATEGORIES.map(sub => (
-                <button
-                  key={sub}
-                  type="button"
-                  onClick={() => setSpendCat(c => c === sub ? "" : sub)}
-                  className={cn(
-                    "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
-                    spendCat === sub
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {sub}
-                </button>
-              ))}
-            </div>
+            {isIncome ? (
+              <p className="text-xs text-warning bg-warning-bg border border-warning-border rounded-md px-2 py-1">
+                Looks like a refund or credit — this will reduce the card&apos;s bill instead of adding a charge.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {CC_SUBCATEGORIES.map(sub => (
+                  <button
+                    key={sub}
+                    type="button"
+                    onClick={() => setSpendCat(c => c === sub ? "" : sub)}
+                    className={cn(
+                      "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
+                      spendCat === sub
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {sub}
+                  </button>
+                ))}
+              </div>
+            )}
           </>
+        ) : isIncome ? (
+          <p className="text-xs text-warning bg-warning-bg border border-warning-border rounded-md px-2 py-1">
+            Looks like a credit or refund — this will be added as income (Other Income) instead of an expense.
+          </p>
         ) : (
           <div className="flex flex-wrap gap-1.5">
             {EXPENSE_CATEGORIES.map(c => (

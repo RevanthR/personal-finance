@@ -77,20 +77,34 @@ export async function POST(req: NextRequest) {
     // CC uses billedAmount (the actual obligation) instead of amount, so manually
     // setting amount=0 does not erase the carry-forward.
     const CARRY_FORWARD_EXCLUDE = new Set(["LOAN", "CHIT_FUND"]);
-    const prevCCOutstanding = new Map<string, number>(); // templateId → outstanding
+    // templateId → outstanding for CREDIT_CARD; negative means a credit
+    // (an overpayment), which reduces rather than adds to next month's
+    // opening balance below.
+    const prevCCOutstanding = new Map<string, number>();
     const nonCCCarryForwards: { name: string; amount: number; category: string }[] = [];
     for (const e of prevMonth?.entries ?? []) {
-      if (e.isPaid) continue;
       const cat = e.template.category;
-      if (CARRY_FORWARD_EXCLUDE.has(cat)) continue;
-      const obligation = cat === "CREDIT_CARD" ? (e.billedAmount ?? e.amount) : e.amount;
-      const outstanding = obligation - (e.cashbackAmount ?? 0) - (e.paidAmount ?? 0);
-      if (outstanding <= 0) continue;
       if (cat === "CREDIT_CARD") {
-        prevCCOutstanding.set(e.templateId, outstanding);
-      } else {
-        nonCCCarryForwards.push({ name: e.template.name, amount: outstanding, category: cat });
+        const netObligation = (e.billedAmount ?? e.amount) - (e.cashbackAmount ?? 0);
+        if (e.isPaid) {
+          // A paid CC entry is normally done and forgotten, but an
+          // overpayment (paidAmount > what was owed) is real money that
+          // shouldn't just vanish once isPaid flips true — carry the
+          // excess forward as a credit against next month's bill instead.
+          const paid = e.paidAmount ?? netObligation;
+          const credit = paid - netObligation;
+          if (credit > 0.5) prevCCOutstanding.set(e.templateId, -credit);
+          continue;
+        }
+        const outstanding = netObligation - (e.paidAmount ?? 0);
+        if (outstanding > 0) prevCCOutstanding.set(e.templateId, outstanding);
+        continue;
       }
+      if (e.isPaid) continue;
+      if (CARRY_FORWARD_EXCLUDE.has(cat)) continue;
+      const outstanding = e.amount - (e.cashbackAmount ?? 0) - (e.paidAmount ?? 0);
+      if (outstanding <= 0) continue;
+      nonCCCarryForwards.push({ name: e.template.name, amount: outstanding, category: cat });
     }
 
     for (const t of templates) {
@@ -148,7 +162,10 @@ export async function POST(req: NextRequest) {
           : t.chitFund.monthlyUnliftedAmount;
       } else if (t.category === "CREDIT_CARD") {
         amount = prevStatements.get(t.id) ?? 0;
-        amount += prevCCOutstanding.get(t.id) ?? 0;
+        // A negative value here is a carried-forward overpayment credit —
+        // floor at 0 rather than let it push the bill negative; any credit
+        // beyond what this month's statement absorbs isn't tracked further.
+        amount = Math.max(0, amount + (prevCCOutstanding.get(t.id) ?? 0));
         billedAmount = amount; // snapshot obligation at creation
       }
 

@@ -347,6 +347,12 @@ enum ParsedTransactionPaymentMethod {
   OTHER
 }
 
+enum ParsedTransactionType {
+  DEBIT
+  CREDIT
+  REFUND
+}
+
 // A bank email Gemini identified as a transaction, awaiting the user's
 // review before it becomes a real AdHocItem (and, for credit cards, a
 // MonthlyEntry statement-math effect).
@@ -367,6 +373,7 @@ model ParsedTransaction {
   rawSnippet             String
   status                 ParsedTransactionStatus         @default(PENDING)
   paymentMethod          ParsedTransactionPaymentMethod  @default(CREDIT_CARD)
+  transactionType        ParsedTransactionType           @default(DEBIT)
   suggestedCcTemplateId  String?
   suggestedSubcategory   String?
   createdAt              DateTime                        @default(now())
