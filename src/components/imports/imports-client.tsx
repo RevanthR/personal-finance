@@ -371,12 +371,16 @@ function TransactionRow({ item, ccCards, customCategories, onDone }: {
             {isOverpayment && ` Pays it off with ₹${overBy.toLocaleString("en-IN")} extra, credited toward next month's bill.`}
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="default" onClick={handleSettle} disabled={settling}>
+            <Button size="sm" variant="default" onClick={handleSettle} disabled={settling || dismissing}>
               {settling ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Check className="w-3.5 h-3.5 mr-1" />}
               {settling ? "Marking..." : isFullPayment ? "Mark as paid" : "Record partial payment"}
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setAddAnyway(true)} disabled={settling}>
+            <Button size="sm" variant="outline" onClick={() => setAddAnyway(true)} disabled={settling || dismissing}>
               Not this, add as new expense
+            </Button>
+            <Button size="sm" variant="destructive" onClick={handleDismiss} disabled={settling || dismissing}>
+              {dismissing ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <X className="w-3.5 h-3.5 mr-1" />}
+              {dismissing ? "Dismissing..." : "Dismiss"}
             </Button>
           </div>
         </CardContent>
