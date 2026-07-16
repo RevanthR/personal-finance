@@ -8,13 +8,13 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const { error } = await searchParams;
   const isDisabled = error === "AccessDenied";
   return (
-    <div className="min-h-screen flex flex-col bg-white">
+    <div className="min-h-screen flex flex-col bg-background">
       <div className="flex-1 flex flex-col items-center justify-center p-4 gap-6">
 
         {/* Login card */}
         <Card className="w-full max-w-sm shadow-sm">
           <CardHeader className="text-center pb-2">
-            <div className="mx-auto mb-4 w-14 h-14 bg-amber-500 rounded-xl flex items-center justify-center text-white text-xl font-bold">
+            <div className="mx-auto mb-4 w-14 h-14 bg-warning rounded-xl flex items-center justify-center text-white text-xl font-bold">
               ₹
             </div>
             <CardTitle className="text-2xl font-bold">FinanceOS</CardTitle>
@@ -24,7 +24,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           </CardHeader>
           <CardContent className="pt-4">
             {isDisabled && (
-              <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+              <div className="mb-4 rounded-lg bg-negative-bg border border-negative-border px-4 py-3 text-sm text-negative">
                 This account has been disabled. Contact support if you think this is a mistake.
               </div>
             )}
@@ -53,14 +53,14 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         {/* PWA install instructions */}
         <div className="w-full max-w-sm space-y-3">
           <div className="flex items-center gap-2">
-            <Smartphone className="w-4 h-4 text-gray-400" />
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Install as an app for the best experience</p>
+            <Smartphone className="w-4 h-4 text-muted-foreground" />
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Install as an app for the best experience</p>
           </div>
 
           {/* iPhone */}
-          <div className="rounded-2xl border bg-white p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
-              <span className="w-5 h-5 rounded-md bg-amber-500 text-white text-xs flex items-center justify-center font-bold shrink-0">
+          <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+            <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+              <span className="w-5 h-5 rounded-md bg-warning text-white text-xs flex items-center justify-center font-bold shrink-0">
               </span>
               iPhone / iPad (Safari)
             </p>
@@ -71,12 +71,12 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
                 { icon: Download, text: "Tap Add, the app icon appears on your home screen" },
               ].map(({ icon: Icon, text }, i) => (
                 <li key={i} className="flex items-start gap-2.5">
-                  <span className="w-4 h-4 rounded-full bg-zinc-100 text-gray-400 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
+                  <span className="w-4 h-4 rounded-full bg-muted text-muted-foreground text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
                     {i + 1}
                   </span>
                   <div className="flex items-start gap-1.5 flex-1">
-                    <Icon className="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0" />
-                    <p className="text-xs text-gray-600 leading-relaxed">{text}</p>
+                    <Icon className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                    <p className="text-xs text-muted-foreground leading-relaxed">{text}</p>
                   </div>
                 </li>
               ))}
@@ -84,9 +84,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           </div>
 
           {/* Android */}
-          <div className="rounded-2xl border bg-white p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
-              <span className="w-5 h-5 rounded-md bg-emerald-600 text-white text-xs flex items-center justify-center font-bold shrink-0">
+          <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+            <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+              <span className="w-5 h-5 rounded-md bg-positive text-white text-xs flex items-center justify-center font-bold shrink-0">
                 A
               </span>
               Android (Chrome)
@@ -98,19 +98,19 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
                 { icon: PlusSquare, text: "Tap Install, FinanceOS is added to your home screen" },
               ].map(({ icon: Icon, text }, i) => (
                 <li key={i} className="flex items-start gap-2.5">
-                  <span className="w-4 h-4 rounded-full bg-zinc-100 text-gray-400 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
+                  <span className="w-4 h-4 rounded-full bg-muted text-muted-foreground text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
                     {i + 1}
                   </span>
                   <div className="flex items-start gap-1.5 flex-1">
-                    <Icon className="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0" />
-                    <p className="text-xs text-gray-600 leading-relaxed">{text}</p>
+                    <Icon className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                    <p className="text-xs text-muted-foreground leading-relaxed">{text}</p>
                   </div>
                 </li>
               ))}
             </ol>
           </div>
 
-          <p className="text-center text-xs text-gray-400 px-2">
+          <p className="text-center text-xs text-muted-foreground px-2">
             Once installed, it works like a native app: no browser chrome, faster load, works offline.
           </p>
         </div>
