@@ -925,9 +925,9 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   return (
     <div className="space-y-4">
       <DashboardTour />
-      <PageHeader title="Dashboard" subtitle="This month's income, expenses, and bills" />
+      <PageHeader title="Dashboard" subtitle="This month's income, expenses, and bills" className="!mb-4" />
       {/* Header */}
-      <div className="space-y-2">
+      <div className="space-y-2 mb-7">
         <div className="flex items-center gap-2">
           {/* Month navigation pill */}
           {prevUrl && nextUrl ? (
