@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useMemo, useTransition, type CSSProperties } from "react";
+import { useState, useMemo, useTransition, Fragment, type CSSProperties } from "react";
 import { flushSync } from "react-dom";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { formatCurrency, formatMonthYear, getCategoryDisplay, getCategoryColor, MONTHS, pendingAmountKicks, ordinal } from "@/lib/utils";
+import { formatCurrency, formatMonthYear, getCategoryDisplay, getCategoryColor, getCategoryIcon, MONTHS, pendingAmountKicks, ordinal } from "@/lib/utils";
 import { netAmount as _net, effectivePaid as _effectivePaid, isBillPending as _isBillPending, computeMetrics, computeMonthIncome } from "@/lib/finance-utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { Progress } from "@/components/ui/progress";
@@ -19,9 +19,12 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { EntryRow } from "./entry-row";
+import { DailySpendsSection } from "./daily-spends-section";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SummaryCard } from "@/components/ui/summary-card";
 import { PageHeader } from "@/components/ui/page-header";
+import { TabsUnderline } from "@/components/ui/tabs-underline";
+import { CategoryBadge } from "@/components/ui/category-badge";
 import { PaymentDialog } from "./payment-dialog";
 import { usePaymentTick } from "@/hooks/use-payment-tick";
 import { DashboardTour } from "@/components/coach/dashboard-tour";
@@ -72,6 +75,7 @@ interface DashboardClientProps {
   recentMonths: RecentMonthSummary[];
   ccTemplates: { id: string; name: string; statementDay: number | null; dueDateDay: number | null }[];
   customCategories: { id: string; name: string }[];
+  subCategorySuggestions: { category: string | null; customCategoryId: string | null; subCategory: string | null }[];
   incomeTemplates: IncomeTemplate[];
   todayMonth: number;
   todayYear: number;
@@ -96,7 +100,7 @@ type RecentMonthSummary = {
   id: string; month: number; year: number;
   salaryIncome: number; freelanceIncome: number; otherIncome: number;
   entries: { id: string; templateId: string; amount: number; cashbackAmount: number | null }[];
-  adHocItems: { id: string; type: string; amount: number; category: string | null; customCategory: string | null; notes: string | null; ccTemplateId: string | null; date: string }[];
+  adHocItems: { id: string; type: string; amount: number; category: string | null; customCategory: string | null; customCategoryId: string | null; subCategory: string | null; notes: string | null; ccTemplateId: string | null; date: string }[];
 };
 
 type EntryWithTemplate = {
@@ -106,7 +110,7 @@ type EntryWithTemplate = {
 };
 
 type AdHocItem = {
-  id: string; name: string; amount: number; type: string; category: string | null; customCategory: string | null; date: string; notes: string | null; ccTemplateId: string | null;
+  id: string; name: string; amount: number; type: string; category: string | null; customCategory: string | null; customCategoryId: string | null; subCategory: string | null; date: string; notes: string | null; ccTemplateId: string | null;
 };
 
 
@@ -118,8 +122,6 @@ const INCOME_SOURCES = [
   { value: "refund",    label: "Refund",    dbCategory: "OTHER_INCOME" },
   { value: "other",     label: "Other",     dbCategory: "OTHER_INCOME" },
 ];
-
-const CC_SUBCATEGORIES = ["Food", "Coffee", "Groceries", "Fuel", "Shopping", "Travel", "Health", "Bills", "Entertainment", "Other"];
 
 // Smoothly animates category cards sliding to their new position (e.g. a
 // fully-settled category sinking down) using the native View Transitions
@@ -141,68 +143,19 @@ function net(e: EntryWithTemplate)                                              
 function effectivePaid(e: EntryWithTemplate)                                    { return _effectivePaid(e); }
 function isBillPending(e: EntryWithTemplate, isCurrent: boolean, day: number)   { return _isBillPending(e, isCurrent, day); }
 
-function parseCCSubcat(notes: string | null): string {
-  if (!notes) return "Other";
-  for (const part of notes.split(" · ")) {
-    if (CC_SUBCATEGORIES.includes(part)) return part;
-  }
-  return "Other";
-}
-
-function CCSubcatBreakdown({ txItems, onDelete, onEditRequest, removingIds }: { txItems: AdHocItem[]; onDelete: (id: string) => void; onEditRequest?: (item: AdHocItem) => void; removingIds: Set<string> }) {
-  const { hidden } = usePrivacy();
-  const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
-
-  const sections: [string, AdHocItem[]][] = CC_SUBCATEGORIES.reduce<[string, AdHocItem[]][]>((acc, sub) => {
-    const matches = txItems.filter(t => parseCCSubcat(t.notes) === sub);
-    if (matches.length) acc.push([sub, matches]);
-    return acc;
-  }, []);
-
-  return (
-    <div className="space-y-0.5">
-      {sections.map(([subcat, txs]) => {
-        const subtotal = txs.reduce((s, t) => s + t.amount, 0);
-        const open = !!openSections[subcat];
-        return (
-          <div key={subcat}>
-            <button
-              type="button"
-              onClick={() => setOpenSections(prev => ({ ...prev, [subcat]: !prev[subcat] }))}
-              className="w-full flex items-center justify-between py-3 hover:bg-muted/50 rounded px-2 transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", open && "rotate-180")} />
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{subcat}</span>
-                <span className="text-xs text-muted-foreground/60">({txs.length})</span>
-              </div>
-              <span className="text-xs text-muted-foreground font-medium">{fmt(subtotal)}</span>
-            </button>
-            {open && (
-              <div className="space-y-1 mt-1 mb-1">
-                {txs.map(t => <TransactionRow key={t.id} item={t} onDelete={onDelete} onEditRequest={onEditRequest} isRemoving={removingIds.has(t.id)} />)}
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
+// Bill/dues view only — the individual purchases that built this bill live
+// in Daily/Regular Spends instead, so this card no longer needs a nested
+// transaction list, only whether next cycle already has spend against it
+// (hasPostCloseSpend) to guard the "Clear" action.
 function CCCardBlock({
-  entry, txItems, nextMonthName, isBillPending, onUpdate, onDelete, onEditRequestTx, onClearStatement, removingIds, collapsed, onToggle,
+  entry, hasPostCloseSpend, nextMonthName, isBillPending, onUpdate, onClearStatement, collapsed, onToggle,
 }: {
   entry: EntryWithTemplate;
-  txItems: AdHocItem[];
+  hasPostCloseSpend: boolean;
   nextMonthName: string;
   isBillPending: boolean;
   onUpdate: (id: string, updates: { isPaid?: boolean; amount?: number; notes?: string; paidAmount?: number; cashbackAmount?: number }) => Promise<void>;
-  onDelete: (id: string) => void;
-  onEditRequestTx?: (item: AdHocItem) => void;
   onClearStatement: (entryId: string) => Promise<void>;
-  removingIds: Set<string>;
   collapsed: boolean;
   onToggle: () => void;
 }) {
@@ -212,32 +165,25 @@ function CCCardBlock({
   const nextBillTotal = entry.statementAmount ?? 0;
   const billedTotal = entry.billedAmount ?? entry.amount;
   const isDueNextMonth = statementDay != null && entry.template.dueDateDay != null && entry.template.dueDateDay < statementDay;
+  const ccColor = getCategoryColor(entry.template.category, entry.template.customCategory);
+  const ccIcon  = getCategoryIcon(entry.template.category, entry.template.customCategory);
   // Single shared tick instance — used by both the collapsed header's tick
   // and the expanded EntryRow's tick, so they never fall out of sync.
   const tick = usePaymentTick(entry, onUpdate);
-  // Next-cycle charge list can get long — collapsed by default, independent
-  // of the card's own collapse state.
-  const [nextCycleCollapsed, setNextCycleCollapsed] = useState(true);
-
-  // Pre-close txs bumped entry.amount; post-close go to next bill
-  const preCloseTxs = statementDay
-    ? txItems.filter(t => new Date(t.date).getDate() <= statementDay)
-    : [];
-  const postCloseTxs = statementDay
-    ? txItems.filter(t => new Date(t.date).getDate() > statementDay)
-    : txItems;
 
   return (
-    <div className="rounded-lg border border-border overflow-hidden">
+    <div className="rounded-xl border border-border bg-card overflow-hidden">
       {/* Card header — click to expand/collapse the whole card.
-          A plain div (not a button) since it hosts the nested tick button below. */}
+          A plain div (not a button) since it hosts the nested tick button below.
+          Split across two lines so name/badge and amount/due-date each get
+          their own row instead of competing for space on one crowded line. */}
       <div
         role="button"
         tabIndex={0}
         onClick={onToggle}
         onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); } }}
         className={cn(
-          "w-full flex items-center justify-between px-3 py-2 bg-muted/40 hover:bg-muted/60 transition-colors cursor-pointer",
+          "w-full px-3 py-2.5 bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer",
           !collapsed && "border-b border-border"
         )}
       >
@@ -264,29 +210,30 @@ function CCCardBlock({
               {tick.isPartial && <span className="w-1.5 h-1.5 rounded-full bg-warning" />}
             </div>
           </button>
-          <div className="flex flex-col items-start min-w-0 text-left">
-            <span className="text-xs font-semibold truncate max-w-full">{entry.template.name}</span>
-            {statementDay && (
-              <span className="text-[10px] text-muted-foreground">closes {ordinal(statementDay)}</span>
-            )}
-          </div>
+          <CategoryBadge icon={ccIcon} color={ccColor} size="sm" />
+          <span className="text-sm font-semibold truncate flex-1 min-w-0 text-left">{entry.template.name}</span>
+          <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/60 transition-transform duration-200 shrink-0", !collapsed && "rotate-180")} />
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Amount, due date — permanently in the header, not a separate row */}
+
+        <div className="flex items-center justify-between mt-1.5 pl-11">
+          <span className="text-xs text-muted-foreground">
+            {statementDay ? `closes ${ordinal(statementDay)}` : ""}
+          </span>
           <div className="flex flex-col items-end">
-            <span className={cn("flex items-center gap-1.5 text-xs font-semibold tabular-nums", tick.isPaid && "text-muted-foreground line-through")}>
-              {nextBillTotal > 0 && <span className="text-warning font-normal">↗ {fmt(nextBillTotal)} ·</span>}
+            <span className={cn("flex items-center gap-1.5 text-sm font-semibold tabular-nums", tick.isPaid && "text-muted-foreground line-through")}>
+              {/* Only shown collapsed — expanded view already has the full
+                  next-cycle breakdown below, showing both here duplicated it. */}
+              {collapsed && nextBillTotal > 0 && <span className="text-warning font-normal text-xs">↗ {fmt(nextBillTotal)} ·</span>}
               {tick.isPartial ? fmt(tick.outstanding) : tick.cashback > 0 && !tick.isPaid ? fmt(tick.netBill) : fmt(billedTotal)}
             </span>
             {tick.isPartial ? (
-              <span className="text-[10px] text-warning">{fmt(tick.paidAmount!)} paid so far</span>
+              <span className="text-xs text-warning">{fmt(tick.paidAmount!)} paid so far</span>
             ) : entry.template.dueDateDay && (
-              <span className="text-[10px] text-warning">
+              <span className="text-xs text-warning">
                 due {ordinal(entry.template.dueDateDay)}{isDueNextMonth ? ` ${nextMonthName}` : ""}
               </span>
             )}
           </div>
-          <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/60 transition-transform duration-200 shrink-0", !collapsed && "rotate-180")} />
         </div>
       </div>
 
@@ -302,35 +249,17 @@ function CCCardBlock({
             </div>
           )}
 
-          {preCloseTxs.length > 0 && (
-            <div className="p-2">
-              <p className="text-xs text-muted-foreground font-medium px-1 mb-1">Added to this bill</p>
-              <CCSubcatBreakdown txItems={preCloseTxs} onDelete={onDelete} onEditRequest={onEditRequestTx} removingIds={removingIds} />
-            </div>
-          )}
-
-          {/* Next cycle charges — its own collapse, independent of the card's.
-              Restrained to a plain neutral block with just the label/amount
-              in amber, not a full tinted background wash over every row. */}
+          {/* Next cycle bill total — the purchases building it are browsable
+              in Daily/Regular Spends, tagged with this card's name. */}
           {nextBillTotal > 0 && (
             <div className="border-t border-border px-3 py-2">
-              <div
-                onClick={postCloseTxs.length > 0 ? () => setNextCycleCollapsed(v => !v) : undefined}
-                className={cn(
-                  "flex items-center justify-between",
-                  postCloseTxs.length > 0 && "cursor-pointer",
-                  postCloseTxs.length > 0 && !nextCycleCollapsed && "mb-1.5"
-                )}
-              >
-                <span className="text-xs font-semibold text-warning tracking-wide flex items-center gap-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-warning tracking-wide">
                   → {nextMonthName} bill
-                  {postCloseTxs.length > 0 && (
-                    <ChevronDown className={cn("w-3 h-3 text-warning/60 transition-transform duration-200", !nextCycleCollapsed && "rotate-180")} />
-                  )}
                 </span>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-semibold text-warning tracking-tight">{fmt(nextBillTotal)}</span>
-                  {postCloseTxs.length === 0 && (
+                  {!hasPostCloseSpend && (
                     <button
                       onClick={() => onClearStatement(entry.id)}
                       className="text-xs font-medium text-muted-foreground border border-border bg-card px-2.5 py-1 rounded-md hover:border-foreground/30 transition-colors"
@@ -340,9 +269,6 @@ function CCCardBlock({
                   )}
                 </div>
               </div>
-              {postCloseTxs.length > 0 && !nextCycleCollapsed && (
-                <CCSubcatBreakdown txItems={postCloseTxs} onDelete={onDelete} onEditRequest={onEditRequestTx} removingIds={removingIds} />
-              )}
             </div>
           )}
         </>
@@ -354,7 +280,7 @@ function CCCardBlock({
   );
 }
 
-export function DashboardClient({ currentMonth: initialMonth, recentMonths: initialRecentMonths, ccTemplates, customCategories, incomeTemplates, todayMonth, todayYear, targetMonth, targetYear, prevUrl, nextUrl, projectedIncome, projectedEntries }: DashboardClientProps) {
+export function DashboardClient({ currentMonth: initialMonth, recentMonths: initialRecentMonths, ccTemplates, customCategories, subCategorySuggestions, incomeTemplates, todayMonth, todayYear, targetMonth, targetYear, prevUrl, nextUrl, projectedIncome, projectedEntries }: DashboardClientProps) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const viewMonth = targetMonth ?? todayMonth;
@@ -376,6 +302,10 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
   const [showSetup, setShowSetup] = useState(!initialMonth && !isProjected);
   const [showIncomeEdit, setShowIncomeEdit] = useState(false);
+  // Payables (recurring bills + card dues, both action-oriented) vs Daily
+  // Spend (browsing/logging ad-hoc transactions) — splitting these into
+  // tabs instead of stacking every section on one long page.
+  const [tab, setTab] = useState<"payables" | "spends">("payables");
 
   // Add one-time income (inline inside income dialog)
   const [showAddIncome, setShowAddIncome] = useState(false);
@@ -450,13 +380,17 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
 
   type GroupedItem =
     | { kind: "entry"; data: EntryWithTemplate }
-    | { kind: "transaction"; data: AdHocItem }
     | { kind: "projected"; data: ProjectedEntry };
 
-  const { grouped, oneTimeItems } = useMemo(() => {
+  // Recurring Payments: bill templates only, grouped by category — credit
+  // card bills excluded (their own Pending Card Payments section) and
+  // ad-hoc transactions excluded (their own Daily/Regular Spends section,
+  // regardless of payment method) rather than merged in here.
+  const { grouped, ccEntries } = useMemo(() => {
     if (isProjected) {
       const result: Record<string, GroupedItem[]> = {};
       for (const cat of CATEGORY_ORDER) {
+        if (cat === "CREDIT_CARD") continue;
         const items = projEntries.filter(e => !e.customCategory && e.category === cat);
         if (items.length) result[cat] = items.map(d => ({ kind: "projected" as const, data: d }));
       }
@@ -466,7 +400,8 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
           result[e.customCategory].push({ kind: "projected" as const, data: e });
         }
       }
-      return { grouped: result, oneTimeItems: [] };
+      const ccProjected = projEntries.filter(e => e.category === "CREDIT_CARD").map(d => ({ kind: "projected" as const, data: d }));
+      return { grouped: result, ccEntries: ccProjected };
     }
 
     const result: Record<string, GroupedItem[]> = {};
@@ -486,6 +421,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
 
     // Template entries grouped by category
     for (const cat of CATEGORY_ORDER) {
+      if (cat === "CREDIT_CARD") continue;
       const items = entries.filter(e => e.template.category === cat && !e.template.customCategory).sort(sortEntries);
       if (items.length) result[cat] = items.map(d => ({ kind: "entry" as const, data: d }));
     }
@@ -505,53 +441,22 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       }
     }
 
-    // Merge categorised ad-hoc EXPENSE items into their group
-    // Income items are shown in the income panel, not here
-    const oneTime: AdHocItem[] = [];
-    for (const item of adHocItems) {
-      if (item.type === "INCOME") continue;
-      // Card charges always group under their card's block (key "CREDIT_CARD",
-      // same bucket the card's own recurring bill entry lives in) regardless
-      // of the real category/sub-label picked — those drive the display
-      // badge inside the block, not which block it lands in.
-      if (item.type === "EXPENSE" && item.ccTemplateId) {
-        const key = "CREDIT_CARD";
-        if (result[key]) {
-          result[key].push({ kind: "transaction", data: item });
-        } else {
-          result[key] = [{ kind: "transaction", data: item }];
-        }
-      } else if (item.type === "EXPENSE" && (item.category || item.customCategory)) {
-        // Group by the real category — customCategory is a sub-label shown
-        // as a badge on the row (see TransactionRow), not a group of its
-        // own, so "Personal + Coffee" lands in the Personal group instead
-        // of spawning a same-named "Coffee" group with no category shown.
-        const key = item.category ?? "MISCELLANEOUS";
-        if (result[key]) {
-          result[key].push({ kind: "transaction", data: item });
-        } else {
-          result[key] = [{ kind: "transaction", data: item }];
-        }
-      } else {
-        oneTime.push(item);
-      }
-    }
-
-    // Sink fully-settled categories (all entries paid, no loose ad-hoc tx)
-    // below groups that still need action. CATEGORY_ORDER / insertion order
-    // is preserved as a stable tiebreak within each bucket.
+    // Sink fully-settled categories (all entries paid) below groups that
+    // still need action. CATEGORY_ORDER / insertion order is preserved as
+    // a stable tiebreak within each bucket.
     const isSettled = (items: GroupedItem[]) => {
       const entryItems = items.filter((i): i is { kind: "entry"; data: EntryWithTemplate } => i.kind === "entry");
-      const txItems = items.filter(i => i.kind === "transaction");
-      return entryItems.length > 0 && entryItems.every(i => i.data.isPaid) && txItems.length === 0;
+      return entryItems.length > 0 && entryItems.every(i => i.data.isPaid);
     };
     const ordered: Record<string, GroupedItem[]> = {};
     for (const key of Object.keys(result).sort((a, b) => Number(isSettled(result[a])) - Number(isSettled(result[b])))) {
       ordered[key] = result[key];
     }
 
-    return { grouped: ordered, oneTimeItems: oneTime };
-  }, [entries, adHocItems, isProjected, projEntries]);
+    const ccEntries = entries.filter(e => e.template.category === "CREDIT_CARD").sort(sortEntries).map(d => ({ kind: "entry" as const, data: d }));
+
+    return { grouped: ordered, ccEntries };
+  }, [entries, isProjected, projEntries]);
 
   // Enhanced breakdown includes ad-hoc expenses in their categories
   const categoryBreakdown = useMemo(() => {
@@ -619,17 +524,6 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     return { fyIncome, fyExpenses, fyBalance: fyIncome - fyExpenses, trendData };
   }, [recentMonths, incomeTemplates, ccTemplates, todayMonth, todayYear, todayDay]);
 
-  const ccSubcatBreakdown = useMemo(() => {
-    const totals: Record<string, number> = {};
-    for (const item of adHocItems) {
-      if (item.ccTemplateId) {
-        const sub = item.customCategory ?? parseCCSubcat(item.notes);
-        totals[sub] = (totals[sub] || 0) + item.amount;
-      }
-    }
-    return Object.entries(totals).sort((a, b) => b[1] - a[1]).map(([name, amount]) => ({ name, amount }));
-  }, [adHocItems]);
-
   const savingsRate = grandIncome > 0 ? Math.round((balance / grandIncome) * 100) : 0;
 
   const { prevMonthName, expensesDelta } = useMemo(() => {
@@ -667,17 +561,25 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   const dispNonCCPaidPct    = isProjected ? 0 : nonCCPaidPercent;
   const dispNonCCPending    = isProjected ? dispRecurringNonCC : (recurringNonCC - nonCCPaidAmount);
 
+  // Nearest unpaid items across both recurring bills and CC dues — a
+  // single glanceable "what needs action" row instead of only surfacing
+  // urgency after expanding every category accordion. CC bills that
+  // haven't closed yet (isBillPending) aren't really "due" so they're
+  // excluded, same as the category-total calculation above does.
   const upcomingPayments = useMemo(() => {
     const isCurrentMonth = currentMonth?.month === todayMonth && currentMonth?.year === todayYear;
     if (!isCurrentMonth) return [];
     const today = new Date().getDate();
     return entries
-      .filter(e => !e.isPaid && e.template.dueDateDay != null)
+      .filter(e => !e.isPaid && e.template.dueDateDay != null && !isBillPending(e, isCurrentMonth, today))
       .map(e => ({
+        id: e.id,
         name: e.template.name,
         amount: net(e) - (e.paidAmount ?? 0),
         dueDay: e.template.dueDateDay!,
         overdue: e.template.dueDateDay! < today,
+        category: e.template.category,
+        customCategory: e.template.customCategory,
       }))
       .sort((a, b) => a.dueDay - b.dueDay)
       .slice(0, 6);
@@ -797,7 +699,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     });
     setRecentMonths(prev => prev.map(m =>
       m.id === currentMonth!.id
-        ? { ...m, adHocItems: [{ id: newItem.id, type: newItem.type, amount: newItem.amount, category: newItem.category, customCategory: newItem.customCategory ?? null, notes: newItem.notes ?? null, ccTemplateId: newItem.ccTemplateId ?? null, date: newItem.date }, ...m.adHocItems] }
+        ? { ...m, adHocItems: [{ id: newItem.id, type: newItem.type, amount: newItem.amount, category: newItem.category, customCategory: newItem.customCategory ?? null, customCategoryId: newItem.customCategoryId ?? null, subCategory: newItem.subCategory ?? null, notes: newItem.notes ?? null, ccTemplateId: newItem.ccTemplateId ?? null, date: newItem.date }, ...m.adHocItems] }
         : m
     ));
     toast.success("Added");
@@ -859,7 +761,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     });
     setRecentMonths(prev => prev.map(m =>
       m.id === currentMonth!.id
-        ? { ...m, adHocItems: m.adHocItems.map(i => i.id === id ? { ...i, type: updated.type, amount: updated.amount, category: updated.category, notes: updated.notes ?? null } : i) }
+        ? { ...m, adHocItems: m.adHocItems.map(i => i.id === id ? { ...i, type: updated.type, amount: updated.amount, category: updated.category, customCategory: updated.customCategory ?? null, customCategoryId: updated.customCategoryId ?? null, subCategory: updated.subCategory ?? null, notes: updated.notes ?? null, ccTemplateId: updated.ccTemplateId ?? null } : i) }
         : m
     ));
     toast.success("Updated");
@@ -1068,11 +970,64 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
         <Progress value={dispPaidPct} className="h-1.5" />
       </div>
 
-      {/* Two-column layout on desktop */}
+      <TabsUnderline
+        value={tab}
+        onChange={setTab}
+        options={[
+          { value: "payables", label: "Payables" },
+          { value: "spends", label: "Daily Spend" },
+        ]}
+      />
+
+      {/* Charts live in a persistent side column next to whichever tab's
+          content is active — never full-width at the top, never appended
+          below both tabs — so they're always visible alongside the list,
+          not competing for the page's primary vertical flow. */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Entries */}
-        <div className="lg:col-span-2 space-y-4">
-          {Object.entries(grouped).map(([groupKey, items]) => {
+      <div className="lg:col-span-2 space-y-6">
+      {tab === "payables" && (
+      <div className="space-y-6">
+        {/* Due Soon — nearest unpaid items across recurring + CC, so what
+            needs action is glanceable without opening any category. */}
+        {upcomingPayments.length > 0 && (
+          <div className="space-y-2">
+            <p className="fin-label px-0.5">Due Soon</p>
+            <div className="flex gap-2 overflow-x-auto pb-1 -mx-0.5 px-0.5 snap-x">
+              {upcomingPayments.map(p => {
+                const color = getCategoryColor(p.category, p.customCategory);
+                const Icon = getCategoryIcon(p.category, p.customCategory);
+                return (
+                  <div key={p.id} className="shrink-0 snap-start w-40 rounded-xl border border-border bg-card p-2.5 space-y-1.5">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <CategoryBadge icon={Icon} color={color} size="sm" />
+                      <span className="text-xs font-medium truncate">{p.name}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-sm font-semibold tabular-nums">{fmt(p.amount)}</span>
+                      <span className={cn("text-xs font-medium shrink-0", p.overdue ? "text-negative" : "text-warning")}>
+                        {p.overdue ? "overdue" : ordinal(p.dueDay)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Recurring Payments — bill templates only, grouped by category */}
+        <div className="space-y-2.5">
+            <p className="fin-label px-0.5">Recurring Payments</p>
+            {(() => {
+            const groupedEntries = Object.entries(grouped);
+            // grouped is already sorted unsettled-first (see the isSettled sort
+            // above) — find where the fully-paid run starts so it can be set
+            // off with its own divider instead of just blending into the list.
+            const firstPaidIdx = groupedEntries.findIndex(([, items]) => {
+              const entryItems = items.filter(i => i.kind === "entry");
+              return !isProjected && entryItems.length > 0 && entryItems.every(i => i.data.isPaid);
+            });
+            return groupedEntries.map(([groupKey, items], groupIdx) => {
             const firstEntry   = items.find(i => i.kind === "entry");
             const firstProj    = items.find(i => i.kind === "projected");
             const sampleCat = firstEntry?.kind === "entry"
@@ -1081,164 +1036,148 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                 ? { cat: firstProj.data.category, custom: firstProj.data.customCategory }
                 : { cat: groupKey, custom: null };
             const catColor = getCategoryColor(sampleCat.cat, sampleCat.custom);
+            const catIcon  = getCategoryIcon(sampleCat.cat, sampleCat.custom);
             const catLabel = getCategoryDisplay(sampleCat.cat, sampleCat.custom);
             const entryItems    = items.filter(i => i.kind === "entry") as { kind: "entry"; data: EntryWithTemplate }[];
             const projectedItems = items.filter(i => i.kind === "projected") as { kind: "projected"; data: ProjectedEntry }[];
-            const txItems = items.filter(i => i.kind === "transaction").map(i => i.data as AdHocItem);
-            const isCC     = groupKey === "CREDIT_CARD";
-            const txTotal  = txItems.reduce((s, t) => s + t.amount, 0);
             const catTotal = isProjected
               ? projectedItems.reduce((s, i) => s + i.data.amount, 0)
-              : entryItems.filter(i => !isBillPending(i.data, isCurrentMonth, todayDay)).reduce((s, i) => s + net(i.data), 0) + (isCC ? 0 : txTotal);
-            const catCarry = entryItems.reduce((s, i) => s + (i.data.statementAmount ?? 0), 0);
+              : entryItems.filter(i => !isBillPending(i.data, isCurrentMonth, todayDay)).reduce((s, i) => s + net(i.data), 0);
             const catPaid  = entryItems.reduce((s, i) => s + effectivePaid(i.data), 0);
-            const allPaid  = !isProjected && entryItems.length > 0 && entryItems.every(i => i.data.isPaid) && txItems.length === 0;
+            const allPaid  = !isProjected && entryItems.length > 0 && entryItems.every(i => i.data.isPaid);
             const collapsed = isGroupCollapsed(groupKey, entryItems);
+            const paidPct = catTotal > 0 ? Math.min(100, Math.round((catPaid / catTotal) * 100)) : 0;
 
             return (
-              <div
-                key={groupKey}
-                className="relative pl-3"
-                style={{ viewTransitionName: `cat-${groupKey.replace(/[^a-zA-Z0-9-_]/g, "")}` } as CSSProperties}
-              >
-                {/* Left accent strip */}
+              <Fragment key={groupKey}>
+                {groupIdx === firstPaidIdx && firstPaidIdx > 0 && (
+                  <p className="fin-label px-0.5 pt-2">Paid</p>
+                )}
                 <div
-                  className="absolute left-0 top-0 bottom-0 w-[3px] rounded-full"
-                  style={{ backgroundColor: catColor, opacity: 0.5 }}
-                />
-
+                  className="rounded-xl border border-border bg-card overflow-hidden"
+                  style={{ viewTransitionName: `cat-${groupKey.replace(/[^a-zA-Z0-9-_]/g, "")}` } as CSSProperties}
+                >
                 {/* Clickable header */}
                 <button
                   type="button"
                   onClick={() => toggleGroup(groupKey, entryItems)}
-                  className="w-full flex items-center justify-between mb-1.5 px-2 py-1.5 rounded-lg transition-colors hover:bg-muted/40"
-                  style={{ background: collapsed ? undefined : `linear-gradient(to right, ${catColor}12, transparent)` }}
+                  className="w-full flex items-center justify-between gap-3 px-3 py-3 transition-colors hover:bg-muted/30"
                 >
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      {catLabel}
-                    </span>
-                    {allPaid && collapsed && (
-                      <span className="text-xs text-positive font-medium ml-1">✓</span>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <CategoryBadge icon={catIcon} color={catColor} />
+                    <span className="text-sm font-semibold truncate">{catLabel}</span>
+                    {allPaid && (
+                      <span className="text-xs text-positive font-medium shrink-0">✓</span>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    {isProjected ? (
-                      <span className="text-xs text-muted-foreground">{fmt(catTotal)}</span>
-                    ) : collapsed ? (
-                      <span className="text-xs text-muted-foreground">
-                        {allPaid
-                          ? `${entryItems.length} paid · ${fmt(catTotal)}`
-                          : isCC
-                            ? `${fmt(catTotal)} billed`
-                            : entryItems.length === 0
-                              ? fmt(catTotal)
-                              : `${fmt(catPaid)} / ${fmt(catTotal)}`}
-                      </span>
-                    ) : isCC ? (
-                      <span className="text-xs text-muted-foreground">
-                        {fmt(catTotal)} billed
-                        {catCarry > 0 && <span className="text-warning"> · ↗ {fmt(catCarry)} {nextMonthName}</span>}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">
-                        {entryItems.length === 0 ? fmt(catTotal) : `${fmt(catPaid)} / ${fmt(catTotal)}`}
-                      </span>
-                    )}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-sm font-semibold tabular-nums">{fmt(catTotal)}</span>
                     <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/60 transition-transform duration-200", !collapsed && "rotate-180")} />
                   </div>
                 </button>
 
+                {/* Paid/total progress — visible even collapsed, so the
+                    state of a category is legible without opening it. */}
+                {!isProjected && entryItems.length > 0 && !allPaid && (
+                  <div className="px-3 pb-3 -mt-1 space-y-1">
+                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${paidPct}%`, backgroundColor: catColor }} />
+                    </div>
+                    <p className="text-xs text-muted-foreground">{fmt(catPaid)} of {fmt(catTotal)} paid</p>
+                  </div>
+                )}
+
                 {/* Collapsible content */}
                 {!collapsed && (
-                  <div className="space-y-2">
+                  <div className="px-3 pb-3 pt-1 space-y-2 border-t border-border">
                     {projectedItems.map((item, idx) => (
                       <ProjectedEntryRow key={idx} entry={item.data} />
                     ))}
-                    {entryItems.map(item => {
-                      if (isCC) {
-                        const cardTemplateId = item.data.templateId;
-                        const cardTxs = txItems.filter(t => t.ccTemplateId === cardTemplateId);
-                        return (
-                          <CCCardBlock
-                            key={item.data.id}
-                            entry={item.data}
-                            txItems={cardTxs}
-                            nextMonthName={nextMonthName}
-                            isBillPending={isBillPending(item.data, isCurrentMonth, todayDay)}
-                            onUpdate={handleEntryUpdate}
-                            onDelete={handleAdHocDelete}
-                            onEditRequestTx={handleEditRequest}
-                            onClearStatement={handleClearStatement}
-                            removingIds={removingIds}
-                            collapsed={isCCCardCollapsed(item.data.id)}
-                            onToggle={() => toggleCCCard(item.data.id)}
-                          />
-                        );
-                      }
-                      return <EntryRow key={item.data.id} entry={item.data} onUpdate={handleEntryUpdate} />;
-                    })}
-                    {!isCC && txItems.map(item =>
-                      <TransactionRow key={item.id} item={item} onDelete={handleAdHocDelete} onEditRequest={handleEditRequest} isRemoving={removingIds.has(item.id)} />
-                    )}
-
-                    {/* Orphaned CC transactions */}
-                    {isCC && (() => {
-                      const entryTemplateIds = new Set(entryItems.map(i => i.data.templateId));
-                      const orphaned = txItems.filter(t => !t.ccTemplateId || !entryTemplateIds.has(t.ccTemplateId));
-                      return orphaned.length > 0 ? (
-                        <div className="mt-2 rounded-xl border border-dashed border-border px-3 py-2">
-                          <p className="text-xs text-muted-foreground mb-1.5">Unmatched transactions</p>
-                          <CCSubcatBreakdown txItems={orphaned} onDelete={handleAdHocDelete} onEditRequest={handleEditRequest} removingIds={removingIds} />
-                        </div>
-                      ) : null;
-                    })()}
+                    {entryItems.map(item => (
+                      <EntryRow key={item.data.id} entry={item.data} onUpdate={handleEntryUpdate} />
+                    ))}
                   </div>
                 )}
-              </div>
+                </div>
+              </Fragment>
             );
-          })}
+            });
+          })()}
+          </div>
 
-          {oneTimeItems.length > 0 && (
-            <div>
-              <div className="px-0.5 mb-1.5">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">One-time</span>
-              </div>
-              <div className="space-y-1.5">
-                {oneTimeItems.map(item => (
-                  <TransactionRow key={item.id} item={item} onDelete={handleAdHocDelete} onEditRequest={handleEditRequest} isRemoving={removingIds.has(item.id)} />
-                ))}
-              </div>
+          {/* Pending Card Payments — bill/dues per card; the purchases that
+              built each bill are browsable in the Daily Spend tab instead. */}
+          {ccEntries.length > 0 && (
+            <div className="space-y-2.5">
+              <p className="fin-label px-0.5">Pending Card Payments</p>
+              {ccEntries.map(item => {
+                if (item.kind === "projected") return <ProjectedEntryRow key={item.data.name} entry={item.data} />;
+                const entry = item.data;
+                const statementDay = entry.template.statementDay;
+                const hasPostCloseSpend = adHocItems.some(t =>
+                  t.type === "EXPENSE" && t.ccTemplateId === entry.templateId &&
+                  (statementDay == null || new Date(t.date).getDate() > statementDay)
+                );
+                return (
+                  <CCCardBlock
+                    key={entry.id}
+                    entry={entry}
+                    hasPostCloseSpend={hasPostCloseSpend}
+                    nextMonthName={nextMonthName}
+                    isBillPending={isBillPending(entry, isCurrentMonth, todayDay)}
+                    onUpdate={handleEntryUpdate}
+                    onClearStatement={handleClearStatement}
+                    collapsed={isCCCardCollapsed(entry.id)}
+                    onToggle={() => toggleCCCard(entry.id)}
+                  />
+                );
+              })}
             </div>
           )}
-        </div>
+      </div>
+      )}
 
-        {/* Right column: Recharts loaded lazily so it doesn't block navigation */}
-        <div className="space-y-4">
-          {recentMonths.length > 0 && (
-            <DailySpendChart
-              recentMonths={recentMonths}
-              targetMonth={targetMonth}
-              targetYear={targetYear}
-              todayMonth={todayMonth}
-              todayYear={todayYear}
-              fmt={fmt}
-            />
-          )}
-          <DashboardCharts
-            trendData={trendData}
-            savingsRate={dispSavings}
-            expensesDelta={isProjected ? null : expensesDelta}
-            prevMonthName={isProjected ? null : prevMonthName}
-            fixedAmount={dispFixed}
-            variableAmount={dispVariable}
-            cashSpend={isProjected ? 0 : adHocExpense}
-            fyIncome={fyIncome}
-            fyExpenses={fyExpenses}
-            fyBalance={fyBalance}
-            monthCount={recentMonths.length}
+      {tab === "spends" && !isProjected && (
+        <DailySpendsSection
+          adHocItems={adHocItems}
+          ccCards={ccTemplates.map(t => ({ templateId: t.id, name: t.name }))}
+          onDelete={handleAdHocDelete}
+          onEditRequest={handleEditRequest}
+          removingIds={removingIds}
+        />
+      )}
+      </div>
+
+      <div className="space-y-4">
+        {tab === "spends" && !isProjected && recentMonths.length > 0 && (
+          <DailySpendChart
+            recentMonths={recentMonths}
+            targetMonth={targetMonth}
+            targetYear={targetYear}
+            todayMonth={todayMonth}
+            todayYear={todayYear}
+            fmt={fmt}
           />
-        </div>
+        )}
+
+        {/* Overview — Spending Health + FY trend, relevant regardless of
+            which tab is active, so it stays visible in the sidebar no
+            matter which tab is open. */}
+        <p className="fin-label px-0.5">Overview</p>
+        <DashboardCharts
+          trendData={trendData}
+          savingsRate={dispSavings}
+          expensesDelta={isProjected ? null : expensesDelta}
+          prevMonthName={isProjected ? null : prevMonthName}
+          fixedAmount={dispFixed}
+          variableAmount={dispVariable}
+          cashSpend={isProjected ? 0 : adHocExpense}
+          fyIncome={fyIncome}
+          fyExpenses={fyExpenses}
+          fyBalance={fyBalance}
+          monthCount={recentMonths.length}
+        />
+      </div>
       </div>
 
       {/* Unified Income Dialog */}
@@ -1440,6 +1379,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
           editing={editingItem}
           ccCards={ccTemplates.map(t => ({ templateId: t.id, name: t.name } satisfies CCCard))}
           customCategories={customCategories}
+          subCategorySuggestions={subCategorySuggestions}
         />
       )}
     </div>
@@ -1466,44 +1406,3 @@ function ProjectedEntryRow({ entry }: { entry: ProjectedEntry }) {
   );
 }
 
-function TransactionRow({ item, onDelete, onEditRequest, isRemoving }: { item: AdHocItem; onDelete: (id: string) => void; onEditRequest?: (item: AdHocItem) => void; isRemoving?: boolean }) {
-  const { hidden } = usePrivacy();
-  const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
-  const isCarryForward = item.notes === "carry_forward";
-
-  return (
-    <div className={cn(
-      "flex items-center gap-3 px-3 py-2.5 rounded-xl border bg-card transition-all duration-150",
-      isCarryForward && "border-warning-border bg-warning-bg/40",
-      isRemoving && "opacity-0 scale-95 pointer-events-none"
-    )}>
-      <div className={cn("w-0.5 h-7 rounded-full shrink-0", item.type === "INCOME" ? "bg-positive" : "bg-negative")} />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <p className="text-sm font-medium">{item.name}</p>
-          {isCarryForward && (
-            <span className="text-xs font-semibold text-warning bg-warning-bg px-1 py-0.5 rounded">carried fwd</span>
-          )}
-          {item.customCategory && (
-            <span className="text-xs font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{item.customCategory}</span>
-          )}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          {format(new Date(item.date), "dd MMM")}
-          {item.notes && !isCarryForward ? ` · ${item.notes}` : ""}
-        </p>
-      </div>
-      <span className={cn("text-sm font-semibold shrink-0", item.type === "INCOME" ? "text-positive" : "text-negative")}>
-        {item.type === "INCOME" ? "+" : "-"}{fmt(item.amount)}
-      </span>
-      {onEditRequest && !isCarryForward && (
-        <Button variant="ghost" size="sm" onClick={() => onEditRequest(item)} className="h-10 w-10 p-0 text-muted-foreground hover:text-foreground shrink-0">
-          <Pencil className="w-4 h-4" />
-        </Button>
-      )}
-      <Button variant="ghost" size="sm" disabled={isRemoving} onClick={() => onDelete(item.id)} className="h-10 w-10 p-0 text-muted-foreground hover:text-negative shrink-0">
-        <Trash2 className="w-4 h-4" />
-      </Button>
-    </div>
-  );
-}

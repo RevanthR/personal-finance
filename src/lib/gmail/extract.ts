@@ -1,10 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { z } from "zod";
 
-// Must match CC_SUBCATEGORIES in src/components/dashboard/dashboard-client.tsx
-// exactly — that's the list the dashboard groups credit-card spend under.
-const SUBCATEGORIES = ["Food", "Coffee", "Groceries", "Fuel", "Shopping", "Travel", "Health", "Bills", "Entertainment", "Other"] as const;
-
 const zExtraction = z.object({
   isTransaction: z.boolean(),
   bank: z.string().nullable(),
@@ -18,7 +14,12 @@ const zExtraction = z.object({
   last4: z.string().nullable(),
   transactionType: z.enum(["debit", "credit", "refund"]).nullable(),
   paymentMethod: z.enum(["creditCard", "upi", "debitCard", "other"]).nullable(),
-  subcategory: z.enum(SUBCATEGORIES).nullable(),
+  // Freeform, not a fixed enum — a per-user taxonomy of sub-categories can't
+  // be baked into a prompt-time constraint. This is only ever a *suggestion*
+  // pre-filled into the review queue; resolveSubCategory canonicalizes it
+  // against the user's real existing values (case-insensitively) once they
+  // confirm it, so near-duplicates ("coffee" vs "Coffee") collapse together.
+  subcategory: z.string().trim().max(40).nullable(),
 });
 
 export type ExtractedTransaction = z.infer<typeof zExtraction>;
@@ -47,7 +48,7 @@ Determine whether the email is actually a transaction alert (not a promotion, st
 
 Also extract the currency the amount is stated in, as an ISO code (e.g. "USD", "EUR", "INR"). If the email uses "₹", "Rs", "INR", or gives no currency at all, use "INR". If the currency is NOT INR (a foreign-currency card transaction): also check whether the email separately states an already-converted INR equivalent (e.g. "approx ₹X" or "INR equivalent: X") and extract that as convertedInrAmount if present, else null. Also give your own best estimate of the current approximate INR exchange rate for that currency as approxInrRate (a plain number, e.g. 87.5 for USD) — this is a fallback only, used solely if a live rate lookup fails, so a rough estimate from your own knowledge is fine.
 
-If this is a debit/spend, also classify it into a spend category based on the merchant name: one of Food, Coffee, Groceries, Fuel, Shopping, Travel, Health, Bills, Entertainment, or Other. Pick the closest match; use Other only if genuinely ambiguous. Leave null for credits/refunds.
+If this is a debit/spend, also give your best-guess spend category as a short, human-readable label (1-2 words, e.g. "Coffee", "Groceries", "Fuel", "Streaming", "Pharmacy") based on the merchant name — not a fixed category from a list, just the most natural everyday label for what this merchant is. Leave null for credits/refunds or if you can't make a reasonable guess.
 
 Respond with isTransaction: false and null for the other fields if this is not a transaction alert or you cannot confidently extract an amount.`;
 
@@ -66,7 +67,7 @@ const RESPONSE_SCHEMA = {
     last4: { type: Type.STRING, nullable: true },
     transactionType: { type: Type.STRING, nullable: true, enum: ["debit", "credit", "refund"] },
     paymentMethod: { type: Type.STRING, nullable: true, enum: ["creditCard", "upi", "debitCard", "other"] },
-    subcategory: { type: Type.STRING, nullable: true, enum: [...SUBCATEGORIES] },
+    subcategory: { type: Type.STRING, nullable: true },
   },
   required: ["isTransaction"],
 };

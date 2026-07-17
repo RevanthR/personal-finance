@@ -26,7 +26,7 @@ export default async function MonthDetailPage({
 
   if (!currentMonth) notFound();
 
-  const [recentMonths, ccTemplates, allTemplates, customCategories] = await Promise.all([
+  const [recentMonths, ccTemplates, allTemplates, customCategories, subCategorySuggestions] = await Promise.all([
     db.month.findMany({
       where: { userId: session.user.id },
       orderBy: [{ year: "desc" }, { month: "desc" }],
@@ -35,7 +35,7 @@ export default async function MonthDetailPage({
         id: true, month: true, year: true,
         salaryIncome: true, freelanceIncome: true, otherIncome: true,
         entries: { select: { id: true, templateId: true, amount: true, cashbackAmount: true } },
-        adHocItems: { select: { id: true, type: true, amount: true, category: true, notes: true, ccTemplateId: true } },
+        adHocItems: { select: { id: true, type: true, amount: true, category: true, customCategory: true, customCategoryId: true, subCategory: true, notes: true, ccTemplateId: true, date: true } },
       },
     }),
     db.lineItemTemplate.findMany({
@@ -50,6 +50,11 @@ export default async function MonthDetailPage({
       where: { userId: session.user.id },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
+    }),
+    db.adHocItem.findMany({
+      where: { month: { userId: session.user.id }, subCategory: { not: null } },
+      select: { category: true, customCategoryId: true, subCategory: true },
+      distinct: ["category", "customCategoryId", "subCategory"],
     }),
   ]);
 
@@ -74,6 +79,7 @@ export default async function MonthDetailPage({
       recentMonths={JSON.parse(JSON.stringify(recentMonths))}
       ccTemplates={JSON.parse(JSON.stringify(ccTemplates))}
       customCategories={customCategories}
+      subCategorySuggestions={subCategorySuggestions}
       incomeTemplates={JSON.parse(JSON.stringify(incomeTemplates))}
       todayMonth={todayMonth}
       todayYear={todayYear}

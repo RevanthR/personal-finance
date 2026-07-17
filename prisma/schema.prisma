@@ -262,9 +262,17 @@ model AdHocItem {
   amount            Float
   type              AdHocType
   category          Category?
+  // Top-level user-created category (e.g. "Kids") — same convention as
+  // LineItemTemplate.customCategory: category is forced to MISCELLANEOUS
+  // when this is set, customCategory holds the real display name.
   customCategory    String?
   customCategoryId  String?
   customCategoryRef CustomCategory? @relation(fields: [customCategoryId], references: [id], onDelete: SetNull)
+  // Sub-category, scoped under whichever of category/customCategoryId is
+  // set on this row — e.g. Personal -> "Coffee". Plain string, not a
+  // relation: suggestions are scoped by querying existing rows for the
+  // same parent, not a normalized table (see resolveSubCategory).
+  subCategory       String?
   // Authoritative link for CC statement math — replaces parsing the card
   // name out of the notes field, which broke if notes became user-editable.
   ccTemplateId      String?

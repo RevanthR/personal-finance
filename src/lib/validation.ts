@@ -62,6 +62,7 @@ export const AdHocPostSchema = z.object({
   type:           zAdHocType,
   category:       zCategory.optional(),
   customCategory: z.string().trim().max(50).optional().nullable(),
+  subCategory:    z.string().trim().max(50).optional().nullable(),
   date:           zDateStr,
   notes:          zNotes,
   ccTemplateId:   z.string().optional(),
@@ -73,12 +74,14 @@ export const AdHocPatchSchema = z.object({
   amount:         z.number().finite().positive().optional(),
   category:       zCategory.optional(),
   customCategory: z.string().trim().max(50).optional().nullable(),
+  subCategory:    z.string().trim().max(50).optional().nullable(),
   date:           zDateStr.optional(),
   notes:          zNotes,
   ccTemplateId:   z.string().optional(),
 }).refine(
   (d) => d.name !== undefined || d.amount !== undefined || d.category !== undefined
-    || d.customCategory !== undefined || d.date !== undefined || d.notes !== undefined || d.ccTemplateId !== undefined,
+    || d.customCategory !== undefined || d.subCategory !== undefined || d.date !== undefined
+    || d.notes !== undefined || d.ccTemplateId !== undefined,
   { message: "Must provide at least one field to update" },
 );
 
@@ -190,6 +193,7 @@ export const ParsedTransactionPatchSchema = z.object({
   ccTemplateId:   z.string().optional(),
   category:       zCategory.optional(),
   customCategory: z.string().trim().max(50).optional().nullable(),
+  subCategory:    z.string().trim().max(50).optional().nullable(),
   merchant:       zName.optional(),
   // "settle" only — the MonthlyEntry this transaction pays down instead of
   // becoming a new AdHocItem.

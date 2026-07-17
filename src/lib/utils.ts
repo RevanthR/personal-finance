@@ -1,6 +1,14 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { format } from "date-fns";
+import {
+  Home, Landmark, Users, CreditCard, PiggyBank, User, Package2,
+  Briefcase, Laptop, Building2, Store, TrendingUp, Gift, Tag,
+  Coffee, ShoppingCart, Fuel, ShoppingBag, Plane, HeartPulse, Receipt, Film, UtensilsCrossed,
+  Baby, PawPrint, Dumbbell, Tv, Shield, GraduationCap, Car, Smartphone, Wifi, Zap, Droplet,
+  HandHeart, Scissors, Star, Bookmark, Layers, Box, Sparkles, Circle, Flag,
+  type LucideIcon,
+} from "lucide-react";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -50,39 +58,118 @@ export const CATEGORY_LABELS: Record<string, string> = {
   OTHER_INCOME: "Other Income",
 };
 
-// Curated sub-category bootstrap list — shown as suggestion chips before a
-// user has typed their own, and (for older CC rows written before
-// sub-category became a real field) the set of tokens recognized inside a
-// legacy packed notes string. Single source of truth: previously duplicated
-// across adhoc-dialog.tsx, imports-client.tsx, and months/page.tsx.
-export const SPEND_SUBCATEGORIES = [
-  "Food", "Coffee", "Groceries", "Fuel", "Shopping",
-  "Travel", "Health", "Bills", "Entertainment", "Other",
-] as const;
-
 export function getCategoryDisplay(category: string, customCategory?: string | null): string {
   return customCategory ?? CATEGORY_LABELS[category] ?? category;
 }
 
+// A custom category isn't in the fixed enum, so there's no lookup table to
+// key off — best-effort keyword match against common real-world category
+// names, falling back to a deterministic hash of the name so two different
+// custom categories at least look visually distinct from each other (same
+// name always maps to the same color+icon) instead of every custom
+// category collapsing onto one shared generic look.
+const CUSTOM_CATEGORY_KEYWORDS: [RegExp, LucideIcon][] = [
+  [/kid|child|baby/i, Baby],
+  [/pet|dog|cat\b/i, PawPrint],
+  [/travel|trip|vacation|holiday/i, Plane],
+  [/gym|fitness|workout/i, Dumbbell],
+  [/netflix|spotify|subscription|streaming/i, Tv],
+  [/gift/i, Gift],
+  [/rent\b/i, Home],
+  [/insurance/i, Shield],
+  [/school|tuition|education|college/i, GraduationCap],
+  [/car|vehicle|bike|scooter/i, Car],
+  [/phone|mobile/i, Smartphone],
+  [/internet|wifi|broadband/i, Wifi],
+  [/electric|power bill/i, Zap],
+  [/water bill/i, Droplet],
+  [/medical|doctor|hospital|health/i, HeartPulse],
+  [/charity|donat/i, HandHeart],
+  [/salon|beauty|spa/i, Scissors],
+];
+
+const CUSTOM_CATEGORY_ICON_FALLBACKS: LucideIcon[] = [Tag, Star, Bookmark, Layers, Box, Sparkles, Circle, Flag];
+const CUSTOM_CATEGORY_COLOR_FALLBACKS = ["#f97316", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16", "#f43f5e", "#0ea5e9", "#eab308"];
+
+function hashString(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+function customCategoryIcon(name: string): LucideIcon {
+  const match = CUSTOM_CATEGORY_KEYWORDS.find(([re]) => re.test(name));
+  return match ? match[1] : CUSTOM_CATEGORY_ICON_FALLBACKS[hashString(name) % CUSTOM_CATEGORY_ICON_FALLBACKS.length];
+}
+
+function customCategoryColor(name: string): string {
+  return CUSTOM_CATEGORY_COLOR_FALLBACKS[hashString(name) % CUSTOM_CATEGORY_COLOR_FALLBACKS.length];
+}
+
 export function getCategoryColor(category: string, customCategory?: string | null): string {
+  if (customCategory) return customCategoryColor(customCategory);
   return CATEGORY_COLORS[category] ?? "#9ca3af";
 }
 
 export const CATEGORY_COLORS: Record<string, string> = {
-  HOUSE_MAINTENANCE: "#64748b",
-  LOAN:             "#b91c1c",
-  CREDIT_CARD:      "#6d28d9",
-  CHIT_FUND:        "#b45309",
-  SAVINGS:          "#15803d",
-  PERSONAL:         "#1d4ed8",
-  MISCELLANEOUS:    "#9ca3af",
-  SALARY:           "#059669",
-  FREELANCE:        "#0891b2",
-  RENTAL:           "#7c3aed",
-  BUSINESS:         "#d97706",
-  INVESTMENTS:      "#0d9488",
-  OTHER_INCOME:     "#6b7280",
+  HOUSE_MAINTENANCE: "#0ea5e9",
+  LOAN:             "#f43f5e",
+  CREDIT_CARD:      "#a855f7",
+  CHIT_FUND:        "#f59e0b",
+  SAVINGS:          "#22c55e",
+  PERSONAL:         "#3b82f6",
+  MISCELLANEOUS:    "#fb923c",
+  SALARY:           "#10b981",
+  FREELANCE:        "#06b6d4",
+  RENTAL:           "#d946ef",
+  BUSINESS:         "#ec4899",
+  INVESTMENTS:      "#14b8a6",
+  OTHER_INCOME:     "#94a3b8",
 };
+
+// Mirrors the sidebar's per-item icon-circle pattern (sidebar.tsx) so
+// categories are recognizable by icon+color everywhere in the app, not
+// just in nav. Custom (user-created) categories always get the generic
+// Tag icon — there's no way to know what a freeform name like "Kids" means.
+export const CATEGORY_ICONS: Record<string, LucideIcon> = {
+  HOUSE_MAINTENANCE: Home,
+  LOAN: Landmark,
+  CHIT_FUND: Users,
+  CREDIT_CARD: CreditCard,
+  SAVINGS: PiggyBank,
+  PERSONAL: User,
+  MISCELLANEOUS: Package2,
+  SALARY: Briefcase,
+  FREELANCE: Laptop,
+  RENTAL: Building2,
+  BUSINESS: Store,
+  INVESTMENTS: TrendingUp,
+  OTHER_INCOME: Gift,
+};
+
+export function getCategoryIcon(category: string, customCategory?: string | null): LucideIcon {
+  if (customCategory) return customCategoryIcon(customCategory);
+  return CATEGORY_ICONS[category] ?? Tag;
+}
+
+// Best-effort icon match for the free-text sub-category field — covers the
+// common labels users actually accumulate, falls back to a generic tag for
+// anything else since sub-categories aren't a closed set.
+export const SUBCATEGORY_ICONS: Record<string, LucideIcon> = {
+  Food: UtensilsCrossed,
+  Coffee: Coffee,
+  Groceries: ShoppingCart,
+  Fuel: Fuel,
+  Shopping: ShoppingBag,
+  Travel: Plane,
+  Health: HeartPulse,
+  Bills: Receipt,
+  Entertainment: Film,
+};
+
+export function getSubCategoryIcon(subCategory: string): LucideIcon {
+  return SUBCATEGORY_ICONS[subCategory] ?? Tag;
+}
 
 export const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"] as const;
 

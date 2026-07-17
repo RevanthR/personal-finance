@@ -8,15 +8,6 @@ import { YearOverviewClient, type MonthData } from "@/components/months/year-ove
 import { CATEGORY_LABELS, CATEGORY_COLORS, MONTHS, pendingAmountKicks } from "@/lib/utils";
 import type { AnalyticsData } from "@/components/months/stats-breakdown";
 
-// Must match CC_SUBCATEGORIES in dashboard-client.tsx — used to pick the
-// real subcategory out of a CC ad-hoc item's notes field regardless of
-// where in the "·"-joined string it lands (manual entries via the ad-hoc
-// dialog format it as "CardName · Subcategory · userNotes"; Gmail-approved
-// entries format it as "Subcategory · Imported from Gmail" — different
-// positions, so a positional a.notes.split("·")[1] picked up the literal
-// "Imported from Gmail" marker for the latter instead of the real category).
-const CC_SPEND_SUBCATEGORIES = ["Food", "Coffee", "Groceries", "Fuel", "Shopping", "Travel", "Health", "Bills", "Entertainment", "Other"];
-
 function getFY(month: number, year: number) {
   const fyStart = month >= 4 ? year : year - 1;
   return {
@@ -295,13 +286,11 @@ export default async function MonthsPage() {
         color: CATEGORY_COLORS[key] ?? "#94a3b8",
       }));
 
-    // CC sub-category breakdown from adHocItems notes
+    // CC sub-category breakdown from adHocItems
     const ccMap = new Map<string, number>();
     for (const a of cm.adHocItems) {
       if (a.type === "EXPENSE" && a.ccTemplateId) {
-        const subcat = a.customCategory ?? (a.notes
-          ? a.notes.split("·").map(p => p.trim()).find(p => CC_SPEND_SUBCATEGORIES.includes(p)) ?? "Other"
-          : "Other");
+        const subcat = a.subCategory ?? "Other";
         ccMap.set(subcat, (ccMap.get(subcat) ?? 0) + a.amount);
       }
     }
@@ -557,8 +546,7 @@ export default async function MonthsPage() {
   for (const m of fyActual) {
     for (const a of m.adHocItems) {
       if (a.type === "EXPENSE" && a.ccTemplateId) {
-        const parts = a.notes ? a.notes.split("·") : [];
-        const subcat = a.customCategory ?? (parts.length > 1 ? parts[1].trim() : "Other");
+        const subcat = a.subCategory ?? "Other";
         ccAnnualSubcatMap.set(subcat, (ccAnnualSubcatMap.get(subcat) ?? 0) + a.amount);
       }
     }

@@ -150,6 +150,7 @@ async function DashboardData({
         recentMonths={[]}
         ccTemplates={[]}
         customCategories={[]}
+        subCategorySuggestions={[]}
         incomeTemplates={[]}
         todayMonth={todayMonth}
         todayYear={todayYear}
@@ -165,7 +166,7 @@ async function DashboardData({
   }
 
   // ── Actual (past or current) month ────────────────────────────────────────
-  const [currentMonth, recentMonths, ccTemplates, allTemplates, customCategories] = await Promise.all([
+  const [currentMonth, recentMonths, ccTemplates, allTemplates, customCategories, subCategorySuggestions] = await Promise.all([
     db.month.findUnique({
       where: { userId_month_year: { userId, month: targetMonth, year: targetYear } },
       include: {
@@ -184,7 +185,7 @@ async function DashboardData({
         id: true, month: true, year: true,
         salaryIncome: true, freelanceIncome: true, otherIncome: true,
         entries: { select: { id: true, templateId: true, amount: true, cashbackAmount: true } },
-        adHocItems: { select: { id: true, type: true, amount: true, category: true, customCategory: true, notes: true, ccTemplateId: true, date: true } },
+        adHocItems: { select: { id: true, type: true, amount: true, category: true, customCategory: true, customCategoryId: true, subCategory: true, notes: true, ccTemplateId: true, date: true } },
       },
     }),
     db.lineItemTemplate.findMany({
@@ -199,6 +200,15 @@ async function DashboardData({
       where: { userId },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
+    }),
+    // Every distinct (parent category, sub-category name) pair this user
+    // has used, so the add-expense form can scope its sub-category
+    // suggestions to whichever category is currently selected instead of
+    // offering a flat, unscoped list.
+    db.adHocItem.findMany({
+      where: { month: { userId }, subCategory: { not: null } },
+      select: { category: true, customCategoryId: true, subCategory: true },
+      distinct: ["category", "customCategoryId", "subCategory"],
     }),
   ]);
 
@@ -219,6 +229,7 @@ async function DashboardData({
       recentMonths={JSON.parse(JSON.stringify(recentMonths))}
       ccTemplates={JSON.parse(JSON.stringify(ccTemplates))}
       customCategories={customCategories}
+      subCategorySuggestions={subCategorySuggestions}
       incomeTemplates={JSON.parse(JSON.stringify(incomeTemplates))}
       todayMonth={todayMonth}
       todayYear={todayYear}

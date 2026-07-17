@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AdHocType, Category } from "@/generated/prisma/client";
 import { validate, AdHocPostSchema, AdHocPatchSchema } from "@/lib/validation";
 import { resolveCustomCategory } from "@/lib/custom-category";
+import { resolveSubCategory } from "@/lib/sub-category";
 import { applyCCEffect, reverseCCEffect, type EntryFields } from "@/lib/cc-effects";
 
 // POST /api/months/[monthId]/adhoc
@@ -24,7 +25,14 @@ export async function POST(
   const month = await db.month.findFirst({ where: { id: monthId, userId } });
   if (!month) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  // A top-level custom category (e.g. "Kids") forces category to
+  // MISCELLANEOUS — same convention LineItemTemplate's custom-category
+  // flow already uses.
   const customCat = body.customCategory ? await resolveCustomCategory(userId, body.customCategory) : null;
+  const resolvedCategory = (customCat ? "MISCELLANEOUS" : body.category) as Category | undefined;
+  const subCategory = body.subCategory
+    ? await resolveSubCategory(userId, { category: resolvedCategory ?? null, customCategoryId: customCat?.id ?? null }, body.subCategory)
+    : null;
 
   const item = await db.adHocItem.create({
     data: {
@@ -32,9 +40,10 @@ export async function POST(
       name: body.name,
       amount: body.amount,
       type: body.type as AdHocType,
-      category: body.category as Category | undefined,
+      category: resolvedCategory ?? null,
       customCategory: customCat?.name ?? null,
       customCategoryId: customCat?.id ?? null,
+      subCategory,
       ccTemplateId: body.ccTemplateId ?? null,
       date: new Date(body.date),
       notes: body.notes ?? null,
@@ -77,15 +86,31 @@ export async function PATCH(
   const nextAmount   = body.amount ?? existing.amount;
   const nextDate     = body.date ? new Date(body.date) : existing.date;
   const nextNotes    = body.notes !== undefined ? body.notes : existing.notes;
-  const nextCategory = body.category !== undefined ? (body.category as Category | null) : existing.category;
   const nextCCTemplateId = body.ccTemplateId !== undefined
     ? (body.ccTemplateId || null)
     : existing.ccTemplateId;
 
-  // A category chip pick (no accompanying customCategory) clears any custom label.
+  // A category chip pick (no accompanying customCategory) clears any custom
+  // top-level category, and forces category to MISCELLANEOUS when a new
+  // custom category is picked instead — same convention as POST.
   const customCat = body.customCategory
     ? await resolveCustomCategory(userId, body.customCategory)
     : body.category !== undefined ? null : undefined; // undefined = leave as-is
+  const nextCategory: Category | null = customCat
+    ? "MISCELLANEOUS"
+    : customCat === null
+      ? (body.category as Category | null)
+      : existing.category;
+  const nextCustomCategoryId = customCat ? customCat.id : customCat === null ? null : existing.customCategoryId;
+
+  // Sub-category: an explicit value updates or clears it. Otherwise, if the
+  // parent category changed, the old sub-label no longer scopes to
+  // anything real and is cleared; if the parent didn't change, it's left
+  // as-is.
+  const parentChanged = body.category !== undefined || body.customCategory !== undefined;
+  const nextSubCategory = body.subCategory !== undefined
+    ? (body.subCategory ? await resolveSubCategory(userId, { category: nextCategory, customCategoryId: nextCustomCategoryId }, body.subCategory) : null)
+    : parentChanged ? null : undefined; // undefined = leave as-is
 
   const item = await db.adHocItem.update({
     where: { id: body.id },
@@ -100,6 +125,7 @@ export async function PATCH(
         customCategory: customCat?.name ?? null,
         customCategoryId: customCat?.id ?? null,
       }),
+      ...(nextSubCategory !== undefined && { subCategory: nextSubCategory }),
     },
   });
 

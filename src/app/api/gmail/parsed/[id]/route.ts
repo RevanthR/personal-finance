@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { validate, ParsedTransactionPatchSchema } from "@/lib/validation";
 import { applyCCEffect, reverseCCEffect } from "@/lib/cc-effects";
 import { resolveCustomCategory } from "@/lib/custom-category";
+import { resolveSubCategory } from "@/lib/sub-category";
 import { computePaymentUpdate } from "@/lib/entry-payment";
 import type { Category } from "@/generated/prisma/client";
 
@@ -99,6 +100,10 @@ export async function PATCH(
     }
 
     const customCat = body.customCategory ? await resolveCustomCategory(userId, body.customCategory) : null;
+    const resolvedCategory = (customCat ? "MISCELLANEOUS" : (body.category as Category | undefined)) ?? "MISCELLANEOUS";
+    const subCategory = body.subCategory
+      ? await resolveSubCategory(userId, { category: resolvedCategory, customCategoryId: customCat?.id ?? null }, body.subCategory)
+      : null;
 
     const item = await db.adHocItem.create({
       data: {
@@ -106,9 +111,10 @@ export async function PATCH(
         name: finalName,
         amount: finalAmount,
         type: "EXPENSE",
-        category: (body.category as Category | undefined) ?? "MISCELLANEOUS",
+        category: resolvedCategory,
         customCategory: customCat?.name ?? null,
         customCategoryId: customCat?.id ?? null,
+        subCategory,
         ccTemplateId,
         date: finalDate,
         notes: "Imported from Gmail",
@@ -140,6 +146,10 @@ export async function PATCH(
   }
 
   const customCat = body.customCategory ? await resolveCustomCategory(userId, body.customCategory) : null;
+  const resolvedCategory = (customCat ? "MISCELLANEOUS" : (body.category as Category | undefined)) ?? "MISCELLANEOUS";
+  const subCategory = body.subCategory
+    ? await resolveSubCategory(userId, { category: resolvedCategory, customCategoryId: customCat?.id ?? null }, body.subCategory)
+    : null;
 
   const item = await db.adHocItem.create({
     data: {
@@ -147,9 +157,10 @@ export async function PATCH(
       name: finalName,
       amount: finalAmount,
       type: "EXPENSE",
-      category: (body.category as Category | undefined) ?? "MISCELLANEOUS",
+      category: resolvedCategory,
       customCategory: customCat?.name ?? null,
       customCategoryId: customCat?.id ?? null,
+      subCategory,
       date: finalDate,
       notes: "Imported from Gmail",
     },

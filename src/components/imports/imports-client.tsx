@@ -8,8 +8,9 @@ import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Mail, RefreshCw, Check, X, Landmark, Plus, Loader2, Inbox } from "lucide-react";
 import { toast } from "sonner";
-import { cn, EXPENSE_CATEGORY_CHIPS, SPEND_SUBCATEGORIES } from "@/lib/utils";
+import { cn, EXPENSE_CATEGORY_CHIPS } from "@/lib/utils";
 import { Chip } from "@/components/ui/chip";
+import { Select } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
@@ -85,6 +86,8 @@ function FxEstimateNote({ item }: { item: ParsedTransactionItem }) {
   );
 }
 
+type SubCategorySuggestion = { category: string | null; customCategoryId: string | null; subCategory: string | null };
+
 interface ImportsClientProps {
   gmail: {
     connected: boolean;
@@ -92,6 +95,7 @@ interface ImportsClientProps {
     lastSyncAt: string | null;
     ccCards: CCCard[];
     customCategories: CustomCat[];
+    subCategorySuggestions: SubCategorySuggestion[];
     pending: ParsedTransactionItem[];
   };
 }
@@ -259,6 +263,7 @@ export function ImportsClient({ gmail }: ImportsClientProps) {
                 item={item}
                 ccCards={gmail.ccCards}
                 customCategories={gmail.customCategories}
+                subCategorySuggestions={gmail.subCategorySuggestions}
                 onDone={() => router.refresh()}
               />
             ))}
@@ -269,10 +274,11 @@ export function ImportsClient({ gmail }: ImportsClientProps) {
   );
 }
 
-function TransactionRow({ item, ccCards, customCategories, onDone }: {
+function TransactionRow({ item, ccCards, customCategories, subCategorySuggestions, onDone }: {
   item: ParsedTransactionItem;
   ccCards: CCCard[];
   customCategories: CustomCat[];
+  subCategorySuggestions: SubCategorySuggestion[];
   onDone: () => void;
 }) {
   const [addAnyway, setAddAnyway] = useState(false);
@@ -383,7 +389,7 @@ function TransactionRow({ item, ccCards, customCategories, onDone }: {
     );
   }
 
-  return <AddForm item={item} ccCards={ccCards} customCategories={customCategories} onDone={onDone} showBack={hasSuggestion && addAnyway} onBack={() => setAddAnyway(false)} />;
+  return <AddForm item={item} ccCards={ccCards} customCategories={customCategories} subCategorySuggestions={subCategorySuggestions} onDone={onDone} showBack={hasSuggestion && addAnyway} onBack={() => setAddAnyway(false)} />;
 }
 
 async function reject(id: string) {
@@ -395,10 +401,11 @@ async function reject(id: string) {
   if (!res.ok) throw new Error("Failed to dismiss");
 }
 
-function AddForm({ item, ccCards, customCategories, onDone, showBack, onBack }: {
+function AddForm({ item, ccCards, customCategories, subCategorySuggestions, onDone, showBack, onBack }: {
   item: ParsedTransactionItem;
   ccCards: CCCard[];
   customCategories: CustomCat[];
+  subCategorySuggestions: SubCategorySuggestion[];
   onDone: () => void;
   showBack: boolean;
   onBack: () => void;
@@ -411,12 +418,62 @@ function AddForm({ item, ccCards, customCategories, onDone, showBack, onBack }: 
   const isCC = paymentMethod === "CARD";
   const [ccTemplateId, setCCTemplateId] = useState(item.suggestedCcTemplateId ?? ccCards[0]?.templateId ?? "");
   const [category, setCategory] = useState("MISCELLANEOUS");
-  const [customLabel, setCustomLabel] = useState(item.suggestedSubcategory ?? "");
+  const [customCategoryName, setCustomCategoryName] = useState("");
+  const [showNewCategory, setShowNewCategory] = useState(false);
+  const [subLabel, setSubLabel] = useState(item.suggestedSubcategory ?? "");
   const [showNewSubcat, setShowNewSubcat] = useState(false);
   const [amount, setAmount] = useState(String(item.amount));
   const [pendingAction, setPendingAction] = useState<"approve" | "reject" | null>(null);
   const loading = pendingAction !== null;
-  const subcatSuggestions = [...new Set([...customCategories.map(c => c.name), ...SPEND_SUBCATEGORIES])];
+
+  function handleCategorySelect(value: string) {
+    if (value === "__new__") {
+      setShowNewCategory(true);
+      setCategory(""); setCustomCategoryName("");
+    } else if (value.startsWith("custom:")) {
+      const found = customCategories.find(c => c.id === value.slice(7));
+      setCustomCategoryName(found?.name ?? "");
+      setCategory(""); setShowNewCategory(false);
+    } else {
+      setCategory(value);
+      setCustomCategoryName(""); setShowNewCategory(false);
+    }
+    setSubLabel(""); setShowNewSubcat(false);
+  }
+  function handleSubcatSelect(value: string) {
+    if (value === "__new__") {
+      setShowNewSubcat(true);
+      setSubLabel("");
+    } else {
+      setSubLabel(value);
+      setShowNewSubcat(false);
+    }
+  }
+
+  // Sub-category suggestions scoped to whichever category is currently
+  // selected, same as the manual add-expense dialog.
+  const selectedCustomCategoryId = customCategoryName
+    ? customCategories.find(c => c.name.toLowerCase() === customCategoryName.trim().toLowerCase())?.id ?? null
+    : null;
+  const scopedPastSubcats = subCategorySuggestions
+    .filter(s => customCategoryName ? s.customCategoryId === selectedCustomCategoryId : (s.category === category && !s.customCategoryId))
+    .map(s => s.subCategory)
+    .filter((s): s is string => !!s);
+  const subcatSuggestions = [...new Set(scopedPastSubcats)];
+  // Gemini's freeform suggestion pre-fills subLabel before the user has
+  // touched anything — if it's not already one of their real past
+  // sub-categories, it still needs to render as a selectable option so the
+  // dropdown shows it selected instead of blank.
+  const subcatOptions = subLabel && !subcatSuggestions.includes(subLabel)
+    ? [subLabel, ...subcatSuggestions]
+    : subcatSuggestions;
+  const categorySelectValue = showNewCategory
+    ? "__new__"
+    : customCategoryName
+      ? `custom:${selectedCustomCategoryId ?? ""}`
+      : category;
+  const subcatSelectValue = showNewSubcat ? "__new__" : subLabel;
+  const hasCategory = !!category || !!customCategoryName.trim();
 
   async function act(action: "approve" | "reject") {
     setPendingAction(action);
@@ -426,8 +483,9 @@ function AddForm({ item, ccCards, customCategories, onDone, showBack, onBack }: 
         body.amount = parseFloat(amount);
         if (isCC) body.ccTemplateId = ccTemplateId;
         if (!isIncome) {
-          body.category = category;
-          if (customLabel.trim()) body.customCategory = customLabel.trim();
+          body.category = category || undefined;
+          if (customCategoryName.trim()) body.customCategory = customCategoryName.trim();
+          if (subLabel.trim()) body.subCategory = subLabel.trim();
         }
       }
       const res = await fetch(`/api/gmail/parsed/${item.id}`, {
@@ -494,29 +552,38 @@ function AddForm({ item, ccCards, customCategories, onDone, showBack, onBack }: 
           <>
             <div>
               <Label className="text-xs mb-1.5 block">Category</Label>
-              <div className="flex flex-wrap gap-1.5">
-                {EXPENSE_CATEGORIES.map(c => (
-                  <Chip key={c.value} label={c.label} active={category === c.value} onClick={() => setCategory(c.value)} />
-                ))}
-              </div>
+              <Select value={categorySelectValue} onChange={e => handleCategorySelect(e.target.value)} required>
+                <option value="">Select...</option>
+                {EXPENSE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                {customCategories.map(c => <option key={c.id} value={`custom:${c.id}`}>{c.name}</option>)}
+                <option value="__new__">+ Add new category...</option>
+              </Select>
+              {showNewCategory && (
+                <Input
+                  className="mt-1.5"
+                  placeholder="Category name (e.g. Kids)"
+                  value={customCategoryName}
+                  onChange={e => setCustomCategoryName(e.target.value)}
+                  autoFocus
+                />
+              )}
             </div>
 
             <div>
               <Label className="text-xs mb-1.5 block">
                 Sub-category <span className="text-muted-foreground">(optional)</span>
               </Label>
-              <div className="flex flex-wrap gap-1.5">
-                {subcatSuggestions.map(name => (
-                  <Chip key={name} label={name} active={customLabel === name && !showNewSubcat} onClick={() => { setCustomLabel(c => c === name ? "" : name); setShowNewSubcat(false); }} />
-                ))}
-                <Chip label="+ Add new" dashed active={showNewSubcat} onClick={() => { setShowNewSubcat(true); setCustomLabel(""); }} />
-              </div>
+              <Select value={subcatSelectValue} onChange={e => handleSubcatSelect(e.target.value)}>
+                <option value="">Select...</option>
+                {subcatOptions.map(name => <option key={name} value={name}>{name}{name === subLabel && !subcatSuggestions.includes(name) ? " (suggested)" : ""}</option>)}
+                <option value="__new__">+ Add new sub-category...</option>
+              </Select>
               {showNewSubcat && (
                 <Input
                   className="mt-1.5"
                   placeholder="Sub-category name (e.g. Coffee)"
-                  value={customLabel}
-                  onChange={e => setCustomLabel(e.target.value)}
+                  value={subLabel}
+                  onChange={e => setSubLabel(e.target.value)}
                   autoFocus
                 />
               )}
@@ -525,7 +592,7 @@ function AddForm({ item, ccCards, customCategories, onDone, showBack, onBack }: 
         )}
 
         <div className="flex flex-wrap gap-2 pt-1">
-          <Button size="sm" onClick={() => act("approve")} disabled={loading || (isCC && !ccTemplateId)}>
+          <Button size="sm" onClick={() => act("approve")} disabled={loading || (isCC && !ccTemplateId) || (!isIncome && !hasCategory)}>
             {pendingAction === "approve" ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Check className="w-3.5 h-3.5 mr-1" />}
             {pendingAction === "approve" ? "Adding..." : "Add"}
           </Button>
