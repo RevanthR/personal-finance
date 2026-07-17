@@ -7,16 +7,15 @@ import { useRouter } from "next/navigation";
 import { formatCurrency, formatMonthYear, getCategoryDisplay, getCategoryColor, MONTHS, pendingAmountKicks, ordinal } from "@/lib/utils";
 import { netAmount as _net, effectivePaid as _effectivePaid, isBillPending as _isBillPending, computeMetrics, computeMonthIncome } from "@/lib/finance-utils";
 import { usePrivacy } from "@/contexts/privacy-context";
-import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  CheckCircle2, Plus, Pencil, ChevronDown, Trash2, ChevronLeft, ChevronRight, IndianRupee, Check, Calendar,
+  Plus, Pencil, ChevronDown, Trash2, ChevronLeft, ChevronRight, Check, Calendar,
 } from "lucide-react";
 import { toast } from "sonner";
 import { EntryRow } from "./entry-row";
@@ -33,6 +32,11 @@ import { cn } from "@/lib/utils";
 const DashboardCharts = dynamic(
   () => import("./dashboard-charts").then(m => m.DashboardCharts),
   { ssr: false, loading: () => <div className="h-64 rounded-xl bg-muted animate-pulse" /> }
+);
+
+const DailySpendChart = dynamic(
+  () => import("./daily-spend-chart").then(m => m.DailySpendChart),
+  { ssr: false, loading: () => <div className="h-48 rounded-xl bg-muted animate-pulse" /> }
 );
 
 const AdHocDialog = dynamic(
@@ -92,7 +96,7 @@ type RecentMonthSummary = {
   id: string; month: number; year: number;
   salaryIncome: number; freelanceIncome: number; otherIncome: number;
   entries: { id: string; templateId: string; amount: number; cashbackAmount: number | null }[];
-  adHocItems: { id: string; type: string; amount: number; category: string | null; notes: string | null }[];
+  adHocItems: { id: string; type: string; amount: number; category: string | null; customCategory: string | null; notes: string | null; ccTemplateId: string | null; date: string }[];
 };
 
 type EntryWithTemplate = {
@@ -416,7 +420,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
 
   const hasCCCards = ccTemplates.length > 0;
   const adHocIncome   = useMemo(() => adHocItems.filter(i => i.type === "INCOME" && !i.notes?.startsWith("income_override:")).reduce((s, i) => s + i.amount, 0), [adHocItems]);
-  const adHocExpense  = useMemo(() => adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0), [adHocItems]);
+  const adHocExpense  = useMemo(() => adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0), [adHocItems]);
   const grandIncome   = templateIncome + adHocIncome;
 
   // Single-pass metric computation via shared finance-utils
@@ -506,8 +510,23 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     const oneTime: AdHocItem[] = [];
     for (const item of adHocItems) {
       if (item.type === "INCOME") continue;
-      if (item.type === "EXPENSE" && item.category) {
-        const key = item.customCategory ?? item.category;
+      // Card charges always group under their card's block (key "CREDIT_CARD",
+      // same bucket the card's own recurring bill entry lives in) regardless
+      // of the real category/sub-label picked — those drive the display
+      // badge inside the block, not which block it lands in.
+      if (item.type === "EXPENSE" && item.ccTemplateId) {
+        const key = "CREDIT_CARD";
+        if (result[key]) {
+          result[key].push({ kind: "transaction", data: item });
+        } else {
+          result[key] = [{ kind: "transaction", data: item }];
+        }
+      } else if (item.type === "EXPENSE" && (item.category || item.customCategory)) {
+        // Group by the real category — customCategory is a sub-label shown
+        // as a badge on the row (see TransactionRow), not a group of its
+        // own, so "Personal + Coffee" lands in the Personal group instead
+        // of spawning a same-named "Coffee" group with no category shown.
+        const key = item.category ?? "MISCELLANEOUS";
         if (result[key]) {
           result[key].push({ kind: "transaction", data: item });
         } else {
@@ -559,7 +578,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       totals[key].amount += net(e);
     }
     for (const item of adHocItems) {
-      if (item.type === "EXPENSE" && item.category && item.category !== "CREDIT_CARD") {
+      if (item.type === "EXPENSE" && item.category && !item.ccTemplateId) {
         const key = item.category;
         if (!totals[key]) totals[key] = { amount: 0, templateCat: key, customCat: null };
         totals[key].amount += item.amount;
@@ -587,7 +606,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
         }
         return a + e.amount - (e.cashbackAmount ?? 0);
       }, 0)
-      + m.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((a, i) => a + i.amount, 0);
+      + m.adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((a, i) => a + i.amount, 0);
     };
 
     const fyIncome   = recentMonths.reduce((s, m) => s + monthIncome(m), 0);
@@ -603,8 +622,8 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   const ccSubcatBreakdown = useMemo(() => {
     const totals: Record<string, number> = {};
     for (const item of adHocItems) {
-      if (item.category === "CREDIT_CARD") {
-        const sub = parseCCSubcat(item.notes);
+      if (item.ccTemplateId) {
+        const sub = item.customCategory ?? parseCCSubcat(item.notes);
         totals[sub] = (totals[sub] || 0) + item.amount;
       }
     }
@@ -620,7 +639,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     if (!prev) return { prevMonthName: null, expensesDelta: null };
     const prevExp = prev.entries
       .reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
-      + prev.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0);
+      + prev.adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0);
     return {
       prevMonthName: MONTHS[prev.month - 1],
       expensesDelta: (totalCommitted + adHocExpense) - prevExp,
@@ -778,7 +797,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     });
     setRecentMonths(prev => prev.map(m =>
       m.id === currentMonth!.id
-        ? { ...m, adHocItems: [{ id: newItem.id, type: newItem.type, amount: newItem.amount, category: newItem.category, notes: newItem.notes ?? null }, ...m.adHocItems] }
+        ? { ...m, adHocItems: [{ id: newItem.id, type: newItem.type, amount: newItem.amount, category: newItem.category, customCategory: newItem.customCategory ?? null, notes: newItem.notes ?? null, ccTemplateId: newItem.ccTemplateId ?? null, date: newItem.date }, ...m.adHocItems] }
         : m
     ));
     toast.success("Added");
@@ -1032,7 +1051,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                 : undefined,
           },
           ...(!isProjected ? [{
-            label: "Cash in Hand",
+            label: "Cash/UPI Bal",
             value: fmt(Math.max(0, inHandNow)),
             valueClass: "text-positive",
           }] : []),
@@ -1196,18 +1215,16 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
 
         {/* Right column: Recharts loaded lazily so it doesn't block navigation */}
         <div className="space-y-4">
-          {/* FY summary — secondary context, sits above settlements */}
-          {recentMonths.length > 1 && (
-            <FYSummaryCard
+          {recentMonths.length > 0 && (
+            <DailySpendChart
               recentMonths={recentMonths}
-              fyIncome={fyIncome}
-              fyExpenses={fyExpenses}
-              fyBalance={fyBalance}
-              trendData={trendData}
+              targetMonth={targetMonth}
+              targetYear={targetYear}
+              todayMonth={todayMonth}
+              todayYear={todayYear}
               fmt={fmt}
             />
           )}
-          {!isProjected && <PaidSummaryPanel entries={entries} totalCommitted={totalCommitted} grandIncome={grandIncome} adHocExpense={adHocExpense} adHocItems={adHocItems} fmt={fmt} />}
           <DashboardCharts
             trendData={trendData}
             savingsRate={dispSavings}
@@ -1215,6 +1232,11 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             prevMonthName={isProjected ? null : prevMonthName}
             fixedAmount={dispFixed}
             variableAmount={dispVariable}
+            cashSpend={isProjected ? 0 : adHocExpense}
+            fyIncome={fyIncome}
+            fyExpenses={fyExpenses}
+            fyBalance={fyBalance}
+            monthCount={recentMonths.length}
           />
         </div>
       </div>
@@ -1440,183 +1462,6 @@ function ProjectedEntryRow({ entry }: { entry: ProjectedEntry }) {
       <span className="text-sm font-semibold text-muted-foreground shrink-0">
         {fmt(entry.amount)}
       </span>
-    </div>
-  );
-}
-
-function FYSummaryCard({ recentMonths, fyIncome, fyExpenses, fyBalance, trendData, fmt }: {
-  recentMonths: RecentMonthSummary[];
-  fyIncome: number; fyExpenses: number; fyBalance: number;
-  trendData: { name: string; Income: number; Expenses: number }[];
-  fmt: (v: number) => string;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  return (
-    <Card className="overflow-hidden border-border">
-      <div className="h-0.5 bg-primary/60" />
-      <button
-        type="button"
-        onClick={() => setExpanded(e => !e)}
-        className="w-full text-left"
-      >
-        <CardContent className="p-3">
-          <p className="text-xs text-muted-foreground uppercase tracking-widest font-medium mb-2.5">Last {recentMonths.length} months</p>
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <p className="text-xs text-muted-foreground mb-0.5">Income</p>
-              <p className="text-sm font-bold text-positive tracking-tight">{fmt(fyIncome)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-0.5">Expenses</p>
-              <p className="text-sm font-bold text-negative tracking-tight">{fmt(fyExpenses)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-0.5">{fyBalance >= 0 ? "In hand" : "Deficit"}</p>
-              <p className={cn("text-sm font-bold tracking-tight", fyBalance >= 0 ? "text-positive" : "text-negative")}>
-                {fyBalance >= 0 ? "+" : "-"}{fmt(Math.abs(fyBalance))}
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </button>
-      {expanded && (
-        <div className="border-t border-border px-3 pb-3 pt-2 space-y-1.5">
-          <div className="grid grid-cols-4 gap-1 text-xs text-muted-foreground uppercase tracking-widest font-medium mb-1 px-1">
-            <span>Month</span><span className="text-right">Income</span><span className="text-right">Expenses</span><span className="text-right">Net</span>
-          </div>
-          {trendData.map(m => {
-            const net = m.Income - m.Expenses;
-            return (
-              <div key={m.name} className="grid grid-cols-4 gap-1 text-xs px-1">
-                <span className="text-foreground font-medium">{m.name}</span>
-                <span className="text-right text-positive tabular-nums tracking-tight">{fmt(m.Income)}</span>
-                <span className="text-right text-negative tabular-nums tracking-tight">{fmt(m.Expenses)}</span>
-                <span className={cn("text-right font-semibold tabular-nums tracking-tight", net >= 0 ? "text-positive" : "text-negative")}>
-                  {net >= 0 ? "+" : "-"}{fmt(Math.abs(net))}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </Card>
-  );
-}
-
-function PaidSummaryPanel({ entries, totalCommitted, grandIncome, adHocExpense, adHocItems, fmt }: {
-  entries: EntryWithTemplate[];
-  totalCommitted: number;
-  grandIncome: number;
-  adHocExpense: number;
-  adHocItems: AdHocItem[];
-  fmt: (v: number) => string;
-}) {
-  const [collapsed, setCollapsed] = useState(true);
-
-  // Include fully paid + partially paid entries (expenses only, not investments)
-  const shown = entries.filter(e => e.isPaid || (e.paidAmount != null && e.paidAmount > 0));
-  const cashItems = adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD");
-  if (!shown.length && cashItems.length === 0) return null;
-
-  // Group by category, preserving CATEGORY_ORDER then custom categories
-  const groups: { key: string; label: string; color: string; items: EntryWithTemplate[] }[] = [];
-  const seen = new Set<string>();
-  for (const cat of CATEGORY_ORDER) {
-    const items = shown.filter(e => e.template.category === cat && !e.template.customCategory);
-    if (items.length) {
-      groups.push({ key: cat, label: getCategoryDisplay(cat, null), color: getCategoryColor(cat, null), items });
-      seen.add(cat);
-    }
-  }
-  for (const e of shown) {
-    if (e.template.customCategory && !seen.has(e.template.customCategory)) {
-      const items = shown.filter(p => p.template.customCategory === e.template.customCategory);
-      groups.push({ key: e.template.customCategory, label: e.template.customCategory, color: getCategoryColor(e.template.category, e.template.customCategory), items });
-      seen.add(e.template.customCategory);
-    }
-  }
-
-  const totalPaidOut = shown.reduce((s, e) => s + effectivePaid(e), 0);
-  const partialEntries = entries.filter(e => !e.isPaid && e.paidAmount != null && e.paidAmount > 0 && e.template.category !== "CREDIT_CARD");
-  const partialTotal = partialEntries.reduce((s, e) => s + (e.paidAmount ?? 0), 0);
-
-  return (
-    <div className="rounded-xl border bg-card overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setCollapsed(c => !c)}
-        className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/40 transition-colors text-left"
-      >
-        <div className="flex items-center gap-2 min-w-0">
-          <CheckCircle2 className="w-4 h-4 text-positive shrink-0" />
-          <div className="min-w-0">
-            <p className="text-sm font-semibold leading-tight">Settlement Summary</p>
-            <p className="text-xs text-muted-foreground tabular-nums mt-0.5">
-              {fmt(totalPaidOut)} of {fmt(totalCommitted)}
-              {partialEntries.length > 0 && (
-                <span className="text-warning ml-1.5">· {partialEntries.length} partial</span>
-              )}
-            </p>
-          </div>
-        </div>
-        <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform duration-200 shrink-0 ml-2", !collapsed && "rotate-180")} />
-      </button>
-
-      {!collapsed && (
-        <div className="border-t border-border">
-          {groups.map(g => {
-            const subtotal = g.items.reduce((s, e) => s + effectivePaid(e), 0);
-            return (
-              <div key={g.key} className="px-4 py-2.5 border-b border-border/50 last:border-b-0">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex-1">{g.label}</span>
-                  <span className="text-xs font-semibold tabular-nums">{fmt(subtotal)}</span>
-                </div>
-                <div className="space-y-1.5 pl-3">
-                  {g.items.map(e => {
-                    const isPartial = !e.isPaid && e.paidAmount != null && e.paidAmount > 0;
-                    const remaining = net(e) - (e.paidAmount ?? 0);
-                    return (
-                      <div key={e.id} className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="text-xs text-muted-foreground truncate">{e.template.name}</span>
-                          {isPartial && (
-                            <span className="text-xs font-semibold text-warning bg-warning-bg px-1 py-0.5 rounded shrink-0">partial payment</span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {e.cashbackAmount ? (
-                            <span className="text-xs text-positive">-{fmt(e.cashbackAmount)} cb</span>
-                          ) : null}
-                          {isPartial && (
-                            <span className="text-xs text-muted-foreground">{fmt(remaining)} left</span>
-                          )}
-                          {!isPartial && e.paidOn && (
-                            <span className="text-xs text-muted-foreground/70">{format(new Date(e.paidOn), "do MMM")}</span>
-                          )}
-                          <span className={cn("text-xs font-semibold tabular-nums", isPartial && "text-warning")}>
-                            {fmt(effectivePaid(e))}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-          {/* Cash / UPI spend this month — total only, items visible in main feed */}
-          {cashItems.length > 0 && (
-            <div className="flex items-center gap-1.5 px-4 py-2.5 border-b border-border/50">
-              <IndianRupee className="w-3 h-3 text-warning shrink-0" />
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex-1">Cash / UPI spend</span>
-              <span className="text-xs font-semibold tabular-nums">{fmt(adHocExpense)}</span>
-            </div>
-          )}
-
-        </div>
-      )}
     </div>
   );
 }

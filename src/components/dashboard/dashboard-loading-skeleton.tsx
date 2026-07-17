@@ -67,12 +67,31 @@ export function DashboardLoadingSkeleton() {
             </div>
           ))}
         </div>
-        <Card>
-          <CardContent className="p-4 space-y-3">
-            <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-[170px] w-full rounded-lg" />
-          </CardContent>
-        </Card>
+        {/* Right column: DailySpendChart + DashboardCharts (Spending Health,
+            6-Month Trend) — kept in sync with the real 2-component shape so
+            this doesn't under-represent right-column density again. */}
+        <div className="space-y-3">
+          <Card>
+            <CardContent className="p-4 space-y-3">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-[160px] w-full rounded-lg" />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 space-y-3">
+              <Skeleton className="h-4 w-28" />
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-1.5 w-full rounded-full" />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 space-y-3">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-[110px] w-full rounded-lg" />
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

@@ -102,7 +102,13 @@ export const TemplatePostSchema = z.object({
   loanStartDate:         zDateStr.optional().nullable(),
   loanOutstandingOverride: zMoney.optional().nullable(),
   addToCurrentMonth:     z.boolean().optional(),
-});
+}).refine(
+  // A YEARLY template with no dueMonth is skipped by month setup's
+  // `t.dueMonth !== month` check on every single month, forever — silently
+  // un-populatable rather than a visible error at creation time.
+  (d) => d.frequency !== "YEARLY" || d.dueMonth != null,
+  { message: "Yearly templates need a due month", path: ["dueMonth"] },
+);
 
 export const TemplatePatchSchema = z.object({
   name:             zName.optional(),
@@ -132,7 +138,16 @@ export const TemplatePatchSchema = z.object({
   loanOutstandingOverride: zMoney.optional().nullable(),
   addToCurrentMonth: z.boolean().optional(),
   note:             zNotes,
-});
+}).refine(
+  // Same rule as TemplatePostSchema, applied when a PATCH explicitly
+  // switches a template to YEARLY in this same request. Can't see the
+  // template's prior dueMonth from here, so a PATCH that changes dueMonth
+  // to null on an already-YEARLY template without also resending
+  // frequency isn't caught by this — a narrower, deliberate scope than a
+  // full DB-aware check would need.
+  (d) => d.frequency !== "YEARLY" || d.dueMonth != null,
+  { message: "Yearly templates need a due month", path: ["dueMonth"] },
+);
 
 export const ReceivablePostSchema = z.object({
   category:       zReceivableCategory,
@@ -176,7 +191,6 @@ export const ParsedTransactionPatchSchema = z.object({
   category:       zCategory.optional(),
   customCategory: z.string().trim().max(50).optional().nullable(),
   merchant:       zName.optional(),
-  subcategory:    z.enum(["Food", "Coffee", "Groceries", "Fuel", "Shopping", "Travel", "Health", "Bills", "Entertainment", "Other"]).optional(),
   // "settle" only — the MonthlyEntry this transaction pays down instead of
   // becoming a new AdHocItem.
   entryId:        z.string().optional(),

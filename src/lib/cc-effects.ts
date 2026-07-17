@@ -12,7 +12,7 @@ async function recomputeStatementAmount(
   statementDay: number | null,
 ): Promise<EntryFields> {
   const cardItems = await db.adHocItem.findMany({
-    where: { monthId, type: "EXPENSE", category: "CREDIT_CARD", ccTemplateId },
+    where: { monthId, type: "EXPENSE", ccTemplateId },
     select: { amount: true, date: true },
   });
 

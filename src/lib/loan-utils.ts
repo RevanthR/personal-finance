@@ -20,6 +20,37 @@ export function computeChitEndDate(startDateStr: string, durationMonths: number)
   return { month: (totalMonths % 12) + 1, year: startY + Math.floor(totalMonths / 12) };
 }
 
+// Single source of truth for "when does this loan/chit template stop
+// generating entries" — a computed end date from amortization/chit-duration
+// math, distinct from (and, for these two categories, authoritative over)
+// the template's manual endsOnMonth/endsOnYear fields. Used by both the
+// Year View's projection and actual month setup so a loan considered "paid
+// off" by the math can't keep generating real bills in one path while the
+// other correctly stops projecting it.
+export function computeTemplateEndDate(t: {
+  category: string;
+  amount: number;
+  loanInterestRate: number | null;
+  loanOriginalPrincipal: number | null;
+  loanStartDate: Date | string | null;
+  loanOutstandingOverride: number | null;
+  chitFund?: { startDate: Date | string; durationMonths: number } | null;
+}): { month: number; year: number } | null {
+  if (t.category === "LOAN" && t.loanInterestRate != null) {
+    return computeLoanEndDate({
+      emi: t.amount,
+      annualRate: t.loanInterestRate,
+      originalPrincipal: t.loanOriginalPrincipal,
+      startDate: t.loanStartDate,
+      outstandingOverride: t.loanOutstandingOverride,
+    });
+  }
+  if (t.category === "CHIT_FUND" && t.chitFund?.startDate && t.chitFund?.durationMonths) {
+    return computeChitEndDate(String(t.chitFund.startDate), t.chitFund.durationMonths);
+  }
+  return null;
+}
+
 export function computeChitCurrentMonth(startDateStr: string): number {
   const start = new Date(startDateStr);
   const now = new Date();

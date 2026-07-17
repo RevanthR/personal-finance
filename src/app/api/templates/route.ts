@@ -6,6 +6,7 @@ import { revalidateTag } from "next/cache";
 import { templateCacheTag } from "@/lib/cached-queries";
 import { validate, TemplatePostSchema } from "@/lib/validation";
 import { resolveCustomCategory } from "@/lib/custom-category";
+import { computeTemplateEntryAmount, computePrevCCState } from "@/lib/entry-amount";
 
 export async function GET() {
   const session = await auth();
@@ -55,16 +56,33 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // If requested, inject an entry into the current already-populated month
+  // If requested, inject an entry into the current already-populated month.
+  // Uses the same amount computation as real month setup (computeTemplateEntryAmount)
+  // rather than the raw template.amount, so a CREDIT_CARD template added
+  // mid-month gets a correctly-derived opening balance instead of whatever
+  // estimate the user typed into the template form.
   if (body.addToCurrentMonth && (body.templateType ?? "EXPENSE") !== "INCOME") {
     const now = new Date();
-    const curMonth = await db.month.findUnique({
-      where: { userId_month_year: { userId: session.user.id, month: now.getMonth() + 1, year: now.getFullYear() } },
+    const curMonth = now.getMonth() + 1;
+    const curYear = now.getFullYear();
+    const curMonthRecord = await db.month.findUnique({
+      where: { userId_month_year: { userId: session.user.id, month: curMonth, year: curYear } },
     });
-    if (curMonth) {
+    if (curMonthRecord) {
+      let prevCC: ReturnType<typeof computePrevCCState> | undefined;
+      if (template.category === "CREDIT_CARD") {
+        const prevMonthNum = curMonth === 1 ? 12 : curMonth - 1;
+        const prevYear = curMonth === 1 ? curYear - 1 : curYear;
+        const prevEntry = await db.monthlyEntry.findFirst({
+          where: { templateId: template.id, month: { userId: session.user.id, month: prevMonthNum, year: prevYear } },
+          select: { statementAmount: true, isPaid: true, amount: true, billedAmount: true, paidAmount: true, cashbackAmount: true },
+        });
+        prevCC = computePrevCCState(prevEntry);
+      }
+      const { amount, billedAmount } = computeTemplateEntryAmount(template, template.amount, prevCC);
       await db.monthlyEntry.upsert({
-        where: { monthId_templateId: { monthId: curMonth.id, templateId: template.id } },
-        create: { monthId: curMonth.id, templateId: template.id, amount: template.amount },
+        where: { monthId_templateId: { monthId: curMonthRecord.id, templateId: template.id } },
+        create: { monthId: curMonthRecord.id, templateId: template.id, amount, ...(billedAmount !== undefined && { billedAmount }) },
         update: {},
       });
     }

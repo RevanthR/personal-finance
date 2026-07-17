@@ -2,10 +2,10 @@ import { getSession } from "@/lib/get-session";
 import { getActiveTemplates } from "@/lib/cached-queries";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
-import { computeLoanAmortization, computeChitEndDate } from "@/lib/loan-utils";
+import { computeTemplateEndDate } from "@/lib/loan-utils";
 import { computeMonthIncome } from "@/lib/finance-utils";
 import { YearOverviewClient, type MonthData } from "@/components/months/year-overview-client";
-import { CATEGORY_LABELS, CATEGORY_COLORS, MONTHS } from "@/lib/utils";
+import { CATEGORY_LABELS, CATEGORY_COLORS, MONTHS, pendingAmountKicks } from "@/lib/utils";
 import type { AnalyticsData } from "@/components/months/stats-breakdown";
 
 // Must match CC_SUBCATEGORIES in dashboard-client.tsx — used to pick the
@@ -98,12 +98,7 @@ export default async function MonthsPage() {
   function getProjectedIncome(month: number, year: number): number {
     if (incomeTemplates.length === 0) return fallbackIncome;
     return incomeTemplates.reduce((sum, t) => {
-      let amount = t.amount;
-      if (t.pendingAmount != null && t.pendingFromMonth != null && t.pendingFromYear != null) {
-        const kicks = year > t.pendingFromYear ||
-          (year === t.pendingFromYear && month >= t.pendingFromMonth);
-        if (kicks) amount = t.pendingAmount;
-      }
+      const amount = pendingAmountKicks(t, month, year) ? t.pendingAmount! : t.amount;
       return sum + amount;
     }, 0);
   }
@@ -120,22 +115,8 @@ export default async function MonthsPage() {
   // Pre-compute end dates for loans and chit funds from their start dates / amortization
   const templateEndDates = new Map<string, { month: number; year: number }>();
   for (const t of expenseTemplates) {
-    if (t.category === "LOAN" && t.loanInterestRate != null) {
-      const amort = computeLoanAmortization({
-        emi: t.amount,
-        annualRate: t.loanInterestRate,
-        originalPrincipal: t.loanOriginalPrincipal,
-        startDate: t.loanStartDate,
-        outstandingOverride: t.loanOutstandingOverride,
-      });
-      if (amort && amort.monthsRemaining > 0) {
-        const d = new Date();
-        d.setMonth(d.getMonth() + amort.monthsRemaining);
-        templateEndDates.set(t.id, { month: d.getMonth() + 1, year: d.getFullYear() });
-      }
-    } else if (t.category === "CHIT_FUND" && t.chitFund?.startDate && t.chitFund?.durationMonths) {
-      templateEndDates.set(t.id, computeChitEndDate(String(t.chitFund.startDate), t.chitFund.durationMonths));
-    }
+    const end = computeTemplateEndDate(t);
+    if (end) templateEndDates.set(t.id, end);
   }
 
   // Returns false if a template has ended before the given projected month
@@ -173,7 +154,7 @@ export default async function MonthsPage() {
       const isActualCurrentMonth = month === todayMonth && year === todayYear;
       const billableEntries = actual.entries.filter(e => !isActualCurrentMonth || !pendingCCBillIds.has(e.id));
       const expenses = billableEntries.reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
-        + actual.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0);
+        + actual.adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0);
       const ccEntries = billableEntries.filter(e => e.template.category === "CREDIT_CARD");
       const ccTotal = ccEntries.reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0);
       const ccByCardMap = new Map<string, { name: string; amount: number }>();
@@ -263,7 +244,7 @@ export default async function MonthsPage() {
     if (!pastFYMap[mFY]) pastFYMap[mFY] = { income: 0, expenses: 0, count: 0 };
     const income = computeMonthIncome(m.adHocItems, incomeTemplates, m.month, m.year);
     const expenses = m.entries.reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
-      + m.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0);
+      + m.adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0);
     pastFYMap[mFY].income += income;
     pastFYMap[mFY].expenses += expenses;
     pastFYMap[mFY].count++;
@@ -289,7 +270,7 @@ export default async function MonthsPage() {
     const cmExpenses = cm.entries
       .filter(e => !pendingCCBillIds.has(e.id))
       .reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
-      + cm.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0);
+      + cm.adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0);
 
     // Category breakdown — entries grouped by template.category (exclude pending CC bills)
     const catMap = new Map<string, number>();
@@ -299,7 +280,7 @@ export default async function MonthsPage() {
       catMap.set(cat, (catMap.get(cat) ?? 0) + e.amount - (e.cashbackAmount ?? 0));
     }
     for (const a of cm.adHocItems) {
-      if (a.type === "EXPENSE" && a.category !== "CREDIT_CARD") {
+      if (a.type === "EXPENSE" && !a.ccTemplateId) {
         const cat = a.customCategory ?? a.category ?? "MISCELLANEOUS";
         catMap.set(cat, (catMap.get(cat) ?? 0) + a.amount);
       }
@@ -317,9 +298,10 @@ export default async function MonthsPage() {
     // CC sub-category breakdown from adHocItems notes
     const ccMap = new Map<string, number>();
     for (const a of cm.adHocItems) {
-      if (a.type === "EXPENSE" && a.category === "CREDIT_CARD" && a.notes) {
-        const parts = a.notes.split("·").map(p => p.trim());
-        const subcat = parts.find(p => CC_SPEND_SUBCATEGORIES.includes(p)) ?? "Other";
+      if (a.type === "EXPENSE" && a.ccTemplateId) {
+        const subcat = a.customCategory ?? (a.notes
+          ? a.notes.split("·").map(p => p.trim()).find(p => CC_SPEND_SUBCATEGORIES.includes(p)) ?? "Other"
+          : "Other");
         ccMap.set(subcat, (ccMap.get(subcat) ?? 0) + a.amount);
       }
     }
@@ -372,7 +354,7 @@ export default async function MonthsPage() {
       recurringTotal += netAmt;
     }
     for (const a of m.adHocItems) {
-      if (a.type === "EXPENSE" && a.category !== "CREDIT_CARD") adHocExpenseTotal += a.amount;
+      if (a.type === "EXPENSE" && !a.ccTemplateId) adHocExpenseTotal += a.amount;
     }
   }
   const fyExpenses = recurringTotal + adHocExpenseTotal;
@@ -392,7 +374,7 @@ export default async function MonthsPage() {
   }
   for (const m of fyActual) {
     for (const a of m.adHocItems) {
-      if (a.type === "EXPENSE" && a.category !== "CREDIT_CARD") {
+      if (a.type === "EXPENSE" && !a.ccTemplateId) {
         const key = a.customCategory ?? a.category ?? "MISCELLANEOUS";
         const ex = catMap.get(key);
         if (ex) ex.total += a.amount;
@@ -434,7 +416,7 @@ export default async function MonthsPage() {
     const expenses = m.entries
       .filter(e => !isCurrentM || !pendingCCBillIds.has(e.id))
       .reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
-      + m.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0);
+      + m.adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0);
     return {
       label: MONTHS[m.month - 1],
       income,
@@ -574,9 +556,9 @@ export default async function MonthsPage() {
   const ccAnnualSubcatMap = new Map<string, number>();
   for (const m of fyActual) {
     for (const a of m.adHocItems) {
-      if (a.type === "EXPENSE" && a.category === "CREDIT_CARD" && a.notes) {
-        const parts = a.notes.split("·");
-        const subcat = parts.length > 1 ? parts[1].trim() : "Other";
+      if (a.type === "EXPENSE" && a.ccTemplateId) {
+        const parts = a.notes ? a.notes.split("·") : [];
+        const subcat = a.customCategory ?? (parts.length > 1 ? parts[1].trim() : "Other");
         ccAnnualSubcatMap.set(subcat, (ccAnnualSubcatMap.get(subcat) ?? 0) + a.amount);
       }
     }
@@ -592,7 +574,7 @@ export default async function MonthsPage() {
     const expenses = m.entries
       .filter(e => !isCurrentM || !pendingCCBillIds.has(e.id))
       .reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
-      + m.adHocItems.filter(i => i.type === "EXPENSE" && i.category !== "CREDIT_CARD").reduce((s, i) => s + i.amount, 0);
+      + m.adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0);
     return { label: `${MONTHS[m.month - 1]} ${m.year}`, income, expenses, balance: income - expenses, savingsRate: income > 0 ? Math.round(((income - expenses) / income) * 100) : 0 };
   });
   const bestMonth = allTimeStats.length ? [...allTimeStats].sort((a, b) => b.savingsRate - a.savingsRate)[0] : null;
@@ -611,7 +593,7 @@ export default async function MonthsPage() {
       prevCatMap.set(key, (prevCatMap.get(key) ?? 0) + e.amount - (e.cashbackAmount ?? 0));
     }
     for (const a of m.adHocItems) {
-      if (a.type === "EXPENSE" && a.category !== "CREDIT_CARD") {
+      if (a.type === "EXPENSE" && !a.ccTemplateId) {
         const key = a.customCategory ?? a.category ?? "MISCELLANEOUS";
         prevCatMap.set(key, (prevCatMap.get(key) ?? 0) + a.amount);
       }

@@ -35,14 +35,14 @@ export async function POST(
       category: body.category as Category | undefined,
       customCategory: customCat?.name ?? null,
       customCategoryId: customCat?.id ?? null,
-      ccTemplateId: body.category === "CREDIT_CARD" ? (body.ccTemplateId ?? null) : null,
+      ccTemplateId: body.ccTemplateId ?? null,
       date: new Date(body.date),
       notes: body.notes ?? null,
     },
   });
 
   let updatedEntry: EntryFields | null = null;
-  if (body.type === "EXPENSE" && body.category === "CREDIT_CARD" && body.ccTemplateId) {
+  if (body.type === "EXPENSE" && body.ccTemplateId) {
     updatedEntry = await applyCCEffect(userId, monthId, body.ccTemplateId, new Date(body.date), body.amount);
   }
 
@@ -78,9 +78,9 @@ export async function PATCH(
   const nextDate     = body.date ? new Date(body.date) : existing.date;
   const nextNotes    = body.notes !== undefined ? body.notes : existing.notes;
   const nextCategory = body.category !== undefined ? (body.category as Category | null) : existing.category;
-  const nextCCTemplateId = nextCategory === "CREDIT_CARD"
-    ? (body.ccTemplateId ?? existing.ccTemplateId)
-    : null;
+  const nextCCTemplateId = body.ccTemplateId !== undefined
+    ? (body.ccTemplateId || null)
+    : existing.ccTemplateId;
 
   // A category chip pick (no accompanying customCategory) clears any custom label.
   const customCat = body.customCategory
@@ -108,11 +108,11 @@ export async function PATCH(
   // a card/category change correctly excludes this item from the OLD
   // card's live re-sum, and includes it in the NEW card's.
   const updatedEntries = new Map<string, EntryFields>();
-  if (existing.type === "EXPENSE" && existing.category === "CREDIT_CARD" && existing.ccTemplateId) {
+  if (existing.type === "EXPENSE" && existing.ccTemplateId) {
     const reversed = await reverseCCEffect(userId, monthId, existing.ccTemplateId, existing.date, existing.amount);
     if (reversed) updatedEntries.set(reversed.id, reversed);
   }
-  if (item.type === "EXPENSE" && item.category === "CREDIT_CARD" && item.ccTemplateId) {
+  if (item.type === "EXPENSE" && item.ccTemplateId) {
     const applied = await applyCCEffect(userId, monthId, item.ccTemplateId, nextDate, nextAmount);
     if (applied) updatedEntries.set(applied.id, applied);
   }
@@ -143,7 +143,7 @@ export async function DELETE(
   });
 
   let updatedEntry: EntryFields | null = null;
-  if (item?.category === "CREDIT_CARD" && item.type === "EXPENSE" && item.ccTemplateId) {
+  if (item?.type === "EXPENSE" && item.ccTemplateId) {
     updatedEntry = await reverseCCEffect(userId, monthId, item.ccTemplateId, item.date, item.amount);
   }
 

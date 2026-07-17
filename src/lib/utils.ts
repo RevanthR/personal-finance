@@ -50,12 +50,22 @@ export const CATEGORY_LABELS: Record<string, string> = {
   OTHER_INCOME: "Other Income",
 };
 
+// Curated sub-category bootstrap list — shown as suggestion chips before a
+// user has typed their own, and (for older CC rows written before
+// sub-category became a real field) the set of tokens recognized inside a
+// legacy packed notes string. Single source of truth: previously duplicated
+// across adhoc-dialog.tsx, imports-client.tsx, and months/page.tsx.
+export const SPEND_SUBCATEGORIES = [
+  "Food", "Coffee", "Groceries", "Fuel", "Shopping",
+  "Travel", "Health", "Bills", "Entertainment", "Other",
+] as const;
+
 export function getCategoryDisplay(category: string, customCategory?: string | null): string {
   return customCategory ?? CATEGORY_LABELS[category] ?? category;
 }
 
 export function getCategoryColor(category: string, customCategory?: string | null): string {
-  return customCategory ? "#9ca3af" : (CATEGORY_COLORS[category] ?? "#9ca3af");
+  return CATEGORY_COLORS[category] ?? "#9ca3af";
 }
 
 export const CATEGORY_COLORS: Record<string, string> = {
@@ -87,6 +97,17 @@ export function pendingAmountKicks(
 
 export const EXPENSE_CATEGORIES = [
   "HOUSE_MAINTENANCE", "LOAN", "CHIT_FUND", "CREDIT_CARD", "SAVINGS", "PERSONAL", "MISCELLANEOUS",
+] as const;
+
+// Chip-shaped category picker options for the add-expense wizard and the
+// Gmail-import review form — CREDIT_CARD is deliberately excluded here,
+// since payment method (cash/UPI vs card) is its own separate chip step in
+// both flows, not a category. Single source of truth for both.
+export const EXPENSE_CATEGORY_CHIPS = [
+  { value: "HOUSE_MAINTENANCE", label: "House" },
+  { value: "LOAN",              label: "Loan" },
+  { value: "PERSONAL",          label: "Personal" },
+  { value: "MISCELLANEOUS",     label: "Misc" },
 ] as const;
 
 export const INCOME_CATEGORIES = [

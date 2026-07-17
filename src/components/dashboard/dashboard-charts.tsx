@@ -18,6 +18,11 @@ interface DashboardChartsProps {
   prevMonthName: string | null;
   fixedAmount: number;
   variableAmount: number;
+  cashSpend: number;
+  fyIncome: number;
+  fyExpenses: number;
+  fyBalance: number;
+  monthCount: number;
 }
 
 export function DashboardCharts({
@@ -27,6 +32,11 @@ export function DashboardCharts({
   prevMonthName,
   fixedAmount,
   variableAmount,
+  cashSpend,
+  fyIncome,
+  fyExpenses,
+  fyBalance,
+  monthCount,
 }: DashboardChartsProps) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
@@ -89,18 +99,43 @@ export function DashboardCharts({
               </div>
             </div>
           )}
+
+          {cashSpend > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Cash / UPI spend</span>
+              <span className="text-xs font-semibold tabular-nums">{fmt(cashSpend)}</span>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Monthly Trend */}
+      {/* Monthly Trend — carries the FY summary stats that used to live in a
+          separate FYSummaryCard, since both cards were built from the same
+          trendData and stacking two views of one dataset was pure redundancy. */}
       {trendData.length > 1 && (
         <Card>
           <CardHeader className="pb-2 pt-3 px-4">
             <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              6-Month Trend
+              Last {monthCount} months
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-4 pb-3">
+          <CardContent className="px-4 pb-3 space-y-3">
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">Income</p>
+                <p className="text-sm font-bold text-positive tracking-tight">{fmt(fyIncome)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">Expenses</p>
+                <p className="text-sm font-bold text-negative tracking-tight">{fmt(fyExpenses)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">{fyBalance >= 0 ? "In hand" : "Deficit"}</p>
+                <p className={cn("text-sm font-bold tracking-tight", fyBalance >= 0 ? "text-positive" : "text-negative")}>
+                  {fyBalance >= 0 ? "+" : "-"}{fmt(Math.abs(fyBalance))}
+                </p>
+              </div>
+            </div>
             <ResponsiveContainer width="100%" height={110}>
               <BarChart data={trendData} barSize={8} barGap={2}>
                 <XAxis

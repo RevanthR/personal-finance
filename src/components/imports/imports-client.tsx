@@ -8,7 +8,10 @@ import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Mail, RefreshCw, Check, X, Landmark, Plus, Loader2, Inbox } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, EXPENSE_CATEGORY_CHIPS, SPEND_SUBCATEGORIES } from "@/lib/utils";
+import { Chip } from "@/components/ui/chip";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 
 export type CCCard = { templateId: string; name: string };
@@ -38,15 +41,7 @@ export interface ParsedTransactionItem {
   matchedEntry: MatchedEntry | null;
 }
 
-const EXPENSE_CATEGORIES = [
-  { value: "HOUSE_MAINTENANCE", label: "House" },
-  { value: "LOAN",              label: "Loan" },
-  { value: "PERSONAL",          label: "Personal" },
-  { value: "MISCELLANEOUS",     label: "Misc" },
-];
-
-// Must match CC_SUBCATEGORIES in src/components/dashboard/dashboard-client.tsx
-const CC_SUBCATEGORIES = ["Food", "Coffee", "Groceries", "Fuel", "Shopping", "Travel", "Health", "Bills", "Entertainment", "Other"];
+const EXPENSE_CATEGORIES = EXPENSE_CATEGORY_CHIPS;
 
 const METHOD_LABEL: Record<PaymentMethod, string> = {
   CREDIT_CARD: "Credit Card",
@@ -408,15 +403,20 @@ function AddForm({ item, ccCards, customCategories, onDone, showBack, onBack }: 
   showBack: boolean;
   onBack: () => void;
 }) {
-  const isCC = item.paymentMethod === "CREDIT_CARD";
   const isIncome = item.transactionType === "CREDIT" || item.transactionType === "REFUND";
+  // Payment method defaults to Gmail's guess but is user-overridable — it
+  // was previously locked to item.paymentMethod with no way to correct a
+  // misclassified UPI-vs-card charge before approving.
+  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD">(item.paymentMethod === "CREDIT_CARD" ? "CARD" : "CASH");
+  const isCC = paymentMethod === "CARD";
   const [ccTemplateId, setCCTemplateId] = useState(item.suggestedCcTemplateId ?? ccCards[0]?.templateId ?? "");
-  const [spendCat, setSpendCat] = useState(item.suggestedSubcategory ?? "");
   const [category, setCategory] = useState("MISCELLANEOUS");
-  const [customLabel, setCustomLabel] = useState("");
+  const [customLabel, setCustomLabel] = useState(item.suggestedSubcategory ?? "");
+  const [showNewSubcat, setShowNewSubcat] = useState(false);
   const [amount, setAmount] = useState(String(item.amount));
   const [pendingAction, setPendingAction] = useState<"approve" | "reject" | null>(null);
   const loading = pendingAction !== null;
+  const subcatSuggestions = [...new Set([...customCategories.map(c => c.name), ...SPEND_SUBCATEGORIES])];
 
   async function act(action: "approve" | "reject") {
     setPendingAction(action);
@@ -424,12 +424,10 @@ function AddForm({ item, ccCards, customCategories, onDone, showBack, onBack }: 
       const body: Record<string, unknown> = { action };
       if (action === "approve") {
         body.amount = parseFloat(amount);
-        if (isCC) {
-          body.ccTemplateId = ccTemplateId;
-          if (!isIncome && spendCat) body.subcategory = spendCat;
-        } else if (!isIncome) {
+        if (isCC) body.ccTemplateId = ccTemplateId;
+        if (!isIncome) {
+          body.category = category;
           if (customLabel.trim()) body.customCategory = customLabel.trim();
-          else body.category = category;
         }
       }
       const res = await fetch(`/api/gmail/parsed/${item.id}`, {
@@ -471,88 +469,59 @@ function AddForm({ item, ccCards, customCategories, onDone, showBack, onBack }: 
 
         <FxEstimateNote item={item} />
 
-        {isCC ? (
-          <>
-            {ccCards.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {ccCards.map(card => (
-                  <button
-                    key={card.templateId}
-                    type="button"
-                    onClick={() => setCCTemplateId(card.templateId)}
-                    className={cn(
-                      "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
-                      ccTemplateId === card.templateId
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {card.name}
-                  </button>
-                ))}
-              </div>
-            )}
-            {isIncome ? (
-              <p className="text-xs text-warning bg-warning-bg border border-warning-border rounded-md px-2 py-1">
-                Looks like a refund or credit — this will reduce the card&apos;s bill instead of adding a charge.
-              </p>
-            ) : (
-              <div className="flex flex-wrap gap-1.5">
-                {CC_SUBCATEGORIES.map(sub => (
-                  <button
-                    key={sub}
-                    type="button"
-                    onClick={() => setSpendCat(c => c === sub ? "" : sub)}
-                    className={cn(
-                      "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
-                      spendCat === sub
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {sub}
-                  </button>
-                ))}
-              </div>
-            )}
-          </>
-        ) : isIncome ? (
+        <div>
+          <Label className="text-xs mb-1.5 block">Paid via</Label>
+          <div className="flex flex-wrap gap-1.5">
+            <Chip label="Cash/UPI" active={paymentMethod === "CASH"} onClick={() => setPaymentMethod("CASH")} />
+            <Chip label="Card" active={paymentMethod === "CARD"} onClick={() => setPaymentMethod("CARD")} />
+          </div>
+          {isCC && ccCards.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-1.5">
+              {ccCards.map(card => (
+                <Chip key={card.templateId} label={card.name} active={ccTemplateId === card.templateId} onClick={() => setCCTemplateId(card.templateId)} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {isIncome ? (
           <p className="text-xs text-warning bg-warning-bg border border-warning-border rounded-md px-2 py-1">
-            Looks like a credit or refund — this will be added as income (Other Income) instead of an expense.
+            {isCC
+              ? <>Looks like a refund or credit — this will reduce the card&apos;s bill instead of adding a charge.</>
+              : <>Looks like a credit or refund — this will be added as income (Other Income) instead of an expense.</>}
           </p>
         ) : (
-          <div className="flex flex-wrap gap-1.5">
-            {EXPENSE_CATEGORIES.map(c => (
-              <button
-                key={c.value}
-                type="button"
-                onClick={() => { setCategory(c.value); setCustomLabel(""); }}
-                className={cn(
-                  "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
-                  category === c.value && !customLabel
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground",
-                )}
-              >
-                {c.label}
-              </button>
-            ))}
-            {customCategories.map(c => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => setCustomLabel(c.name)}
-                className={cn(
-                  "px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
-                  customLabel === c.name
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground",
-                )}
-              >
-                {c.name}
-              </button>
-            ))}
-          </div>
+          <>
+            <div>
+              <Label className="text-xs mb-1.5 block">Category</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {EXPENSE_CATEGORIES.map(c => (
+                  <Chip key={c.value} label={c.label} active={category === c.value} onClick={() => setCategory(c.value)} />
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs mb-1.5 block">
+                Sub-category <span className="text-muted-foreground">(optional)</span>
+              </Label>
+              <div className="flex flex-wrap gap-1.5">
+                {subcatSuggestions.map(name => (
+                  <Chip key={name} label={name} active={customLabel === name && !showNewSubcat} onClick={() => { setCustomLabel(c => c === name ? "" : name); setShowNewSubcat(false); }} />
+                ))}
+                <Chip label="+ Add new" dashed active={showNewSubcat} onClick={() => { setShowNewSubcat(true); setCustomLabel(""); }} />
+              </div>
+              {showNewSubcat && (
+                <Input
+                  className="mt-1.5"
+                  placeholder="Sub-category name (e.g. Coffee)"
+                  value={customLabel}
+                  onChange={e => setCustomLabel(e.target.value)}
+                  autoFocus
+                />
+              )}
+            </div>
+          </>
         )}
 
         <div className="flex flex-wrap gap-2 pt-1">

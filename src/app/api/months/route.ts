@@ -2,6 +2,9 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { validate, MonthPostSchema } from "@/lib/validation";
+import { computeTemplateEndDate } from "@/lib/loan-utils";
+import { computeTemplateEntryAmount, computePrevCCState, type PrevCCState } from "@/lib/entry-amount";
+import { pendingAmountKicks } from "@/lib/utils";
 
 // GET /api/months — list all months for current user
 export async function GET() {
@@ -66,40 +69,20 @@ export async function POST(req: NextRequest) {
         },
       },
     });
-    const prevStatements = new Map(
+    // templateId → last statement + any unpaid/overpaid carry, for CC templates
+    const prevCCState = new Map<string, PrevCCState>(
       (prevMonth?.entries ?? [])
-        .filter(e => e.statementAmount != null)
-        .map(e => [e.templateId, e.statementAmount!])
+        .filter(e => e.template.category === "CREDIT_CARD")
+        .map(e => [e.templateId, computePrevCCState(e)])
     );
 
     // Carry-forward: unpaid/partially-paid entries from previous month
     // Excluded: LOAN and CHIT_FUND (intentional — those are tracked differently)
-    // CC uses billedAmount (the actual obligation) instead of amount, so manually
-    // setting amount=0 does not erase the carry-forward.
     const CARRY_FORWARD_EXCLUDE = new Set(["LOAN", "CHIT_FUND"]);
-    // templateId → outstanding for CREDIT_CARD; negative means a credit
-    // (an overpayment), which reduces rather than adds to next month's
-    // opening balance below.
-    const prevCCOutstanding = new Map<string, number>();
     const nonCCCarryForwards: { name: string; amount: number; category: string }[] = [];
     for (const e of prevMonth?.entries ?? []) {
       const cat = e.template.category;
-      if (cat === "CREDIT_CARD") {
-        const netObligation = (e.billedAmount ?? e.amount) - (e.cashbackAmount ?? 0);
-        if (e.isPaid) {
-          // A paid CC entry is normally done and forgotten, but an
-          // overpayment (paidAmount > what was owed) is real money that
-          // shouldn't just vanish once isPaid flips true — carry the
-          // excess forward as a credit against next month's bill instead.
-          const paid = e.paidAmount ?? netObligation;
-          const credit = paid - netObligation;
-          if (credit > 0.5) prevCCOutstanding.set(e.templateId, -credit);
-          continue;
-        }
-        const outstanding = netObligation - (e.paidAmount ?? 0);
-        if (outstanding > 0) prevCCOutstanding.set(e.templateId, outstanding);
-        continue;
-      }
+      if (cat === "CREDIT_CARD") continue;
       if (e.isPaid) continue;
       if (CARRY_FORWARD_EXCLUDE.has(cat)) continue;
       const outstanding = e.amount - (e.cashbackAmount ?? 0) - (e.paidAmount ?? 0);
@@ -111,15 +94,11 @@ export async function POST(req: NextRequest) {
       // Income templates don't create entries — they just inform income pre-fill.
       // Still promote pending amounts so the template.amount stays current.
       if (t.templateType === "INCOME") {
-        if (t.pendingAmount != null && t.pendingFromMonth != null && t.pendingFromYear != null) {
-          const kicks = year > t.pendingFromYear ||
-            (year === t.pendingFromYear && month >= t.pendingFromMonth);
-          if (kicks) {
-            await db.lineItemTemplate.update({
-              where: { id: t.id },
-              data: { amount: t.pendingAmount, pendingAmount: null, pendingFromMonth: null, pendingFromYear: null },
-            });
-          }
+        if (pendingAmountKicks(t, month, year)) {
+          await db.lineItemTemplate.update({
+            where: { id: t.id },
+            data: { amount: t.pendingAmount!, pendingAmount: null, pendingFromMonth: null, pendingFromYear: null },
+          });
         }
         continue;
       }
@@ -127,8 +106,15 @@ export async function POST(req: NextRequest) {
       // Yearly templates only appear in their designated month
       if (t.frequency === "YEARLY" && t.dueMonth !== month) continue;
 
-      // Skip templates that have ended before this month
-      if (t.endsOnYear != null && t.endsOnMonth != null) {
+      // Skip templates that have ended before this month. Loans and chit
+      // funds use a computed end date (amortization payoff / chit duration)
+      // instead of the manual field — same rule the Year View projection
+      // already applies — so a loan the math says is paid off stops
+      // generating real bills here too, not just in the projection.
+      if (t.category === "LOAN" || t.category === "CHIT_FUND") {
+        const computedEnd = computeTemplateEndDate(t);
+        if (computedEnd && (year > computedEnd.year || (year === computedEnd.year && month > computedEnd.month))) continue;
+      } else if (t.endsOnYear != null && t.endsOnMonth != null) {
         if (year > t.endsOnYear || (year === t.endsOnYear && month > t.endsOnMonth)) continue;
       }
 
@@ -142,32 +128,15 @@ export async function POST(req: NextRequest) {
 
       // Promote pending amount if its effective month has arrived
       let baseAmount = t.amount;
-      if (t.pendingAmount != null && t.pendingFromMonth != null && t.pendingFromYear != null) {
-        const kicks = year > t.pendingFromYear ||
-          (year === t.pendingFromYear && month >= t.pendingFromMonth);
-        if (kicks) {
-          baseAmount = t.pendingAmount;
-          await db.lineItemTemplate.update({
-            where: { id: t.id },
-            data: { amount: t.pendingAmount, pendingAmount: null, pendingFromMonth: null, pendingFromYear: null },
-          });
-        }
+      if (pendingAmountKicks(t, month, year)) {
+        baseAmount = t.pendingAmount!;
+        await db.lineItemTemplate.update({
+          where: { id: t.id },
+          data: { amount: t.pendingAmount!, pendingAmount: null, pendingFromMonth: null, pendingFromYear: null },
+        });
       }
 
-      let amount = baseAmount;
-      let billedAmount: number | undefined;
-      if (t.chitFund) {
-        amount = t.chitFund.isLifted
-          ? (t.chitFund.monthlyLiftedAmount ?? baseAmount)
-          : t.chitFund.monthlyUnliftedAmount;
-      } else if (t.category === "CREDIT_CARD") {
-        amount = prevStatements.get(t.id) ?? 0;
-        // A negative value here is a carried-forward overpayment credit —
-        // floor at 0 rather than let it push the bill negative; any credit
-        // beyond what this month's statement absorbs isn't tracked further.
-        amount = Math.max(0, amount + (prevCCOutstanding.get(t.id) ?? 0));
-        billedAmount = amount; // snapshot obligation at creation
-      }
+      const { amount, billedAmount } = computeTemplateEntryAmount(t, baseAmount, prevCCState.get(t.id));
 
       await db.monthlyEntry.upsert({
         where: { monthId_templateId: { monthId: monthRecord.id, templateId: t.id } },

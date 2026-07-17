@@ -77,16 +77,18 @@ export async function PATCH(
     );
   }
 
-  const isCC = existing.paymentMethod === "CREDIT_CARD";
+  // Payment method is whatever the user confirmed in the review form
+  // (defaulting to Gmail's guess, but overridable there) — not blindly
+  // trusted from the parsed email, since a misclassified UPI-vs-card charge
+  // has to be correctable before it hits card statement math.
+  const ccTemplateId = body.ccTemplateId || null;
+  const isCC = !!ccTemplateId;
   // A "credit"/"refund" email is money coming back, not a spend — every
   // transaction used to get filed as type: EXPENSE regardless, which
   // logged a refund as if it were a new charge.
   const isIncome = existing.transactionType === "CREDIT" || existing.transactionType === "REFUND";
 
   if (isCC) {
-    const ccTemplateId = body.ccTemplateId ?? existing.suggestedCcTemplateId;
-    if (!ccTemplateId) return NextResponse.json({ error: "Pick a card first" }, { status: 400 });
-
     if (isIncome) {
       // A refund/credit against the card reduces what's owed on the
       // statement — it isn't a new charge, so no AdHocItem is created for
@@ -96,7 +98,7 @@ export async function PATCH(
       return NextResponse.json({ item: null, updatedEntry });
     }
 
-    const subcategory = body.subcategory ?? existing.suggestedSubcategory;
+    const customCat = body.customCategory ? await resolveCustomCategory(userId, body.customCategory) : null;
 
     const item = await db.adHocItem.create({
       data: {
@@ -104,10 +106,12 @@ export async function PATCH(
         name: finalName,
         amount: finalAmount,
         type: "EXPENSE",
-        category: "CREDIT_CARD",
+        category: (body.category as Category | undefined) ?? "MISCELLANEOUS",
+        customCategory: customCat?.name ?? null,
+        customCategoryId: customCat?.id ?? null,
         ccTemplateId,
         date: finalDate,
-        notes: [subcategory, "Imported from Gmail"].filter(Boolean).join(" · "),
+        notes: "Imported from Gmail",
       },
     });
 
@@ -118,7 +122,7 @@ export async function PATCH(
     return NextResponse.json({ item, updatedEntry });
   }
 
-  // UPI / debit card / other — a plain ad-hoc item, no CC statement math.
+  // Cash/UPI/debit — a plain ad-hoc item, no CC statement math.
   if (isIncome) {
     const item = await db.adHocItem.create({
       data: {
@@ -143,7 +147,7 @@ export async function PATCH(
       name: finalName,
       amount: finalAmount,
       type: "EXPENSE",
-      category: customCat ? null : ((body.category as Category | undefined) ?? "MISCELLANEOUS"),
+      category: (body.category as Category | undefined) ?? "MISCELLANEOUS",
       customCategory: customCat?.name ?? null,
       customCategoryId: customCat?.id ?? null,
       date: finalDate,
