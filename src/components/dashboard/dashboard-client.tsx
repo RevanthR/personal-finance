@@ -343,7 +343,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   // Payables (recurring bills + card dues, both action-oriented) vs Daily
   // Spend (browsing/logging ad-hoc transactions) — splitting these into
   // tabs instead of stacking every section on one long page.
-  const [tab, setTab] = useState<"payables" | "spends">("payables");
+  const [tab, setTab] = useState<"payables" | "spends">("spends");
 
   // Add one-time income (inline inside income dialog)
   const [showAddIncome, setShowAddIncome] = useState(false);
