@@ -426,10 +426,6 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   const balance   = grandIncome - totalCommitted - adHocExpense;
   const inHandNow = grandIncome - totalPaid - adHocExpense;
 
-  const nonCCPendingCount = useMemo(() =>
-    entries.filter(e => e.template.category !== "CREDIT_CARD" && !e.isPaid).length,
-    [entries],
-  );
   const nextMonthName  = MONTHS[todayMonth % 12]; // todayMonth is 1-12; % 12 maps Dec→Jan correctly
 
   type GroupedItem =
@@ -948,11 +944,9 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                 : undefined,
           },
           {
-            label: "Recurring",
-            value: fmt(dispRecurringNonCC),
-            hint: <span className="text-xs text-muted-foreground">
-              {isProjected ? `${projEntries.filter(e => e.category !== "CREDIT_CARD").length} items` : nonCCPendingCount > 0 ? `${nonCCPendingCount} pending` : "all paid"}
-            </span>,
+            label: "Expenditure",
+            value: fmt(dispCommitted + dispAdHoc),
+            hint: <span className="text-xs text-muted-foreground">{fmt(dispRecurringNonCC)} recurring</span>,
           },
           ...(hasCCCards ? [{
             label: "CC Bill",
