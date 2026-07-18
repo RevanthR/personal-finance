@@ -27,7 +27,7 @@ export function CategoryChipPicker({ picker, customCategories }: CategoryChipPic
     <>
       <div>
         <Label className="text-xs mb-1.5 block">Category</Label>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5">
           {EXPENSE_CATEGORY_CHIPS.map(c => (
             <Chip
               key={c.value}
@@ -64,7 +64,7 @@ export function CategoryChipPicker({ picker, customCategories }: CategoryChipPic
       {hasCategory && (
         <div>
           <Label className="text-xs mb-1.5 block">Sub-category</Label>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             {subcatChips.map(name => (
               <Chip
                 key={name}

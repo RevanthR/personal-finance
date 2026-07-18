@@ -126,7 +126,7 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
         <DialogHeader>
           <DialogTitle>{isEditing ? "Edit Transaction" : "Add Transaction"}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form onSubmit={handleSubmit} className="space-y-2.5">
 
           {/* Expense / Income toggle */}
           <div className="grid grid-cols-2 gap-2 p-1 bg-muted rounded-lg">
@@ -137,7 +137,7 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
                 disabled={isEditing}
                 onClick={() => { setType(t); picker.reset(); }}
                 className={cn(
-                  "py-3 rounded-md text-sm font-semibold transition-all",
+                  "py-2 rounded-md text-sm font-semibold transition-all",
                   type === t
                     ? t === "INCOME"
                       ? "bg-positive text-white shadow-sm"
@@ -174,12 +174,12 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
               {/* Payment method — small, fixed option counts, chips suit these better than a dropdown */}
               <div>
                 <Label className="text-xs mb-2 block">Paid via</Label>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-1.5">
                   <Chip label="Cash/UPI" icon={Wallet} active={paymentMethod === "CASH"} onClick={() => setPaymentMethod("CASH")} />
                   <Chip label="Card" icon={CreditCard} active={paymentMethod === "CARD"} onClick={() => setPaymentMethod("CARD")} />
                 </div>
                 {paymentMethod === "CARD" && ccCards.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
+                  <div className="flex flex-wrap gap-1.5 mt-2">
                     {ccCards.map(card => (
                       <Chip key={card.templateId} label={card.name} active={ccCard?.templateId === card.templateId} onClick={() => setCCCard(card)} />
                     ))}

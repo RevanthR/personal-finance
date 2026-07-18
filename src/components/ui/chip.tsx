@@ -24,7 +24,7 @@ export function Chip({ label, active, dashed, onClick, icon: Icon, color }: Chip
       type="button"
       onClick={onClick}
       className={cn(
-        "flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium border transition-colors",
+        "flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[13px] font-medium border transition-colors",
         active
           ? "bg-foreground text-background border-foreground"
           : dashed
@@ -32,7 +32,7 @@ export function Chip({ label, active, dashed, onClick, icon: Icon, color }: Chip
             : "border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground"
       )}
     >
-      {Icon && <Icon className="w-3.5 h-3.5" style={active ? undefined : { color }} />}
+      {Icon && <Icon className="w-3 h-3 shrink-0" style={active ? undefined : { color }} />}
       {label}
     </button>
   );
