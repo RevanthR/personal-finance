@@ -157,11 +157,11 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
           )}
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
+            <div className="min-w-0">
               <Label className="text-xs">Amount (₹)</Label>
               <Input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" required />
             </div>
-            <div>
+            <div className="min-w-0">
               <Label className="text-xs">Date</Label>
               <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
             </div>
