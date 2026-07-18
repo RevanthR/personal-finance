@@ -2,7 +2,7 @@ import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { format } from "date-fns";
 import {
-  Home, Landmark, Users, CreditCard, PiggyBank, User, Package2,
+  Home, Landmark, Users, CreditCard, PiggyBank, User,
   Briefcase, Laptop, Building2, Store, TrendingUp, Gift, Tag,
   Coffee, ShoppingCart, Fuel, ShoppingBag, Plane, HeartPulse, Receipt, Film, UtensilsCrossed,
   Baby, PawPrint, Dumbbell, Tv, Shield, GraduationCap, Car, Smartphone, Wifi, Zap, Droplet,
@@ -49,7 +49,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
   CREDIT_CARD: "Credit Card",
   SAVINGS: "Savings",
   PERSONAL: "Personal",
-  MISCELLANEOUS: "Miscellaneous",
+  MISCELLANEOUS: "Family",
   SALARY: "Salary",
   FREELANCE: "Freelance",
   RENTAL: "Rental",
@@ -162,7 +162,7 @@ export const CATEGORY_ICONS: Record<string, LucideIcon> = {
   CREDIT_CARD: CreditCard,
   SAVINGS: PiggyBank,
   PERSONAL: User,
-  MISCELLANEOUS: Package2,
+  MISCELLANEOUS: Baby,
   SALARY: Briefcase,
   FREELANCE: Laptop,
   RENTAL: Building2,
@@ -218,7 +218,7 @@ export const EXPENSE_CATEGORY_CHIPS = [
   { value: "HOUSE_MAINTENANCE", label: "House" },
   { value: "LOAN",              label: "Loan" },
   { value: "PERSONAL",          label: "Personal" },
-  { value: "MISCELLANEOUS",     label: "Misc" },
+  { value: "MISCELLANEOUS",     label: "Family" },
 ] as const;
 
 export const INCOME_CATEGORIES = [

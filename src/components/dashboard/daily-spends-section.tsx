@@ -33,8 +33,16 @@ export function DailySpendsSection({ adHocItems, ccCards, onDelete, onEditReques
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  // "ALL" | "CASH" | a card's templateId — narrows by how the spend was paid,
+  // independent of (and combinable with) the category filter above.
+  const [activeMethod, setActiveMethod] = useState<string>("ALL");
 
-  const expenseItems = adHocItems.filter(i => i.type === "EXPENSE");
+  const allExpenseItems = adHocItems.filter(i => i.type === "EXPENSE");
+  const expenseItems = activeMethod === "ALL"
+    ? allExpenseItems
+    : activeMethod === "CASH"
+      ? allExpenseItems.filter(i => !i.ccTemplateId)
+      : allExpenseItems.filter(i => i.ccTemplateId === activeMethod);
 
   const groups = groupItemsByCategory(expenseItems).map(v => {
     // Items with no sub-category land in "Other" — same bucket the picker
@@ -63,7 +71,10 @@ export function DailySpendsSection({ adHocItems, ccCards, onDelete, onEditReques
     };
   }).sort((a, b) => b.total - a.total);
 
-  if (groups.length === 0) return null;
+  // Gate on the unfiltered set — a method filter (e.g. "this card") that
+  // happens to match zero items shouldn't blank out the whole section and
+  // strand the user with no chip to clear it.
+  if (allExpenseItems.length === 0) return null;
 
   const visibleGroups = activeFilter ? groups.filter(g => g.key === activeFilter) : groups;
 
@@ -87,12 +98,37 @@ export function DailySpendsSection({ adHocItems, ccCards, onDelete, onEditReques
           again (or "All") to clear. Built from the same grouped data below
           rather than a separate query. */}
       {groups.length > 1 && (
-        <div className="flex flex-wrap gap-2 mb-3">
+        <div className="flex flex-wrap gap-2 mb-2">
           <Chip label="All" active={activeFilter === null} onClick={() => setActiveFilter(null)} />
           {groups.map(g => (
             <Chip key={g.key} label={g.label} active={activeFilter === g.key} onClick={() => setActiveFilter(activeFilter === g.key ? null : g.key)} />
           ))}
         </div>
+      )}
+
+      {/* Paid-via filter — separate axis from category above, so "show me
+          only card spends" or "only this card" works regardless of which
+          category chip is active. Built from allExpenseItems (pre-method-
+          filter) so a method that would zero out the list doesn't disappear
+          from the row itself. */}
+      {ccCards.length > 0 && allExpenseItems.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-3">
+          <Chip label="All" active={activeMethod === "ALL"} onClick={() => setActiveMethod("ALL")} />
+          <Chip label="Cash/UPI" icon={Wallet} active={activeMethod === "CASH"} onClick={() => setActiveMethod(activeMethod === "CASH" ? "ALL" : "CASH")} />
+          {ccCards.map(card => (
+            <Chip
+              key={card.templateId}
+              label={card.name}
+              icon={CreditCard}
+              active={activeMethod === card.templateId}
+              onClick={() => setActiveMethod(activeMethod === card.templateId ? "ALL" : card.templateId)}
+            />
+          ))}
+        </div>
+      )}
+
+      {visibleGroups.length === 0 && (
+        <p className="text-sm text-muted-foreground py-6 text-center">No spends match these filters.</p>
       )}
 
       {/* 2-up on desktop — a category card is fundamentally a compact list
@@ -180,8 +216,9 @@ function TransactionRow({ item, ccCards, onDelete, onEditRequest, isRemoving }: 
       isRemoving && "opacity-0 scale-95 pointer-events-none"
     )}>
       <div className={cn("w-0.5 h-7 rounded-full shrink-0", item.type === "INCOME" ? "bg-positive" : "bg-negative")} />
-      {/* Payment method — icon instead of a text pill, still labeled for
-          screen readers and on hover, less text noise per row. */}
+      {/* Payment method — icon for at-a-glance scanning; the method name
+          itself is spelled out in the meta line below since title/hover
+          tooltips never surface on touch devices. */}
       <span
         className="shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-muted text-muted-foreground"
         title={cardName ? `Card · ${cardName}` : "Cash/UPI"}
@@ -198,6 +235,7 @@ function TransactionRow({ item, ccCards, onDelete, onEditRequest, isRemoving }: 
         </div>
         <p className="text-xs text-muted-foreground">
           {format(new Date(item.date), "dd MMM")}
+          {" · "}{cardName ?? "Cash/UPI"}
           {item.notes && !isCarryForward ? ` · ${item.notes}` : ""}
         </p>
       </div>
