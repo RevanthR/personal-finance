@@ -35,8 +35,11 @@ function getSnapshot(): InstallSnapshot {
   if (cached === null) cached = computeSnapshot();
   return cached;
 }
+// Must be a stable reference — a fresh object literal here makes
+// useSyncExternalStore see a "changed" snapshot every render and loop.
+const SERVER_SNAPSHOT: InstallSnapshot = { show: false, platform: null };
 function getServerSnapshot(): InstallSnapshot {
-  return { show: false, platform: null };
+  return SERVER_SNAPSHOT;
 }
 
 export function usePwaInstall() {

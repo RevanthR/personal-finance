@@ -62,9 +62,17 @@ export function useCategoryPicker({
   // A pre-filled suggestion (e.g. Gemini's freeform guess in the Gmail
   // review flow) may not be part of real past usage yet — still needs to
   // render as a selectable/highlighted chip instead of matching nothing.
+  // Order must not depend on which chip is currently selected (subLabel) —
+  // "Other" then real past usage, both fixed — otherwise the selected chip
+  // jumps to the front on every tap. A genuinely new label (not yet part of
+  // past usage) is appended at the end instead of prepended.
+  const dedupedPastSubcats = [...new Set(scopedPastSubcats)];
+  const isNewLabel = subLabel.trim() && subLabel.toLowerCase() !== "other"
+    && !dedupedPastSubcats.some(s => s.toLowerCase() === subLabel.toLowerCase());
   const subcatChips = [
     "Other",
-    ...new Set([...(subLabel && subLabel.toLowerCase() !== "other" ? [subLabel] : []), ...scopedPastSubcats]),
+    ...dedupedPastSubcats,
+    ...(isNewLabel ? [subLabel] : []),
   ];
 
   return {

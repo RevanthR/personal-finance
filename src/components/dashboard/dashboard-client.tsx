@@ -328,6 +328,13 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   }
   const [currentMonth, setCurrentMonth] = useState(initialMonth);
   const [recentMonths, setRecentMonths] = useState(initialRecentMonths);
+  // A custom category / sub-category created inline while adding or editing
+  // a spend needs to show up as a chip immediately for the *next* add/edit
+  // in this session, not just after a full page reload — merged in below
+  // whenever handleAdHocAdd/handleAdHocEdit's response introduces one that
+  // isn't in the server-provided list yet.
+  const [localCustomCategories, setLocalCustomCategories] = useState(customCategories);
+  const [localSubCategorySuggestions, setLocalSubCategorySuggestions] = useState(subCategorySuggestions);
   const [showAdHoc, setShowAdHoc] = useState(false);
   const [editingItem, setEditingItem] = useState<AdHocItem | null>(null);
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
@@ -361,6 +368,23 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     setShowSetup(!initialMonth && !isProjected);
     setShowAdHoc(false);
     setShowIncomeEdit(false);
+    setLocalCustomCategories(customCategories);
+    setLocalSubCategorySuggestions(subCategorySuggestions);
+  }
+
+  // Adds a newly-created custom category / sub-category (from an add or
+  // edit response) to the local suggestion lists if not already present.
+  function mergeNewCategory(item: { category: string | null; customCategory: string | null; customCategoryId: string | null; subCategory: string | null }) {
+    if (item.customCategoryId && item.customCategory) {
+      setLocalCustomCategories(prev => prev.some(c => c.id === item.customCategoryId)
+        ? prev
+        : [...prev, { id: item.customCategoryId!, name: item.customCategory! }]);
+    }
+    if (item.subCategory) {
+      setLocalSubCategorySuggestions(prev => prev.some(s =>
+        s.category === item.category && s.customCategoryId === item.customCategoryId && s.subCategory === item.subCategory
+      ) ? prev : [...prev, { category: item.category, customCategoryId: item.customCategoryId, subCategory: item.subCategory }]);
+    }
   }
 
   // Memoized so a null currentMonth (the projected-future-month view)
@@ -684,6 +708,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     });
     if (!res.ok) { toast.error("Failed to add"); return; }
     const { item: newItem, updatedEntry } = await res.json();
+    mergeNewCategory(newItem);
     withReorderTransition(() => {
       setCurrentMonth(prev => {
         if (!prev) return prev;
@@ -745,6 +770,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     });
     if (!res.ok) { toast.error("Failed to save"); return; }
     const { item: updated, updatedEntries } = await res.json();
+    mergeNewCategory(updated);
     withReorderTransition(() => {
       setCurrentMonth(prev => {
         if (!prev) return prev;
@@ -1405,8 +1431,8 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
           onEdit={handleAdHocEdit}
           editing={editingItem}
           ccCards={ccTemplates.map(t => ({ templateId: t.id, name: t.name } satisfies CCCard))}
-          customCategories={customCategories}
-          subCategorySuggestions={subCategorySuggestions}
+          customCategories={localCustomCategories}
+          subCategorySuggestions={localSubCategorySuggestions}
         />
       )}
     </div>
