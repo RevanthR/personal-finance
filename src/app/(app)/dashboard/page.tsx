@@ -204,11 +204,15 @@ async function DashboardData({
     // Every distinct (parent category, sub-category name) pair this user
     // has used, so the add-expense form can scope its sub-category
     // suggestions to whichever category is currently selected instead of
-    // offering a flat, unscoped list.
+    // offering a flat, unscoped list. orderBy date desc before distinct
+    // means each distinct combo keeps its most-recent usage's position,
+    // so the list comes back recent-first — used to power the category
+    // picker's "Recent" section.
     db.adHocItem.findMany({
       where: { month: { userId }, subCategory: { not: null } },
       select: { category: true, customCategoryId: true, subCategory: true },
       distinct: ["category", "customCategoryId", "subCategory"],
+      orderBy: { date: "desc" },
     }),
   ]);
 

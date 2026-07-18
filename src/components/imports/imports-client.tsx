@@ -6,13 +6,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Mail, RefreshCw, Check, X, Landmark, Plus, Loader2, Inbox } from "lucide-react";
+import { Mail, RefreshCw, Check, X, Landmark, Plus, Loader2, Inbox, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
-import { cn, EXPENSE_CATEGORY_CHIPS } from "@/lib/utils";
+import { cn, getCategoryColor, getCategoryIcon } from "@/lib/utils";
 import { Chip } from "@/components/ui/chip";
-import { Select } from "@/components/ui/select";
+import { CategoryBadge } from "@/components/ui/category-badge";
+import { CategoryPickerSheet, categoryPickerLabel } from "@/components/dashboard/category-picker-sheet";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 
 export type CCCard = { templateId: string; name: string };
@@ -41,8 +41,6 @@ export interface ParsedTransactionItem {
   possibleMatch: PossibleMatch | null;
   matchedEntry: MatchedEntry | null;
 }
-
-const EXPENSE_CATEGORIES = EXPENSE_CATEGORY_CHIPS;
 
 const METHOD_LABEL: Record<PaymentMethod, string> = {
   CREDIT_CARD: "Credit Card",
@@ -419,60 +417,22 @@ function AddForm({ item, ccCards, customCategories, subCategorySuggestions, onDo
   const [ccTemplateId, setCCTemplateId] = useState(item.suggestedCcTemplateId ?? ccCards[0]?.templateId ?? "");
   const [category, setCategory] = useState("MISCELLANEOUS");
   const [customCategoryName, setCustomCategoryName] = useState("");
-  const [showNewCategory, setShowNewCategory] = useState(false);
+  // Gemini's freeform suggestion pre-fills this before the user has
+  // touched anything — the picker sheet surfaces it as the initial
+  // selection, easily overridden via the same "Recent"/browse/search flow
+  // used everywhere else categories are picked.
   const [subLabel, setSubLabel] = useState(item.suggestedSubcategory ?? "");
-  const [showNewSubcat, setShowNewSubcat] = useState(false);
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [amount, setAmount] = useState(String(item.amount));
   const [pendingAction, setPendingAction] = useState<"approve" | "reject" | null>(null);
   const loading = pendingAction !== null;
 
-  function handleCategorySelect(value: string) {
-    if (value === "__new__") {
-      setShowNewCategory(true);
-      setCategory(""); setCustomCategoryName("");
-    } else if (value.startsWith("custom:")) {
-      const found = customCategories.find(c => c.id === value.slice(7));
-      setCustomCategoryName(found?.name ?? "");
-      setCategory(""); setShowNewCategory(false);
-    } else {
-      setCategory(value);
-      setCustomCategoryName(""); setShowNewCategory(false);
-    }
-    setSubLabel(""); setShowNewSubcat(false);
-  }
-  function handleSubcatSelect(value: string) {
-    if (value === "__new__") {
-      setShowNewSubcat(true);
-      setSubLabel("");
-    } else {
-      setSubLabel(value);
-      setShowNewSubcat(false);
-    }
+  function handleCategoryPicked(result: { category?: string; customCategory?: string; subCategory?: string }) {
+    setCategory(result.category ?? "");
+    setCustomCategoryName(result.customCategory ?? "");
+    setSubLabel(result.subCategory ?? "");
   }
 
-  // Sub-category suggestions scoped to whichever category is currently
-  // selected, same as the manual add-expense dialog.
-  const selectedCustomCategoryId = customCategoryName
-    ? customCategories.find(c => c.name.toLowerCase() === customCategoryName.trim().toLowerCase())?.id ?? null
-    : null;
-  const scopedPastSubcats = subCategorySuggestions
-    .filter(s => customCategoryName ? s.customCategoryId === selectedCustomCategoryId : (s.category === category && !s.customCategoryId))
-    .map(s => s.subCategory)
-    .filter((s): s is string => !!s);
-  const subcatSuggestions = [...new Set(scopedPastSubcats)];
-  // Gemini's freeform suggestion pre-fills subLabel before the user has
-  // touched anything — if it's not already one of their real past
-  // sub-categories, it still needs to render as a selectable option so the
-  // dropdown shows it selected instead of blank.
-  const subcatOptions = subLabel && !subcatSuggestions.includes(subLabel)
-    ? [subLabel, ...subcatSuggestions]
-    : subcatSuggestions;
-  const categorySelectValue = showNewCategory
-    ? "__new__"
-    : customCategoryName
-      ? `custom:${selectedCustomCategoryId ?? ""}`
-      : category;
-  const subcatSelectValue = showNewSubcat ? "__new__" : subLabel;
   const hasCategory = !!category || !!customCategoryName.trim();
 
   async function act(action: "approve" | "reject") {
@@ -549,46 +509,29 @@ function AddForm({ item, ccCards, customCategories, subCategorySuggestions, onDo
               : <>Looks like a credit or refund — this will be added as income (Other Income) instead of an expense.</>}
           </p>
         ) : (
-          <>
-            <div>
-              <Label className="text-xs mb-1.5 block">Category</Label>
-              <Select value={categorySelectValue} onChange={e => handleCategorySelect(e.target.value)} required>
-                <option value="">Select...</option>
-                {EXPENSE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-                {customCategories.map(c => <option key={c.id} value={`custom:${c.id}`}>{c.name}</option>)}
-                <option value="__new__">+ Add new category...</option>
-              </Select>
-              {showNewCategory && (
-                <Input
-                  className="mt-1.5"
-                  placeholder="Category name (e.g. Kids)"
-                  value={customCategoryName}
-                  onChange={e => setCustomCategoryName(e.target.value)}
-                  autoFocus
-                />
+          <div>
+            <Label className="text-xs mb-1.5 block">Category</Label>
+            <button
+              type="button"
+              onClick={() => setShowCategoryPicker(true)}
+              className="flex h-10 w-full items-center gap-2 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              {hasCategory && (
+                <CategoryBadge icon={getCategoryIcon(category, customCategoryName || null)} color={getCategoryColor(category, customCategoryName || null)} size="sm" />
               )}
-            </div>
-
-            <div>
-              <Label className="text-xs mb-1.5 block">
-                Sub-category <span className="text-muted-foreground">(optional)</span>
-              </Label>
-              <Select value={subcatSelectValue} onChange={e => handleSubcatSelect(e.target.value)}>
-                <option value="">Select...</option>
-                {subcatOptions.map(name => <option key={name} value={name}>{name}{name === subLabel && !subcatSuggestions.includes(name) ? " (suggested)" : ""}</option>)}
-                <option value="__new__">+ Add new sub-category...</option>
-              </Select>
-              {showNewSubcat && (
-                <Input
-                  className="mt-1.5"
-                  placeholder="Sub-category name (e.g. Coffee)"
-                  value={subLabel}
-                  onChange={e => setSubLabel(e.target.value)}
-                  autoFocus
-                />
-              )}
-            </div>
-          </>
+              <span className={cn("flex-1 min-w-0 truncate text-left", !hasCategory && "text-muted-foreground")}>
+                {categoryPickerLabel(category, customCategoryName || null, subLabel || null)}
+              </span>
+              <ChevronRight className="w-4 h-4 text-muted-foreground/60 shrink-0" />
+            </button>
+            <CategoryPickerSheet
+              open={showCategoryPicker}
+              onOpenChange={setShowCategoryPicker}
+              customCategories={customCategories}
+              subCategorySuggestions={subCategorySuggestions}
+              onSelect={handleCategoryPicked}
+            />
+          </div>
         )}
 
         <div className="flex flex-wrap gap-2 pt-1">

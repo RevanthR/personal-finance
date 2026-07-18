@@ -65,8 +65,8 @@ export function DailySpendChart({ recentMonths, targetMonth, targetYear, todayMo
   const [selectedId, setSelectedId] = useState(initial?.id);
   const selected = recentMonths.find(m => m.id === selectedId) ?? initial;
 
-  const { buckets, series, average } = useMemo(() => {
-    if (!selected) return { buckets: [] as Record<string, number>[], series: [] as Series[], average: 0 };
+  const { buckets, series, average, total, cashTotal, cardTotal } = useMemo(() => {
+    if (!selected) return { buckets: [] as Record<string, number>[], series: [] as Series[], average: 0, total: 0, cashTotal: 0, cardTotal: 0 };
     const daysInMonth = new Date(selected.year, selected.month, 0).getDate();
     const isCurrentMonth = selected.month === todayMonth && selected.year === todayYear;
     const lastDay = isCurrentMonth ? Math.min(new Date().getDate(), daysInMonth) : daysInMonth;
@@ -81,11 +81,15 @@ export function DailySpendChart({ recentMonths, targetMonth, targetYear, todayMo
       return row;
     });
 
-    let total = 0;
+    // Cash/card split is tracked independently of the mode toggle above —
+    // these headline totals stay put regardless of whether the chart
+    // itself is currently broken down by category or by payment method.
+    let total = 0, cashTotal = 0, cardTotal = 0;
     for (const item of expenseItems) {
       const d = new Date(item.date).getDate();
       if (d < 1 || d > lastDay) continue;
       total += item.amount;
+      if (item.ccTemplateId) cardTotal += item.amount; else cashTotal += item.amount;
       const key = mode === "category"
         ? (() => {
             const raw = item.customCategory ?? item.category ?? "MISCELLANEOUS";
@@ -95,7 +99,7 @@ export function DailySpendChart({ recentMonths, targetMonth, targetYear, todayMo
       buckets[d - 1][key] = (buckets[d - 1][key] ?? 0) + item.amount;
     }
 
-    return { buckets, series, average: lastDay > 0 ? total / lastDay : 0 };
+    return { buckets, series, average: lastDay > 0 ? total / lastDay : 0, total, cashTotal, cardTotal };
   }, [selected, mode, todayMonth, todayYear]);
 
   // Sub-category totals combine card + cash spend under the same label
@@ -140,6 +144,22 @@ export function DailySpendChart({ recentMonths, targetMonth, targetYear, todayMo
         </select>
       </CardHeader>
       <CardContent className="px-4 pb-3">
+        {total > 0 && (
+          <div className="grid grid-cols-3 gap-2 mb-3 pb-3 border-b border-border">
+            <div>
+              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Total</p>
+              <p className="text-sm font-bold tabular-nums mt-0.5">{fmt(total)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Cash/UPI</p>
+              <p className="text-sm font-semibold tabular-nums mt-0.5">{fmt(cashTotal)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Card</p>
+              <p className="text-sm font-semibold tabular-nums mt-0.5">{fmt(cardTotal)}</p>
+            </div>
+          </div>
+        )}
         <SegmentedControl
           value={mode}
           onChange={setMode}

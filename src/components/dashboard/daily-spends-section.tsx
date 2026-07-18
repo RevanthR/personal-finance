@@ -101,7 +101,11 @@ export function DailySpendsSection({ adHocItems, ccCards, onDelete, onEditReques
         </div>
       )}
 
-      <div className="space-y-3">
+      {/* 2-up on desktop — a category card is fundamentally a compact list
+          (icon, name, total, sub-category rows), it doesn't need the full
+          lg:col-span-2 content width. items-start so a collapsed card next
+          to a taller expanded one doesn't stretch to match its height. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
         {visibleGroups.map(g => {
           const catCollapsed = isCollapsed(g.key, false);
           return (

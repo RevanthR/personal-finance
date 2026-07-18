@@ -55,6 +55,7 @@ export default async function MonthDetailPage({
       where: { month: { userId: session.user.id }, subCategory: { not: null } },
       select: { category: true, customCategoryId: true, subCategory: true },
       distinct: ["category", "customCategoryId", "subCategory"],
+      orderBy: { date: "desc" },
     }),
   ]);
 

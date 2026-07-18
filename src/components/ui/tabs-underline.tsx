@@ -23,7 +23,12 @@ interface TabsUnderlineProps<T extends string> {
 // Zerodha's tab pattern: bold + underline, not a filled background).
 export function TabsUnderline<T extends string>({ value, onChange, options, className }: TabsUnderlineProps<T>) {
   return (
-    <div className={cn("flex items-center gap-6 border-b border-border", className)}>
+    // inline-flex, not flex — a block-level flex container fills its
+    // parent's full width by default, which stretched the border-b into a
+    // stray hairline running edge-to-edge across the page with the tabs
+    // sitting in the corner of it. Sizing to content keeps the line scoped
+    // to the tabs themselves.
+    <div className={cn("inline-flex items-center gap-6 border-b border-border", className)}>
       {options.map((opt) => {
         const active = opt.value === value;
         const Icon = opt.icon;

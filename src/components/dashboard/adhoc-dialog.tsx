@@ -9,10 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Chip } from "@/components/ui/chip";
-import { cn, EXPENSE_CATEGORY_CHIPS } from "@/lib/utils";
+import { CategoryBadge } from "@/components/ui/category-badge";
+import { CategoryPickerSheet, categoryPickerLabel } from "./category-picker-sheet";
+import { cn, getCategoryColor, getCategoryIcon } from "@/lib/utils";
+import { ChevronRight } from "lucide-react";
 import { format } from "date-fns";
-
-const EXPENSE_CATEGORIES = EXPENSE_CATEGORY_CHIPS;
 
 const INCOME_SOURCES = [
   { value: "bonus",         label: "Bonus",     dbCategory: "OTHER_INCOME" },
@@ -20,8 +21,6 @@ const INCOME_SOURCES = [
   { value: "reimbursement", label: "Refund",    dbCategory: "OTHER_INCOME" },
   { value: "other",         label: "Other",     dbCategory: "OTHER_INCOME" },
 ];
-
-const NEW_OPTION = "__new__";
 
 export type CCCard = { templateId: string; name: string };
 export type SubCategorySuggestion = { category: string | null; customCategoryId: string | null; subCategory: string | null };
@@ -64,9 +63,8 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
   // A user-created top-level category (e.g. "Kids") — mutually exclusive
   // with `category`; selecting one clears the other.
   const [customCategoryName, setCustomCategoryName] = useState(editing?.customCategory ?? "");
-  const [showNewCategory, setShowNewCategory] = useState(false);
   const [subLabel, setSubLabel] = useState(editing?.subCategory ?? "");
-  const [showNewSubcat, setShowNewSubcat] = useState(false);
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD">(editing?.ccTemplateId ? "CARD" : "CASH");
   const [ccCard, setCCCard] = useState<CCCard | null>(initialCCCard ?? (ccCards[0] ?? null));
   const [name, setName] = useState(editing?.name ?? "");
@@ -75,38 +73,19 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
   const [notes, setNotes] = useState(editing?.notes ?? "");
   const [loading, setLoading] = useState(false);
 
-  function clearSubcategory() {
-    setSubLabel(""); setShowNewSubcat(false);
+  function handleIncomeSourceSelect(value: string) {
+    setCategory(value);
   }
 
-  function handleCategorySelect(value: string) {
-    if (value === NEW_OPTION) {
-      setShowNewCategory(true);
-      setCategory(""); setCustomCategoryName("");
-    } else if (value.startsWith("custom:")) {
-      const found = customCategories.find(c => c.id === value.slice(7));
-      setCustomCategoryName(found?.name ?? "");
-      setCategory(""); setShowNewCategory(false);
-    } else {
-      setCategory(value);
-      setCustomCategoryName(""); setShowNewCategory(false);
-    }
-    clearSubcategory();
-  }
-
-  function handleSubcatSelect(value: string) {
-    if (value === NEW_OPTION) {
-      setShowNewSubcat(true);
-      setSubLabel("");
-    } else {
-      setSubLabel(value);
-      setShowNewSubcat(false);
-    }
+  function handleCategoryPicked(result: { category?: string; customCategory?: string; subCategory?: string }) {
+    setCategory(result.category ?? "");
+    setCustomCategoryName(result.customCategory ?? "");
+    setSubLabel(result.subCategory ?? "");
   }
 
   function reset() {
-    setType("EXPENSE"); setCategory(""); setCustomCategoryName(""); setShowNewCategory(false);
-    setSubLabel(""); setShowNewSubcat(false);
+    setType("EXPENSE"); setCategory(""); setCustomCategoryName("");
+    setSubLabel(""); setShowCategoryPicker(false);
     setPaymentMethod("CASH"); setCCCard(ccCards[0] ?? null);
     setName(""); setAmount(""); setDate(format(new Date(), "yyyy-MM-dd")); setNotes("");
   }
@@ -149,28 +128,8 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
     if (!isEditing) onOpenChange(false);
   }
 
-  // Sub-category suggestions scoped to whichever category is currently
-  // selected — purely this user's own real past usage under that exact
-  // parent, not a generic seed list, so a category they've never tagged
-  // spend under yet shows an empty list + "+ Add new" rather than nudging
-  // them toward categories that may not fit their spending at all.
-  const selectedCustomCategoryId = customCategoryName
-    ? customCategories.find(c => c.name.toLowerCase() === customCategoryName.trim().toLowerCase())?.id ?? null
-    : null;
-  const scopedPastSubcats = subCategorySuggestions
-    .filter(s => customCategoryName ? s.customCategoryId === selectedCustomCategoryId : (s.category === category && !s.customCategoryId))
-    .map(s => s.subCategory)
-    .filter((s): s is string => !!s);
-  const subcatSuggestions = [...new Set(scopedPastSubcats)];
   const hasCategory = !!category || !!customCategoryName.trim();
   const canSubmit = !loading && !!name && !!amount && hasCategory;
-
-  const categorySelectValue = showNewCategory
-    ? NEW_OPTION
-    : customCategoryName
-      ? `custom:${selectedCustomCategoryId ?? ""}`
-      : category;
-  const subcatSelectValue = showNewSubcat ? NEW_OPTION : subLabel;
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v && !isEditing) reset(); onOpenChange(v); }}>
@@ -187,7 +146,7 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
                 key={t}
                 type="button"
                 disabled={isEditing}
-                onClick={() => { setType(t); setCategory(""); setCustomCategoryName(""); }}
+                onClick={() => { setType(t); setCategory(""); setCustomCategoryName(""); setSubLabel(""); }}
                 className={cn(
                   "py-3 rounded-md text-sm font-semibold transition-all",
                   type === t
@@ -219,49 +178,44 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
             </div>
           </div>
 
-          <div>
-            <Label className="text-xs">{type === "EXPENSE" ? "Category" : "Source"}</Label>
-            <Select value={categorySelectValue} onChange={e => handleCategorySelect(e.target.value)} required>
-              <option value="">Select...</option>
-              {(type === "EXPENSE" ? EXPENSE_CATEGORIES : INCOME_SOURCES).map(c => (
-                <option key={c.value} value={c.value}>{c.label}</option>
-              ))}
-              {type === "EXPENSE" && customCategories.map(c => (
-                <option key={c.id} value={`custom:${c.id}`}>{c.name}</option>
-              ))}
-              {type === "EXPENSE" && <option value={NEW_OPTION}>+ Add new category...</option>}
-            </Select>
-            {showNewCategory && (
-              <Input
-                className="mt-2"
-                placeholder="Category name (e.g. Kids)"
-                value={customCategoryName}
-                onChange={e => setCustomCategoryName(e.target.value)}
-                autoFocus
+          {type === "EXPENSE" ? (
+            <div>
+              <Label className="text-xs">Category</Label>
+              <button
+                type="button"
+                onClick={() => setShowCategoryPicker(true)}
+                className="flex h-10 w-full items-center gap-2 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                {hasCategory && (
+                  <CategoryBadge icon={getCategoryIcon(category, customCategoryName || null)} color={getCategoryColor(category, customCategoryName || null)} size="sm" />
+                )}
+                <span className={cn("flex-1 min-w-0 truncate text-left", !hasCategory && "text-muted-foreground")}>
+                  {categoryPickerLabel(category, customCategoryName || null, subLabel || null)}
+                </span>
+                <ChevronRight className="w-4 h-4 text-muted-foreground/60 shrink-0" />
+              </button>
+              <CategoryPickerSheet
+                open={showCategoryPicker}
+                onOpenChange={setShowCategoryPicker}
+                customCategories={customCategories}
+                subCategorySuggestions={subCategorySuggestions}
+                onSelect={handleCategoryPicked}
               />
-            )}
-          </div>
+            </div>
+          ) : (
+            <div>
+              <Label className="text-xs">Source</Label>
+              <Select value={category} onChange={e => handleIncomeSourceSelect(e.target.value)} required>
+                <option value="">Select...</option>
+                {INCOME_SOURCES.map(c => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </Select>
+            </div>
+          )}
 
           {type === "EXPENSE" && (
             <>
-              <div>
-                <Label className="text-xs">Sub-category <span className="text-muted-foreground">(optional)</span></Label>
-                <Select value={subcatSelectValue} onChange={e => handleSubcatSelect(e.target.value)}>
-                  <option value="">Select...</option>
-                  {subcatSuggestions.map(n => <option key={n} value={n}>{n}</option>)}
-                  <option value={NEW_OPTION}>+ Add new sub-category...</option>
-                </Select>
-                {showNewSubcat && (
-                  <Input
-                    className="mt-2"
-                    placeholder="Sub-category name (e.g. Coffee)"
-                    value={subLabel}
-                    onChange={e => setSubLabel(e.target.value)}
-                    autoFocus
-                  />
-                )}
-              </div>
-
               {/* Payment method — small, fixed option counts, chips suit these better than a dropdown */}
               <div>
                 <Label className="text-xs mb-2 block">Paid via</Label>

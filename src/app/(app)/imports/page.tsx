@@ -26,6 +26,7 @@ export default async function ImportsPage() {
       where: { month: { userId }, subCategory: { not: null } },
       select: { category: true, customCategoryId: true, subCategory: true },
       distinct: ["category", "customCategoryId", "subCategory"],
+      orderBy: { date: "desc" },
     }),
     db.parsedTransaction.findMany({
       where: { userId, status: "PENDING" },
