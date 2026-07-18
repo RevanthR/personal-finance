@@ -9,7 +9,7 @@ import crypto from "crypto";
 // users who explicitly opt in here, not at every login.
 export async function GET() {
   const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const oauth2Client = getOAuthClient();
   const state = crypto.randomBytes(16).toString("hex");

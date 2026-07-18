@@ -17,7 +17,7 @@ const CardPostSchema = z.object({
 // GET — list all CC cards for the user (with current month's entry if it exists)
 export async function GET(_req: NextRequest) {
   const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const cards = await db.creditCard.findMany({
     where: { userId: session.user.id },
@@ -38,7 +38,7 @@ export async function GET(_req: NextRequest) {
 // POST — create a new CC card
 export async function POST(req: NextRequest) {
   const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const parsed = validate(CardPostSchema, await req.json());
   if (!parsed.ok) return parsed.response;

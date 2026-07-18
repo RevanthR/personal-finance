@@ -19,7 +19,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = session.user.id;
 
   const { id } = await params;
@@ -54,12 +54,14 @@ export async function PATCH(
     // rest later) both need to count, not overwrite each other.
     const newPaidAmount = (entry.paidAmount ?? 0) + settleAmount;
 
-    const updatedEntry = await db.monthlyEntry.update({
-      where: { id: entry.id },
-      data: computePaymentUpdate(netAmount, newPaidAmount),
+    const updatedEntry = await db.$transaction(async (tx) => {
+      const updatedEntry = await tx.monthlyEntry.update({
+        where: { id: entry.id },
+        data: computePaymentUpdate(netAmount, newPaidAmount),
+      });
+      await tx.parsedTransaction.update({ where: { id }, data: { status: "APPROVED" } });
+      return updatedEntry;
     });
-
-    await db.parsedTransaction.update({ where: { id }, data: { status: "APPROVED" } });
 
     return NextResponse.json({ item: null, updatedEntry });
   }
@@ -84,18 +86,38 @@ export async function PATCH(
   // has to be correctable before it hits card statement math.
   const ccTemplateId = body.ccTemplateId || null;
   const isCC = !!ccTemplateId;
+
+  // Reject a foreign/bad ccTemplateId outright instead of letting it persist
+  // on the AdHocItem row unverified — applyCCEffect/reverseCCEffect already
+  // scope their own lookup by userId, but that only skipped the statement
+  // effect, not the stored reference itself.
+  if (ccTemplateId) {
+    const ccTemplate = await db.lineItemTemplate.findFirst({
+      where: { id: ccTemplateId, userId, category: "CREDIT_CARD" },
+      select: { id: true },
+    });
+    if (!ccTemplate) return NextResponse.json({ error: "Invalid card" }, { status: 400 });
+  }
   // A "credit"/"refund" email is money coming back, not a spend — every
   // transaction used to get filed as type: EXPENSE regardless, which
   // logged a refund as if it were a new charge.
   const isIncome = existing.transactionType === "CREDIT" || existing.transactionType === "REFUND";
 
+  // Every terminal branch below writes an AdHocItem (or a CC effect) and
+  // marks the ParsedTransaction APPROVED together, inside one transaction
+  // — previously separate calls, so a failure partway through could create
+  // the expense (or reverse a CC effect) while leaving the review-queue row
+  // stuck PENDING, or vice versa.
   if (isCC) {
     if (isIncome) {
       // A refund/credit against the card reduces what's owed on the
       // statement — it isn't a new charge, so no AdHocItem is created for
       // it, and the effect is reversed instead of applied.
-      const updatedEntry = await reverseCCEffect(userId, monthRow.id, ccTemplateId, finalDate, finalAmount);
-      await db.parsedTransaction.update({ where: { id }, data: { status: "APPROVED" } });
+      const updatedEntry = await db.$transaction(async (tx) => {
+        const updatedEntry = await reverseCCEffect(tx, userId, monthRow.id, ccTemplateId, finalDate, finalAmount);
+        await tx.parsedTransaction.update({ where: { id }, data: { status: "APPROVED" } });
+        return updatedEntry;
+      });
       return NextResponse.json({ item: null, updatedEntry });
     }
 
@@ -105,43 +127,47 @@ export async function PATCH(
       ? await resolveSubCategory(userId, { category: resolvedCategory, customCategoryId: customCat?.id ?? null }, body.subCategory)
       : null;
 
-    const item = await db.adHocItem.create({
-      data: {
-        monthId: monthRow.id,
-        name: finalName,
-        amount: finalAmount,
-        type: "EXPENSE",
-        category: resolvedCategory,
-        customCategory: customCat?.name ?? null,
-        customCategoryId: customCat?.id ?? null,
-        subCategory,
-        ccTemplateId,
-        date: finalDate,
-        notes: "Imported from Gmail",
-      },
+    const { item, updatedEntry } = await db.$transaction(async (tx) => {
+      const item = await tx.adHocItem.create({
+        data: {
+          monthId: monthRow.id,
+          name: finalName,
+          amount: finalAmount,
+          type: "EXPENSE",
+          category: resolvedCategory,
+          customCategory: customCat?.name ?? null,
+          customCategoryId: customCat?.id ?? null,
+          subCategory,
+          ccTemplateId,
+          date: finalDate,
+          notes: "Imported from Gmail",
+        },
+      });
+      const updatedEntry = await applyCCEffect(tx, userId, monthRow.id, ccTemplateId, finalDate, finalAmount);
+      await tx.parsedTransaction.update({ where: { id }, data: { status: "APPROVED" } });
+      return { item, updatedEntry };
     });
-
-    const updatedEntry = await applyCCEffect(userId, monthRow.id, ccTemplateId, finalDate, finalAmount);
-
-    await db.parsedTransaction.update({ where: { id }, data: { status: "APPROVED" } });
 
     return NextResponse.json({ item, updatedEntry });
   }
 
   // Cash/UPI/debit — a plain ad-hoc item, no CC statement math.
   if (isIncome) {
-    const item = await db.adHocItem.create({
-      data: {
-        monthId: monthRow.id,
-        name: finalName,
-        amount: finalAmount,
-        type: "INCOME",
-        category: "OTHER_INCOME",
-        date: finalDate,
-        notes: "Imported from Gmail",
-      },
+    const item = await db.$transaction(async (tx) => {
+      const item = await tx.adHocItem.create({
+        data: {
+          monthId: monthRow.id,
+          name: finalName,
+          amount: finalAmount,
+          type: "INCOME",
+          category: "OTHER_INCOME",
+          date: finalDate,
+          notes: "Imported from Gmail",
+        },
+      });
+      await tx.parsedTransaction.update({ where: { id }, data: { status: "APPROVED" } });
+      return item;
     });
-    await db.parsedTransaction.update({ where: { id }, data: { status: "APPROVED" } });
     return NextResponse.json({ item, updatedEntry: null });
   }
 
@@ -151,22 +177,24 @@ export async function PATCH(
     ? await resolveSubCategory(userId, { category: resolvedCategory, customCategoryId: customCat?.id ?? null }, body.subCategory)
     : null;
 
-  const item = await db.adHocItem.create({
-    data: {
-      monthId: monthRow.id,
-      name: finalName,
-      amount: finalAmount,
-      type: "EXPENSE",
-      category: resolvedCategory,
-      customCategory: customCat?.name ?? null,
-      customCategoryId: customCat?.id ?? null,
-      subCategory,
-      date: finalDate,
-      notes: "Imported from Gmail",
-    },
+  const item = await db.$transaction(async (tx) => {
+    const item = await tx.adHocItem.create({
+      data: {
+        monthId: monthRow.id,
+        name: finalName,
+        amount: finalAmount,
+        type: "EXPENSE",
+        category: resolvedCategory,
+        customCategory: customCat?.name ?? null,
+        customCategoryId: customCat?.id ?? null,
+        subCategory,
+        date: finalDate,
+        notes: "Imported from Gmail",
+      },
+    });
+    await tx.parsedTransaction.update({ where: { id }, data: { status: "APPROVED" } });
+    return item;
   });
-
-  await db.parsedTransaction.update({ where: { id }, data: { status: "APPROVED" } });
 
   return NextResponse.json({ item, updatedEntry: null });
 }

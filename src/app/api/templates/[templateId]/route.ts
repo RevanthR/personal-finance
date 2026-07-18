@@ -12,7 +12,7 @@ export async function PATCH(
   { params }: { params: Promise<{ templateId: string }> }
 ) {
   const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { templateId } = await params;
 
@@ -23,8 +23,9 @@ export async function PATCH(
   const isCustom = body.customCategory != null && body.customCategory !== "";
   const customCat = isCustom ? await resolveCustomCategory(session.user.id, body.customCategory!) : null;
 
+  let updateCount: number;
   try {
-    await db.lineItemTemplate.updateMany({
+    const result = await db.lineItemTemplate.updateMany({
       where: { id: templateId, userId: session.user.id },
       data: {
         ...(body.name     !== undefined && { name: body.name }),
@@ -57,10 +58,22 @@ export async function PATCH(
         ...(body.loanOutstandingOverride !== undefined && { loanOutstandingOverride: body.loanOutstandingOverride }),
       },
     });
+    updateCount = result.count;
   } catch (err) {
     console.error("[PATCH /templates] error:", err);
     return NextResponse.json({ error: "Update failed" }, { status: 500 });
   }
+  // updateMany scoped by userId silently matches nothing for a foreign or
+  // bad templateId — previously returned 200 with updatedTemplate: null
+  // instead of a real 404, unlike every other findFirst-then-404 route.
+  if (updateCount === 0) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  // Fetched once and reused below (foreclosure name, amount-sync check,
+  // response body) instead of a second identical findFirst.
+  const updatedTemplate = await db.lineItemTemplate.findFirst({
+    where: { id: templateId, userId: session.user.id },
+    include: { chitFund: true },
+  });
 
   // If foreclosing, optionally add a one-off expense to the current month
   if (body.foreClosedOn && body.addToCurrentMonth && body.foreCloseAmount) {
@@ -69,13 +82,10 @@ export async function PATCH(
       where: { userId: session.user.id, month: now.getMonth() + 1, year: now.getFullYear() },
     });
     if (currentMonth) {
-      const template = await db.lineItemTemplate.findFirst({
-        where: { id: templateId, userId: session.user.id },
-      });
       await db.adHocItem.create({
         data: {
           monthId: currentMonth.id,
-          name: `Foreclosure ${template?.name ?? ""}`.trim(),
+          name: `Foreclosure ${updatedTemplate?.name ?? ""}`.trim(),
           amount: body.foreCloseAmount,
           type: "EXPENSE",
           category: "LOAN",
@@ -87,11 +97,6 @@ export async function PATCH(
   }
 
   revalidateTag(templateCacheTag, {});
-
-  const updatedTemplate = await db.lineItemTemplate.findFirst({
-    where: { id: templateId, userId: session.user.id },
-    include: { chitFund: true },
-  });
 
   // Auto-apply amount change to current month's existing unpaid entry (expense templates only)
   if (body.amount !== undefined && updatedTemplate?.templateType !== "INCOME") {
@@ -116,7 +121,7 @@ export async function DELETE(
   { params }: { params: Promise<{ templateId: string }> }
 ) {
   const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { templateId } = await params;
 

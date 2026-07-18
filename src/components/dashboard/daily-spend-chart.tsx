@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatMonthYear, getCategoryColor, getCategoryDisplay } from "@/lib/utils";
+import { formatMonthYear, getCategoryColor, getCategoryDisplay, groupItemsByCategory } from "@/lib/utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { compactAxisFmt } from "@/components/months/compact-axis-fmt";
 import { SegmentedControl } from "@/components/ui/segmented-control";
@@ -40,16 +40,9 @@ const METHOD_SERIES: Series[] = [
 ];
 
 function buildCategorySeries(items: AdHocItem[]): Series[] {
-  const totals = new Map<string, { amount: number; category: string; customCategory: string | null }>();
-  for (const item of items) {
-    const cat = item.category ?? "MISCELLANEOUS";
-    const key = item.customCategory ?? cat;
-    if (!totals.has(key)) totals.set(key, { amount: 0, category: cat, customCategory: item.customCategory });
-    totals.get(key)!.amount += item.amount;
-  }
-  const sorted = [...totals.entries()].sort((a, b) => b[1].amount - a[1].amount);
-  const series: Series[] = sorted.slice(0, TOP_CATEGORIES).map(([key, v]) => ({
-    key,
+  const sorted = groupItemsByCategory(items).sort((a, b) => b.total - a.total);
+  const series: Series[] = sorted.slice(0, TOP_CATEGORIES).map(v => ({
+    key: v.key,
     name: getCategoryDisplay(v.category, v.customCategory),
     color: getCategoryColor(v.category, v.customCategory),
   }));

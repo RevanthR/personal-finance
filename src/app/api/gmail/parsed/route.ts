@@ -11,7 +11,7 @@ import { findEntryMatches } from "@/lib/gmail/entry-match";
 // (unmatched) items, for the nav badge.
 export async function GET(req: NextRequest) {
   const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = session.user.id;
 
   const items = await db.parsedTransaction.findMany({

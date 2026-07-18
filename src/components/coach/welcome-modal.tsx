@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 const features = [
   { icon: LayoutDashboard, iconClass: "bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400", label: "Dashboard", desc: "Mark bills paid, track monthly progress." },
   { icon: TrendingUp, iconClass: "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400", label: "Statistics", desc: "Full-year income vs expense view." },
-  { icon: SlidersHorizontal, iconClass: "bg-orange-100 text-orange-600 dark:bg-orange-500/15 dark:text-orange-400", label: "Configuration", desc: "Set up recurring items once; they auto-fill every month." },
+  { icon: SlidersHorizontal, iconClass: "bg-orange-100 text-orange-600 dark:bg-orange-500/15 dark:text-orange-400", label: "Recurring", desc: "Set up recurring items once; they auto-fill every month." },
   { icon: Coins, iconClass: "bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400", label: "Chit Funds", desc: "Track contributions, savings, and lifts." },
 ];
 

@@ -8,6 +8,37 @@ import { YearOverviewClient, type MonthData } from "@/components/months/year-ove
 import { CATEGORY_LABELS, CATEGORY_COLORS, MONTHS, pendingAmountKicks } from "@/lib/utils";
 import type { AnalyticsData } from "@/components/months/stats-breakdown";
 
+// Category breakdown of one month's income — mirrors computeMonthIncome's
+// override/pending-promotion logic (finance-utils.ts) per category instead
+// of collapsing straight to one total, so the FY summary can show a real
+// salary/freelance/other/one-off split instead of attributing all income
+// to "salary".
+function computeMonthIncomeByCategory(
+  adHocItems: { type: string; amount: number; notes: string | null }[],
+  templates: { id: string; category: string; amount: number; pendingAmount: number | null; pendingFromMonth: number | null; pendingFromYear: number | null }[],
+  month: number,
+  year: number,
+): { salary: number; freelance: number; other: number; adHoc: number } {
+  const overrides = new Map<string, number>();
+  let adHoc = 0;
+  for (const item of adHocItems) {
+    if (item.type !== "INCOME") continue;
+    if (item.notes?.startsWith("income_override:")) {
+      overrides.set(item.notes.slice("income_override:".length), item.amount);
+    } else {
+      adHoc += item.amount;
+    }
+  }
+  let salary = 0, freelance = 0, other = 0;
+  for (const t of templates) {
+    const amount = overrides.has(t.id) ? overrides.get(t.id)! : (pendingAmountKicks(t, month, year) ? t.pendingAmount! : t.amount);
+    if (t.category === "SALARY") salary += amount;
+    else if (t.category === "FREELANCE") freelance += amount;
+    else other += amount;
+  }
+  return { salary, freelance, other, adHoc };
+}
+
 function getFY(month: number, year: number) {
   const fyStart = month >= 4 ? year : year - 1;
   return {
@@ -34,29 +65,25 @@ export default async function MonthsPage() {
     ...Array.from({ length: 3 }, (_, i) => ({ month: i + 1, year: fyStart + 1 })),
   ];
 
-  const [allMonths, allTemplates, currentMonthFull, pendingReceivables, analyticsMonths] = await Promise.all([
+  // currentMonthFull and analyticsMonths were previously two more queries
+  // here, each with the exact same include shape and orderBy as allMonths
+  // (analyticsMonths just adds isPopulated: true, currentMonthFull just
+  // narrows to one month/year) — both are strict subsets of allMonths and
+  // are now derived from it below instead of refetched.
+  const [allMonths, allTemplates, pendingReceivables] = await Promise.all([
     db.month.findMany({
       where: { userId },
       include: { entries: { include: { template: true } }, adHocItems: true },
       orderBy: [{ year: "asc" }, { month: "asc" }],
     }),
     getActiveTemplates(userId),
-    db.month.findUnique({
-      where: { userId_month_year: { userId, month: todayMonth, year: todayYear } },
-      include: {
-        entries: { include: { template: true } },
-        adHocItems: true,
-      },
-    }),
     db.receivable.findMany({
       where: { userId, status: "PENDING", expectedDate: { not: null } },
     }),
-    db.month.findMany({
-      where: { userId, isPopulated: true },
-      include: { entries: { include: { template: true } }, adHocItems: true },
-      orderBy: [{ year: "asc" }, { month: "asc" }],
-    }),
   ]);
+
+  const currentMonthFull = allMonths.find(m => m.month === todayMonth && m.year === todayYear) ?? null;
+  const analyticsMonths = allMonths.filter(m => m.isPopulated);
 
   // CC statement amounts from current month — used to make the next-month projection more accurate
   // (statementAmount reflects actual post-close charges, not the template default)
@@ -592,13 +619,12 @@ export default async function MonthsPage() {
   // Income stats
   const avgMonthlyIncome = monthlyTrends.length > 0
     ? Math.round(monthlyTrends.reduce((s, m) => s + m.income, 0) / monthlyTrends.length) : 0;
-  const freelancePct = 0;
-  const incomeSources = {
-    salary: fyIncomeTotal,
-    freelance: 0,
-    other: 0,
-    adHoc: 0,
-  };
+  const incomeSources = fyActual.reduce((acc, m) => {
+    const b = computeMonthIncomeByCategory(m.adHocItems, incomeTemplates, m.month, m.year);
+    return { salary: acc.salary + b.salary, freelance: acc.freelance + b.freelance, other: acc.other + b.other, adHoc: acc.adHoc + b.adHoc };
+  }, { salary: 0, freelance: 0, other: 0, adHoc: 0 });
+  const incomeSourcesTotal = incomeSources.salary + incomeSources.freelance + incomeSources.other + incomeSources.adHoc;
+  const freelancePct = incomeSourcesTotal > 0 ? Math.round((incomeSources.freelance / incomeSourcesTotal) * 100) : 0;
 
   const analyticsData: AnalyticsData = {
     fyExpenses, fyIncome: fyIncomeTotal, fyExpensesProjected, fyIncomeProjected, actualMonthCount: fyActual.length,
@@ -616,7 +642,6 @@ export default async function MonthsPage() {
       months={JSON.parse(JSON.stringify(currentFYMonths))}
       fyKey={fyKey}
       pastFYSummaries={pastFYSummaries}
-      incomeTemplateCount={incomeTemplates.length}
       currentMonthInsights={JSON.parse(JSON.stringify(currentMonthInsights))}
       analyticsData={JSON.parse(JSON.stringify(analyticsData))}
     />

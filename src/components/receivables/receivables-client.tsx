@@ -82,7 +82,6 @@ const RECV_COLORS: Record<string, string> = {
   INVESTMENT: "bg-positive-bg text-positive border border-positive-border",
   PERSONAL_LOAN: "bg-muted text-muted-foreground border border-border",
   CUSTOM: "bg-muted text-muted-foreground border border-border",
-  CHIT_FUND: "bg-muted text-muted-foreground border border-border",
 };
 
 type MainTab = "cards" | "chits" | "receivables";
@@ -608,7 +607,12 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
       {mainTab === "cards" && (
         <div className="space-y-3">
           {activeCards.length === 0 && (
-            <EmptyState icon={CreditCard} title="No credit cards added yet" description="Add your cards to track bills and carry-forwards." />
+            <EmptyState
+              icon={CreditCard}
+              title="No credit cards added yet"
+              description="Add your cards to track bills and carry-forwards."
+              action={<Button size="sm" onClick={() => setShowAddCard(true)}><Plus className="w-3.5 h-3.5 mr-1" />Add Card</Button>}
+            />
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {activeCards.map(card => (
@@ -632,7 +636,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
           {/* Active chits */}
           {unliftedChits.length > 0 && (
             <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Active</p>
+              <p className="fin-label mb-3">Active</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {unliftedChits.map(chit => {
                   const sd = new Date(chit.startDate);
@@ -697,7 +701,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
           {/* Lifted chits */}
           {liftedChits.length > 0 && (
             <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Lifted</p>
+              <p className="fin-label mb-3">Lifted</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {liftedChits.map(chit => (
                   <Card key={chit.id} className="opacity-75">

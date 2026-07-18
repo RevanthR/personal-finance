@@ -91,8 +91,9 @@ model CustomCategory {
   user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   name       String
   createdAt  DateTime           @default(now())
-  templates  LineItemTemplate[]
-  adHocItems AdHocItem[]
+  templates   LineItemTemplate[]
+  adHocItems  AdHocItem[]
+  receivables Receivable[]
 
   @@unique([userId, name])
 }
@@ -238,6 +239,12 @@ model ChitFund {
   accumulatedSavings    Float            @default(0)
   endDate               DateTime?
   createdAt             DateTime         @default(now())
+  // Real link to the lift-income AdHocItem, replacing a name-string match
+  // ("{template.name} Chit Lifted") that broke if the template was renamed
+  // after lifting, and that a typo in the delete-cleanup path never
+  // actually matched (see backfill script run alongside this change).
+  liftIncomeItemId      String?          @unique
+  liftIncomeItem        AdHocItem?       @relation(fields: [liftIncomeItemId], references: [id], onDelete: SetNull)
 }
 
 // Credit card — linked 1:1 to a LineItemTemplate of category CREDIT_CARD
@@ -280,6 +287,11 @@ model AdHocItem {
   date              DateTime
   notes             String?
   createdAt         DateTime        @default(now())
+  // Back-reference for ChitFund.liftIncomeItemId — lets a chit's lift
+  // income row be found by real FK instead of matching on a computed
+  // "{template name} Chit Lifted" string, which broke silently if the
+  // template was ever renamed.
+  liftedByChit      ChitFund?
 }
 
 enum ReceivableCategory {
@@ -299,6 +311,12 @@ model Receivable {
   user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   category        ReceivableCategory
   customCategory  String?
+  // Links to the same CustomCategory table AdHocItem/LineItemTemplate use —
+  // previously a plain unlinked string, so a "Kids" receivable never
+  // converged with a "Kids" custom category created elsewhere (ad-hoc entry,
+  // recurring template), and case variants didn't canonicalize either.
+  customCategoryId  String?
+  customCategoryRef CustomCategory?   @relation(fields: [customCategoryId], references: [id], onDelete: SetNull)
   description     String
   expectedAmount  Float
   expectedDate    DateTime?

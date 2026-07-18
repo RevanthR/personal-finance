@@ -16,7 +16,7 @@ const SAFE_USER_FIELDS = {
 
 export async function GET() {
   const session = await auth();
-  if (!session?.user?.id || isNotAdmin(session.user.role)) {
+  if (!session?.user?.id || !session.user.isActive || isNotAdmin(session.user.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -30,7 +30,7 @@ export async function GET() {
 
 export async function PATCH(req: NextRequest) {
   const session = await auth();
-  if (!session?.user?.id || isNotAdmin(session.user.role)) {
+  if (!session?.user?.id || !session.user.isActive || isNotAdmin(session.user.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

@@ -7,7 +7,7 @@ import { stopWatch } from "@/lib/gmail/watch";
 // DELETE /api/gmail/disconnect
 export async function DELETE() {
   const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const conn = await db.gmailConnection.findUnique({ where: { userId: session.user.id } });
   if (conn) {

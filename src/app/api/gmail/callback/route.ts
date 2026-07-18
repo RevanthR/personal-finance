@@ -8,7 +8,7 @@ import { google } from "googleapis";
 // GET /api/gmail/callback — Google redirects here after consent.
 export async function GET(req: NextRequest) {
   const session = await auth();
-  if (!session?.user?.id) return NextResponse.redirect(new URL("/login", req.url));
+  if (!session?.user?.id || !session.user.isActive) return NextResponse.redirect(new URL("/login", req.url));
 
   const code = req.nextUrl.searchParams.get("code");
   const state = req.nextUrl.searchParams.get("state");

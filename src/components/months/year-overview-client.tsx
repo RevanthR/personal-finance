@@ -101,14 +101,12 @@ export function YearOverviewClient({
   months,
   fyKey,
   pastFYSummaries = [],
-  incomeTemplateCount = 0,
   currentMonthInsights = null,
   analyticsData,
 }: {
   months: MonthData[];
   fyKey: string;
   pastFYSummaries?: PastFY[];
-  incomeTemplateCount?: number;
   currentMonthInsights?: InsightData;
   analyticsData?: AnalyticsData;
 }) {

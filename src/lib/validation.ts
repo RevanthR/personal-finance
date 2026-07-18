@@ -210,6 +210,21 @@ export const PaymentVerifySchema = z.object({
   razorpay_signature:  z.string().min(1),
 });
 
+export const PushSubscribeSchema = z.object({
+  subscription: z.object({
+    endpoint: z.string().min(1),
+    keys: z.object({
+      p256dh: z.string().min(1),
+      auth:   z.string().min(1),
+    }),
+  }),
+  label: z.string().trim().max(100).optional(),
+});
+
+export const PushUnsubscribeSchema = z.object({
+  endpoint: z.string().min(1),
+});
+
 // ── Helper ────────────────────────────────────────────────────────────────────
 export function validate<T>(
   schema: z.ZodSchema<T>,

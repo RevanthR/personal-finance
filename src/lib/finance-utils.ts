@@ -4,6 +4,8 @@
  * No React imports — safe to use in any context.
  */
 
+import { pendingAmountKicks } from "./utils";
+
 export interface EntryBase {
   amount: number;
   isPaid: boolean;
@@ -99,11 +101,7 @@ export function computeMonthIncome(
   }
   const templateIncome = incomeTemplates.reduce((sum, t) => {
     if (overrides.has(t.id)) return sum + overrides.get(t.id)!;
-    let amount = t.amount;
-    if (t.pendingAmount != null && t.pendingFromMonth != null && t.pendingFromYear != null) {
-      const kicks = year > t.pendingFromYear || (year === t.pendingFromYear && month >= t.pendingFromMonth);
-      if (kicks) amount = t.pendingAmount;
-    }
+    const amount = pendingAmountKicks(t, month, year) ? t.pendingAmount! : t.amount;
     return sum + amount;
   }, 0);
   return templateIncome + nonOverrideAdhoc;

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { CategoryBadge } from "@/components/ui/category-badge";
-import { formatCurrency, getCategoryDisplay, getCategoryColor, getCategoryIcon, getSubCategoryIcon, cn } from "@/lib/utils";
+import { formatCurrency, getCategoryDisplay, getCategoryColor, getCategoryIcon, getSubCategoryIcon, groupItemsByCategory, cn } from "@/lib/utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { Pencil, Trash2, ChevronDown, CreditCard, Wallet } from "lucide-react";
 import { format } from "date-fns";
@@ -36,15 +36,7 @@ export function DailySpendsSection({ adHocItems, ccCards, onDelete, onEditReques
 
   const expenseItems = adHocItems.filter(i => i.type === "EXPENSE");
 
-  const byCategory = new Map<string, { category: string; customCategory: string | null; items: AdHocItem[] }>();
-  for (const item of expenseItems) {
-    const cat = item.category ?? "MISCELLANEOUS";
-    const key = item.customCategory ?? cat;
-    if (!byCategory.has(key)) byCategory.set(key, { category: cat, customCategory: item.customCategory, items: [] });
-    byCategory.get(key)!.items.push(item);
-  }
-
-  const groups = [...byCategory.entries()].map(([key, v]) => {
+  const groups = groupItemsByCategory(expenseItems).map(v => {
     // Items with no sub-category land in "Other" — same bucket the picker
     // sheet writes when you explicitly pick "Other", and the same fallback
     // months/page.tsx uses, so a null subCategory and a literal "Other"
@@ -60,13 +52,13 @@ export function DailySpendsSection({ adHocItems, ccCards, onDelete, onEditReques
       .map(([subKey, items]) => ({ key: subKey, items, total: items.reduce((s, i) => s + i.amount, 0) }))
       .sort((a, b) => b.total - a.total);
     return {
-      key,
+      key: v.key,
       category: v.category,
       customCategory: v.customCategory,
       label: getCategoryDisplay(v.category, v.customCategory),
       color: getCategoryColor(v.category, v.customCategory),
       icon: getCategoryIcon(v.category, v.customCategory),
-      total: v.items.reduce((s, i) => s + i.amount, 0),
+      total: v.total,
       subGroups,
     };
   }).sort((a, b) => b.total - a.total);

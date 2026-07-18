@@ -4,7 +4,7 @@ import { useState, useMemo, useTransition, Fragment, type CSSProperties } from "
 import { flushSync } from "react-dom";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { formatCurrency, formatMonthYear, getCategoryDisplay, getCategoryColor, getCategoryIcon, MONTHS, pendingAmountKicks, ordinal } from "@/lib/utils";
+import { formatCurrency, formatMonthYear, getCategoryDisplay, getCategoryColor, getCategoryIcon, MONTHS, pendingAmountKicks, ordinal, EXPENSE_CATEGORIES } from "@/lib/utils";
 import { netAmount as _net, effectivePaid as _effectivePaid, isBillPending as _isBillPending, computeMetrics, computeMonthIncome } from "@/lib/finance-utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { Progress } from "@/components/ui/progress";
@@ -114,7 +114,11 @@ type AdHocItem = {
 };
 
 
-const CATEGORY_ORDER = ["HOUSE_MAINTENANCE", "LOAN", "CREDIT_CARD", "CHIT_FUND", "SAVINGS", "PERSONAL", "MISCELLANEOUS"];
+// Every consumer below skips CREDIT_CARD immediately (it has its own
+// Pending Card Payments section), so its position in this list never
+// actually matters — safe to reuse the shared EXPENSE_CATEGORIES export
+// instead of maintaining a second, independently-ordered copy.
+const CATEGORY_ORDER = EXPENSE_CATEGORIES;
 
 const INCOME_SOURCES = [
   { value: "bonus",     label: "Bonus",     dbCategory: "OTHER_INCOME" },
@@ -310,7 +314,10 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   const viewMonth = targetMonth ?? todayMonth;
   const viewYear  = targetYear  ?? todayYear;
   const isProjected = projectedEntries != null;
-  const projEntries = projectedEntries ?? [];
+  // Memoized for the same reason entries/adHocItems are below — avoids a
+  // fresh [] reference (and cascading useMemo recomputation) on every
+  // render when projectedEntries is undefined.
+  const projEntries = useMemo(() => projectedEntries ?? [], [projectedEntries]);
   const isCurrentMonth = viewMonth === todayMonth && viewYear === todayYear;
   const todayDay = new Date().getDate();
   const router = useRouter();
@@ -356,8 +363,13 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     setShowIncomeEdit(false);
   }
 
-  const entries = currentMonth?.entries ?? [];
-  const adHocItems = currentMonth?.adHocItems ?? [];
+  // Memoized so a null currentMonth (the projected-future-month view)
+  // doesn't create a fresh [] reference every render — that was making
+  // every downstream useMemo depending on entries/adHocItems see a
+  // "changed" dependency and recompute on every render instead of only
+  // when the underlying data actually changed.
+  const entries = useMemo(() => currentMonth?.entries ?? [], [currentMonth]);
+  const adHocItems = useMemo(() => currentMonth?.adHocItems ?? [], [currentMonth]);
 
   const templateIncome = useMemo(() => {
     const overrides = new Map<string, number>();
@@ -390,16 +402,10 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   const balance   = grandIncome - totalCommitted - adHocExpense;
   const inHandNow = grandIncome - totalPaid - adHocExpense;
 
-  const nonCCPaidAmount = useMemo(() =>
-    entries.filter(e => e.template.category !== "CREDIT_CARD")
-           .reduce((s, e) => s + effectivePaid(e), 0),
-    [entries],
-  );
   const nonCCPendingCount = useMemo(() =>
     entries.filter(e => e.template.category !== "CREDIT_CARD" && !e.isPaid).length,
     [entries],
   );
-  const nonCCPaidPercent = recurringNonCC > 0 ? Math.round((nonCCPaidAmount / recurringNonCC) * 100) : 0;
   const nextMonthName  = MONTHS[todayMonth % 12]; // todayMonth is 1-12; % 12 maps Dec→Jan correctly
 
   type GroupedItem =
@@ -493,46 +499,6 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   const ccHasPending = ccEntries.some(item => item.kind === "entry" && !item.data.isPaid);
   const payablesSectionsSwapped = recurringFullySettled && ccHasPending;
 
-  // Enhanced breakdown includes ad-hoc expenses in their categories
-  const categoryBreakdown = useMemo(() => {
-    if (isProjected) {
-      // Aggregate by category so multiple CC templates don't produce duplicate keys/names
-      const totals = new Map<string, { amount: number; category: string; customCategory: string | null }>();
-      for (const e of projEntries) {
-        const key = e.customCategory ?? e.category;
-        if (!totals.has(key)) totals.set(key, { amount: 0, category: e.category, customCategory: e.customCategory });
-        totals.get(key)!.amount += e.amount;
-      }
-      return [...totals.entries()].map(([, { amount, category, customCategory }]) => ({
-        key: customCategory ?? category,
-        value: amount,
-        name: getCategoryDisplay(category, customCategory),
-        color: getCategoryColor(category, customCategory),
-      })).sort((a, b) => b.value - a.value);
-    }
-    const totals: Record<string, { amount: number; templateCat: string; customCat: string | null }> = {};
-    for (const e of entries) {
-      if (isBillPending(e, isCurrentMonth, todayDay)) continue;
-      const key = e.template.customCategory ?? e.template.category;
-      if (!totals[key]) totals[key] = { amount: 0, templateCat: e.template.category, customCat: e.template.customCategory };
-      totals[key].amount += net(e);
-    }
-    for (const item of adHocItems) {
-      if (item.type === "EXPENSE" && item.category && !item.ccTemplateId) {
-        const key = item.category;
-        if (!totals[key]) totals[key] = { amount: 0, templateCat: key, customCat: null };
-        totals[key].amount += item.amount;
-      }
-    }
-    return Object.entries(totals)
-      .map(([key, { amount, templateCat, customCat }]) => ({
-        key, value: amount,
-        name: getCategoryDisplay(templateCat, customCat),
-        color: getCategoryColor(templateCat, customCat),
-      }))
-      .sort((a, b) => b.value - a.value);
-  }, [entries, adHocItems, isProjected, projEntries]);
-
   const { fyIncome, fyExpenses, fyBalance, trendData } = useMemo(() => {
     const ccStatementDayById = new Map(ccTemplates.map(t => [t.id, t.statementDay]));
     const monthIncome = (m: typeof recentMonths[0]) =>
@@ -559,8 +525,6 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     return { fyIncome, fyExpenses, fyBalance: fyIncome - fyExpenses, trendData };
   }, [recentMonths, incomeTemplates, ccTemplates, todayMonth, todayYear, todayDay]);
 
-  const savingsRate = grandIncome > 0 ? Math.round((balance / grandIncome) * 100) : 0;
-
   const { prevMonthName, expensesDelta } = useMemo(() => {
     const prev = [...recentMonths]
       .filter(m => !(m.month === currentMonth?.month && m.year === currentMonth?.year))
@@ -585,7 +549,6 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   const dispIncome          = isProjected ? (projectedIncome ?? 0) : grandIncome;
   const dispCommitted       = isProjected ? projEntries.reduce((s, e) => s + e.amount, 0) : totalCommitted;
   const dispAdHoc           = isProjected ? 0 : adHocExpense;
-  const dispBalance         = dispIncome - dispCommitted - dispAdHoc;
   const dispPaidPct         = isProjected ? 0 : paidPercent;
   const dispPending         = isProjected ? dispCommitted : totalPending;
   const dispFixed           = isProjected ? projEntries.filter(e => e.isFixed).reduce((s, e) => s + e.amount, 0) : fixedAmount;
@@ -593,8 +556,6 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   const dispSavings         = dispIncome > 0 ? Math.round(((dispIncome - dispCommitted - dispAdHoc) / dispIncome) * 100) : 0;
   const dispRecurringNonCC  = isProjected ? projEntries.filter(e => e.category !== "CREDIT_CARD").reduce((s, e) => s + e.amount, 0) : recurringNonCC;
   const dispCCBills         = isProjected ? projEntries.filter(e => e.category === "CREDIT_CARD").reduce((s, e) => s + e.amount, 0) : ccBillsThisMonth;
-  const dispNonCCPaidPct    = isProjected ? 0 : nonCCPaidPercent;
-  const dispNonCCPending    = isProjected ? dispRecurringNonCC : (recurringNonCC - nonCCPaidAmount);
 
   // Nearest unpaid items across both recurring bills and CC dues — a
   // single glanceable "what needs action" row instead of only surfacing
@@ -622,12 +583,12 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
 
   // Collapsible groups: track user overrides; default = always collapsed
   const [groupToggled, setGroupToggled] = useState<Record<string, boolean>>({});
-  function isGroupCollapsed(key: string, entryItems: { data: EntryWithTemplate }[]): boolean {
+  function isGroupCollapsed(key: string): boolean {
     if (key in groupToggled) return groupToggled[key];
     return true;
   }
-  function toggleGroup(key: string, entryItems: { data: EntryWithTemplate }[]) {
-    setGroupToggled(prev => ({ ...prev, [key]: !isGroupCollapsed(key, entryItems) }));
+  function toggleGroup(key: string) {
+    setGroupToggled(prev => ({ ...prev, [key]: !isGroupCollapsed(key) }));
   }
 
   // Collapsible per-card body (current bill + next-cycle bill) within the CC category
@@ -1085,7 +1046,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
               : entryItems.filter(i => !isBillPending(i.data, isCurrentMonth, todayDay)).reduce((s, i) => s + net(i.data), 0);
             const catPaid  = entryItems.reduce((s, i) => s + effectivePaid(i.data), 0);
             const allPaid  = !isProjected && entryItems.length > 0 && entryItems.every(i => i.data.isPaid);
-            const collapsed = isGroupCollapsed(groupKey, entryItems);
+            const collapsed = isGroupCollapsed(groupKey);
             const paidPct = catTotal > 0 ? Math.min(100, Math.round((catPaid / catTotal) * 100)) : 0;
 
             return (
@@ -1109,7 +1070,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                     weight as ones still needing action. */}
                 <button
                   type="button"
-                  onClick={() => toggleGroup(groupKey, entryItems)}
+                  onClick={() => toggleGroup(groupKey)}
                   className="w-full flex items-center justify-between gap-3 px-3 py-3 transition-colors hover:bg-muted/30"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">

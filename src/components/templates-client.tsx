@@ -18,7 +18,7 @@ import {
   formatCurrency, CATEGORY_LABELS, INCOME_CATEGORIES, getCategoryDisplay, getCategoryColor, cn, MONTHS,
 } from "@/lib/utils";
 import { Plus, Pencil, Trash2, Lock, ChevronDown, TrendingUp, SlidersHorizontal } from "lucide-react";
-import { computeLoanAmortization, computeChitCurrentMonth, computeChitEndDate } from "@/lib/loan-utils";
+import { computeLoanAmortization, computeChitCurrentMonth } from "@/lib/loan-utils";
 import { PageCoach } from "@/components/coach/page-coach";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -108,6 +108,7 @@ export function TemplatesClient({
   const [importLoading, setImportLoading] = useState(false);
 
   async function toggleActive(t: Template) {
+    const wasActive = t.isActive;
     const res = await fetch(`/api/templates/${t.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -115,6 +116,10 @@ export function TemplatesClient({
     });
     if (!res.ok) { toast.error("Failed"); return; }
     setTemplates((prev) => prev.map((x) => x.id === t.id ? { ...x, isActive: !x.isActive } : x));
+    // Deactivating stops future months from generating an entry for this —
+    // it doesn't touch any entry already created for the current (or a
+    // past) month, which otherwise wasn't obvious from the toggle alone.
+    if (wasActive) toast.success(`${t.name} deactivated — this month's entry, if any, is unaffected`);
   }
 
   async function saveEdit(data: SaveData) {
@@ -352,7 +357,7 @@ export function TemplatesClient({
               <div key={key}>
                 <div className="flex items-center gap-1.5 mb-2">
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
-                  <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{displayLabel}</h2>
+                  <h2 className="fin-label">{displayLabel}</h2>
                 </div>
                 <div className="space-y-2">
                   {items.map(t => {
@@ -431,7 +436,7 @@ export function TemplatesClient({
               <div key={key}>
                 <div className="flex items-center gap-1.5 mb-2">
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
-                  <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  <h2 className="fin-label">
                     {displayLabel}
                   </h2>
                 </div>
@@ -630,7 +635,6 @@ function TemplateDialog({
   const [addToCurrentMonth, setAddToCurrentMonth] = useState(true);
 
   // Part 2: scheduled future change — auto-expand only if a pending change is already saved
-  const isEditingIncome = isEditing && (initial?.templateType === "INCOME");
   const [showSchedule, setShowSchedule] = useState(
     isEditing && initial?.pendingAmount != null
   );
@@ -938,7 +942,7 @@ function TemplateDialog({
 
           {/* ── Payment settings ── */}
           <div className="space-y-3 rounded-lg border bg-muted/20 px-3 py-3">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Payment settings</p>
+            <p className="fin-label">Payment settings</p>
 
             {!isIncome && (
               <div className="flex items-center justify-between">

@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { SegmentedControl } from "@/components/ui/segmented-control";
-import { Bell, BellOff, User, Sun, Moon, Monitor } from "lucide-react";
+import { Bell, User, Sun, Moon, Monitor } from "lucide-react";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
@@ -17,10 +17,18 @@ const APPEARANCE_OPTIONS = [
   { value: "system", label: "System", icon: Monitor },
 ] as const;
 
+// Same "only render theme-dependent UI after hydration" guard as before,
+// but via useSyncExternalStore instead of setState-in-an-effect — the
+// latter triggers a synchronous cascading render (flagged by
+// react-hooks/set-state-in-effect); this is React's own recommended
+// replacement for exactly this SSR/client-mismatch-avoidance pattern.
+function subscribeNoop() { return () => {}; }
+function getMountedSnapshot() { return true; }
+function getServerSnapshot() { return false; }
+
 function AppearanceCard() {
   const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = useSyncExternalStore(subscribeNoop, getMountedSnapshot, getServerSnapshot);
 
   return (
     <Card>
@@ -108,7 +116,12 @@ export function SettingsClient({ user }: SettingsClientProps) {
         toast.success("Push notifications disabled");
       }
     } catch (err) {
-      toast.error("Failed to update push settings");
+      // Previously a single generic toast regardless of cause — a
+      // permission denial (already handled above, before this point) and,
+      // say, the /api/push request failing looked identical to the user
+      // and to anyone reading logs. Surface the real reason when there is one.
+      console.error("[push] toggle failed:", err);
+      toast.error(err instanceof Error ? err.message : "Failed to update push settings");
     } finally {
       setPushLoading(false);
     }

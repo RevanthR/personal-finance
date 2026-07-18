@@ -12,7 +12,7 @@ const razorpay = new Razorpay({
 
 export async function POST(req: NextRequest) {
   const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const parsed = validate(PaymentOrderSchema, await req.json());
   if (!parsed.ok) return parsed.response;

@@ -16,7 +16,7 @@ const SetBillSchema = z.object({
 // POST — upsert a CC entry for the current month (create or update)
 export async function POST(req: NextRequest) {
   const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = session.user.id;
 
   const parsed = validate(SetBillSchema, await req.json());

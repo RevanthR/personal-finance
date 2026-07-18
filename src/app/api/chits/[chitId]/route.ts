@@ -26,7 +26,7 @@ export async function PATCH(
   { params }: { params: Promise<{ chitId: string }> }
 ) {
   const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { chitId } = await params;
 
@@ -81,7 +81,10 @@ export async function PATCH(
   const incomeLabel = `${chit.template.name} Chit Lifted`;
 
   if (isLifting) {
-    // Fresh lift: create pot-value income in the selected month
+    // Fresh lift: create pot-value income in the selected month, and link
+    // it back via liftIncomeItemId (a real FK) rather than relying on
+    // name-matching "{template name} Chit Lifted" later — that broke
+    // silently if the template was ever renamed after lifting.
     let monthRecord = await db.month.findUnique({
       where: { userId_month_year: { userId: session.user.id, month: liftMonth, year: liftYear } },
     });
@@ -90,15 +93,19 @@ export async function PATCH(
         data: { userId: session.user.id, month: liftMonth, year: liftYear, salaryIncome: 0 },
       });
     }
-    await db.adHocItem.create({
-      data: {
-        monthId:  monthRecord.id,
-        name:     incomeLabel,
-        amount:   body.liftedAmount ?? chit.totalValue,
-        type:     "INCOME",
-        category: "OTHER_INCOME",
-        date:     new Date(Date.UTC(liftYear, liftMonth - 1, 1)),
-      },
+    const monthId = monthRecord.id;
+    await db.$transaction(async (tx) => {
+      const item = await tx.adHocItem.create({
+        data: {
+          monthId,
+          name:     incomeLabel,
+          amount:   body.liftedAmount ?? chit.totalValue,
+          type:     "INCOME",
+          category: "OTHER_INCOME",
+          date:     new Date(Date.UTC(liftYear, liftMonth - 1, 1)),
+        },
+      });
+      await tx.chitFund.update({ where: { id: chitId }, data: { liftIncomeItemId: item.id } });
     });
     if (body.monthlyLiftedAmount) {
       const nextMonth = liftMonth === 12 ? 1 : liftMonth + 1;
@@ -108,33 +115,24 @@ export async function PATCH(
         data: { pendingAmount: body.monthlyLiftedAmount, pendingFromMonth: nextMonth, pendingFromYear: nextYear },
       });
     }
-  } else if (chit.isLifted && body.liftMonth != null && body.liftYear != null) {
+  } else if (chit.isLifted && body.liftMonth != null && body.liftYear != null && chit.liftIncomeItemId) {
     // Lift month edit on already-lifted chit: move income adhoc to the new month
-    const allMonthIds = (await db.month.findMany({
-      where: { userId: session.user.id },
-      select: { id: true, month: true, year: true },
-    }));
-    const oldEntry = await db.adHocItem.findFirst({
-      where: { name: incomeLabel, type: "INCOME", monthId: { in: allMonthIds.map(m => m.id) } },
+    let newMonthRecord = await db.month.findUnique({
+      where: { userId_month_year: { userId: session.user.id, month: liftMonth, year: liftYear } },
     });
-    if (oldEntry) {
-      let newMonthRecord = allMonthIds.find(m => m.month === liftMonth && m.year === liftYear);
-      if (!newMonthRecord) {
-        const created = await db.month.create({
-          data: { userId: session.user.id, month: liftMonth, year: liftYear, salaryIncome: 0 },
-        });
-        newMonthRecord = created;
-      }
-      await db.adHocItem.update({
-        where: { id: oldEntry.id },
-        data: { monthId: newMonthRecord.id, date: new Date(Date.UTC(liftYear, liftMonth - 1, 1)) },
+    if (!newMonthRecord) {
+      newMonthRecord = await db.month.create({
+        data: { userId: session.user.id, month: liftMonth, year: liftYear, salaryIncome: 0 },
       });
     }
-  } else if (chit.isLifted && body.liftedAmount != null) {
+    await db.adHocItem.update({
+      where: { id: chit.liftIncomeItemId },
+      data: { monthId: newMonthRecord.id, date: new Date(Date.UTC(liftYear, liftMonth - 1, 1)) },
+    });
+  } else if (chit.isLifted && body.liftedAmount != null && chit.liftIncomeItemId) {
     // Amount-only edit on already-lifted chit: update the income adhoc amount
-    const allMonthIds = (await db.month.findMany({ where: { userId: session.user.id }, select: { id: true } }));
-    await db.adHocItem.updateMany({
-      where: { name: incomeLabel, type: "INCOME", monthId: { in: allMonthIds.map(m => m.id) } },
+    await db.adHocItem.update({
+      where: { id: chit.liftIncomeItemId },
       data: { amount: body.liftedAmount },
     });
   }
@@ -152,31 +150,21 @@ export async function DELETE(
   { params }: { params: Promise<{ chitId: string }> }
 ) {
   const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { chitId } = await params;
 
   const chit = await db.chitFund.findFirst({
     where: { id: chitId, userId: session.user.id },
-    select: { id: true, templateId: true, isLifted: true, template: { select: { name: true } } },
+    select: { id: true, templateId: true, isLifted: true, liftIncomeItemId: true },
   });
   if (!chit) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Remove the lift income ad-hoc entry that was created when this chit was lifted.
-  // Use a two-step approach (fetch monthIds first) because deleteMany with nested
-  // relation filters doesn't work reliably with @prisma/adapter-pg.
-  if (chit.isLifted) {
-    const monthIds = (await db.month.findMany({
-      where: { userId: session.user.id },
-      select: { id: true },
-    })).map(m => m.id);
-    await db.adHocItem.deleteMany({
-      where: {
-        name: `${chit.template.name} Chit Lifted`,
-        type: "INCOME",
-        monthId: { in: monthIds },
-      },
-    });
+  // Remove the lift income ad-hoc entry that was created when this chit was
+  // lifted — via the real FK now, not a name-string match (which could
+  // silently stop matching if the template was ever renamed after lifting).
+  if (chit.isLifted && chit.liftIncomeItemId) {
+    await db.adHocItem.deleteMany({ where: { id: chit.liftIncomeItemId } });
   }
 
   // Deleting the template cascades to ChitFund and MonthlyEntry (onDelete: Cascade in schema)

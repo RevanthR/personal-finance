@@ -3,10 +3,10 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatCurrency, CATEGORY_COLORS, MONTHS } from "@/lib/utils";
+import { formatCurrency, MONTHS } from "@/lib/utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { cn } from "@/lib/utils";
-import { ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { ChevronDown, ChevronRight, TrendingUp, TrendingDown } from "lucide-react";
 
 const TrendChart = dynamic(() => import("./stats-charts").then(m => m.TrendChart), {
   ssr: false,

@@ -27,7 +27,7 @@ const steps = [
     icon: SlidersHorizontal,
     iconClass: "text-violet-600 bg-violet-100 dark:text-violet-400 dark:bg-violet-500/15",
     title: "Set up recurring items",
-    desc: "Go to Configuration to add your salary, EMIs, rent, and subscriptions. They auto-fill every month.",
+    desc: "Go to Recurring to add your salary, EMIs, rent, and subscriptions. They auto-fill every month.",
   },
 ];
 

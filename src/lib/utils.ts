@@ -111,6 +111,30 @@ export function getCategoryColor(category: string, customCategory?: string | nul
   return CATEGORY_COLORS[category] ?? "#9ca3af";
 }
 
+// Groups items by category — customCategory takes priority as the group
+// key when set, same convention getCategoryDisplay/getCategoryColor use.
+// Shared by daily-spend-chart.tsx's category series and
+// daily-spends-section.tsx's category -> sub-category breakdown, which
+// previously each rebuilt this same grouping map independently.
+export function groupItemsByCategory<T extends { category: string | null; customCategory: string | null; amount: number }>(
+  items: T[]
+): { key: string; category: string; customCategory: string | null; items: T[]; total: number }[] {
+  const map = new Map<string, { category: string; customCategory: string | null; items: T[] }>();
+  for (const item of items) {
+    const cat = item.category ?? "MISCELLANEOUS";
+    const key = item.customCategory ?? cat;
+    if (!map.has(key)) map.set(key, { category: cat, customCategory: item.customCategory, items: [] });
+    map.get(key)!.items.push(item);
+  }
+  return [...map.entries()].map(([key, v]) => ({
+    key,
+    category: v.category,
+    customCategory: v.customCategory,
+    items: v.items,
+    total: v.items.reduce((s, i) => s + i.amount, 0),
+  }));
+}
+
 export const CATEGORY_COLORS: Record<string, string> = {
   HOUSE_MAINTENANCE: "#0ea5e9",
   LOAN:             "#f43f5e",

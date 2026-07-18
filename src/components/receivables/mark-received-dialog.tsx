@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatCurrency } from "@/lib/utils";
 import { usePrivacy } from "@/contexts/privacy-context";
+import { format } from "date-fns";
 
 interface MarkReceivedDialogProps {
   open: boolean;
@@ -46,10 +47,11 @@ export function MarkReceivedDialog({ open, onOpenChange, receivable, onConfirm }
     setLoading(false);
   }
 
-  const MONTHS = [
-    "January","February","March","April","May","June",
-    "July","August","September","October","November","December",
-  ];
+  // Full month names for this dropdown specifically — the shared MONTHS
+  // export in lib/utils.ts is deliberately abbreviated ("Jan") for compact
+  // chart axes/labels elsewhere, wrong for a spelled-out form select.
+  // Derived via date-fns rather than a third hardcoded array.
+  const MONTHS = Array.from({ length: 12 }, (_, i) => format(new Date(2000, i, 1), "MMMM"));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

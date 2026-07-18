@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { tokenOverlapScore } from "./text-similarity";
 
 export type ExistingMatch = { id: string; name: string; amount: number; date: string };
 
@@ -18,22 +19,13 @@ function sameDay(a: Date, b: Date): boolean {
   return istDay(a) === istDay(b);
 }
 
-function normalizeTokens(s: string): Set<string> {
-  return new Set(s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean));
-}
-
 // Containment-style overlap — divides by the SMALLER token set, not the
 // larger. Merchant names are often typed as a short abbreviation on one
 // side ("Coffee") against a fuller extracted name on the other ("TOOPS
 // COFFEE PVT LTD"); dividing by the larger set (plain Jaccard) would
 // unfairly punish a full match of the shorter name's tokens.
 function merchantSimilarity(a: string, b: string): number {
-  const ta = normalizeTokens(a);
-  const tb = normalizeTokens(b);
-  if (ta.size === 0 || tb.size === 0) return 0;
-  let overlap = 0;
-  for (const t of ta) if (tb.has(t)) overlap++;
-  return overlap / Math.min(ta.size, tb.size);
+  return tokenOverlapScore(a, b, { mode: "containment" });
 }
 
 // Missing name on either side doesn't block a match — falls through to

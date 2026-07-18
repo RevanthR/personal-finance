@@ -8,7 +8,7 @@ import { syncGmailForUser } from "@/lib/gmail/sync";
 // take well over a minute — the client renders this as a progress bar.
 export async function POST() {
   const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = session.user.id;
 
   const encoder = new TextEncoder();

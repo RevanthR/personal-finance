@@ -21,7 +21,7 @@ export async function PATCH(
   { params }: { params: Promise<{ cardId: string }> }
 ) {
   const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { cardId } = await params;
 
@@ -73,7 +73,7 @@ export async function DELETE(
   { params }: { params: Promise<{ cardId: string }> }
 ) {
   const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { cardId } = await params;
 

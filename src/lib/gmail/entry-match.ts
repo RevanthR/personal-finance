@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { tokenOverlapScore } from "./text-similarity";
 
 export type EntryMatch = {
   kind: "cc" | "recurring";
@@ -17,23 +18,12 @@ export type EntryMatch = {
 // (the bank name, a card nickname) drive the score.
 const STOPWORDS = new Set(["bank", "banks", "card", "cards", "credit", "cc", "ltd", "limited", "the", "of", "payment", "bill", "and", "co"]);
 
-function normalizeTokens(s: string): Set<string> {
-  return new Set(
-    s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(t => t && !STOPWORDS.has(t)),
-  );
-}
-
 // Containment-style overlap (divide by the SMALLER token set) — a UPI
 // payee string ("Axis Bank Credit Card") and a user-typed template name
 // are rarely the same length, so plain Jaccard would unfairly punish a
 // full match of the shorter one's tokens. Same reasoning as dedupe.ts.
 function nameSimilarity(a: string, b: string): number {
-  const ta = normalizeTokens(a);
-  const tb = normalizeTokens(b);
-  if (ta.size === 0 || tb.size === 0) return 0;
-  let overlap = 0;
-  for (const t of ta) if (tb.has(t)) overlap++;
-  return overlap / Math.min(ta.size, tb.size);
+  return tokenOverlapScore(a, b, { mode: "containment", stopwords: STOPWORDS });
 }
 
 const NAME_SIMILARITY_THRESHOLD = 0.4;
