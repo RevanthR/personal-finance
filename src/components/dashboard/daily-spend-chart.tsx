@@ -109,8 +109,12 @@ export function DailySpendChart({ recentMonths, targetMonth, targetYear, todayMo
     if (!selected) return [] as { name: string; amount: number }[];
     const totals = new Map<string, number>();
     for (const item of selected.adHocItems) {
-      if (item.type !== "EXPENSE" || !item.subCategory) continue;
-      totals.set(item.subCategory, (totals.get(item.subCategory) ?? 0) + item.amount);
+      if (item.type !== "EXPENSE") continue;
+      // No sub-category bucket under "Other" instead of being skipped —
+      // previously this silently dropped every untagged transaction from
+      // the list rather than counting it anywhere.
+      const key = item.subCategory ?? "Other";
+      totals.set(key, (totals.get(key) ?? 0) + item.amount);
     }
     return [...totals.entries()]
       .sort((a, b) => b[1] - a[1])

@@ -53,7 +53,6 @@ export function SetupMonthDialog({ open, onOpenChange, month, year, suggestedInc
               value={salary}
               onChange={(e) => setSalary(e.target.value)}
               placeholder="e.g. 164000"
-              autoFocus
             />
             {(suggestedIncome ?? 0) > 0 && (
               <p className="text-xs text-muted-foreground mt-1">

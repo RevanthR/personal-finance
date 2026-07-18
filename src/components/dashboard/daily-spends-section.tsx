@@ -45,12 +45,14 @@ export function DailySpendsSection({ adHocItems, ccCards, onDelete, onEditReques
   }
 
   const groups = [...byCategory.entries()].map(([key, v]) => {
-    // Items with no sub-category land in their own "General" group — same
-    // shape/collapse behavior as every other sub-category, not a special
-    // unlabeled case.
+    // Items with no sub-category land in "Other" — same bucket the picker
+    // sheet writes when you explicitly pick "Other", and the same fallback
+    // months/page.tsx uses, so a null subCategory and a literal "Other"
+    // string always converge on one group instead of two near-duplicate
+    // ones ("General" vs "Other") splitting what's really the same bucket.
     const bySub = new Map<string, AdHocItem[]>();
     for (const item of v.items) {
-      const subKey = item.subCategory ?? "General";
+      const subKey = item.subCategory ?? "Other";
       if (!bySub.has(subKey)) bySub.set(subKey, []);
       bySub.get(subKey)!.push(item);
     }

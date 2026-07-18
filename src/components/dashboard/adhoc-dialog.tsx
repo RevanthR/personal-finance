@@ -9,10 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Chip } from "@/components/ui/chip";
-import { CategoryBadge } from "@/components/ui/category-badge";
-import { CategoryPickerSheet, categoryPickerLabel } from "./category-picker-sheet";
-import { cn, getCategoryColor, getCategoryIcon } from "@/lib/utils";
-import { ChevronRight } from "lucide-react";
+import { cn, EXPENSE_CATEGORY_CHIPS, getCategoryColor, getCategoryIcon, getSubCategoryIcon } from "@/lib/utils";
+import { Wallet, CreditCard } from "lucide-react";
 import { format } from "date-fns";
 
 const INCOME_SOURCES = [
@@ -64,7 +62,8 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
   // with `category`; selecting one clears the other.
   const [customCategoryName, setCustomCategoryName] = useState(editing?.customCategory ?? "");
   const [subLabel, setSubLabel] = useState(editing?.subCategory ?? "");
-  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [showNewCategory, setShowNewCategory] = useState(false);
+  const [showNewSubcat, setShowNewSubcat] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD">(editing?.ccTemplateId ? "CARD" : "CASH");
   const [ccCard, setCCCard] = useState<CCCard | null>(initialCCCard ?? (ccCards[0] ?? null));
   const [name, setName] = useState(editing?.name ?? "");
@@ -77,15 +76,21 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
     setCategory(value);
   }
 
-  function handleCategoryPicked(result: { category?: string; customCategory?: string; subCategory?: string }) {
-    setCategory(result.category ?? "");
-    setCustomCategoryName(result.customCategory ?? "");
-    setSubLabel(result.subCategory ?? "");
+  function selectBuiltInCategory(value: string) {
+    setCategory(value); setCustomCategoryName(""); setShowNewCategory(false);
+    setSubLabel(""); setShowNewSubcat(false);
+  }
+  function selectCustomCategory(name: string) {
+    setCustomCategoryName(name); setCategory(""); setShowNewCategory(false);
+    setSubLabel(""); setShowNewSubcat(false);
+  }
+  function selectSubCategory(value: string) {
+    setSubLabel(value); setShowNewSubcat(false);
   }
 
   function reset() {
-    setType("EXPENSE"); setCategory(""); setCustomCategoryName("");
-    setSubLabel(""); setShowCategoryPicker(false);
+    setType("EXPENSE"); setCategory(""); setCustomCategoryName(""); setShowNewCategory(false);
+    setSubLabel(""); setShowNewSubcat(false);
     setPaymentMethod("CASH"); setCCCard(ccCards[0] ?? null);
     setName(""); setAmount(""); setDate(format(new Date(), "yyyy-MM-dd")); setNotes("");
   }
@@ -131,6 +136,19 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
   const hasCategory = !!category || !!customCategoryName.trim();
   const canSubmit = !loading && !!name && !!amount && hasCategory;
 
+  // Sub-category chips scoped to whichever category is currently selected
+  // — purely real past usage, not a generic seed list. "Other" is always
+  // offered first as the stable default bucket (same convention as
+  // daily-spends-section.tsx's grouping fallback).
+  const selectedCustomCategoryId = customCategoryName
+    ? customCategories.find(c => c.name.toLowerCase() === customCategoryName.trim().toLowerCase())?.id ?? null
+    : null;
+  const scopedPastSubcats = subCategorySuggestions
+    .filter(s => customCategoryName ? s.customCategoryId === selectedCustomCategoryId : (s.category === category && !s.customCategoryId))
+    .map(s => s.subCategory)
+    .filter((s): s is string => !!s && s.toLowerCase() !== "other");
+  const subcatChips = ["Other", ...new Set(scopedPastSubcats)];
+
   return (
     <Dialog open={open} onOpenChange={v => { if (!v && !isEditing) reset(); onOpenChange(v); }}>
       <DialogContent className="max-w-sm sm:max-w-md max-h-[85dvh] overflow-y-auto">
@@ -170,7 +188,7 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Amount (₹)</Label>
-              <Input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" autoFocus={!isEditing} required />
+              <Input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" required />
             </div>
             <div>
               <Label className="text-xs">Date</Label>
@@ -179,49 +197,80 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
           </div>
 
           {type === "EXPENSE" ? (
-            <div>
-              <Label className="text-xs">Category</Label>
-              <button
-                type="button"
-                onClick={() => setShowCategoryPicker(true)}
-                className="flex h-10 w-full items-center gap-2 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              >
-                {hasCategory && (
-                  <CategoryBadge icon={getCategoryIcon(category, customCategoryName || null)} color={getCategoryColor(category, customCategoryName || null)} size="sm" />
-                )}
-                <span className={cn("flex-1 min-w-0 truncate text-left", !hasCategory && "text-muted-foreground")}>
-                  {categoryPickerLabel(category, customCategoryName || null, subLabel || null)}
-                </span>
-                <ChevronRight className="w-4 h-4 text-muted-foreground/60 shrink-0" />
-              </button>
-              <CategoryPickerSheet
-                open={showCategoryPicker}
-                onOpenChange={setShowCategoryPicker}
-                customCategories={customCategories}
-                subCategorySuggestions={subCategorySuggestions}
-                onSelect={handleCategoryPicked}
-              />
-            </div>
-          ) : (
-            <div>
-              <Label className="text-xs">Source</Label>
-              <Select value={category} onChange={e => handleIncomeSourceSelect(e.target.value)} required>
-                <option value="">Select...</option>
-                {INCOME_SOURCES.map(c => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
-                ))}
-              </Select>
-            </div>
-          )}
-
-          {type === "EXPENSE" && (
             <>
+              {/* Category — single-tap chips, same interaction as Paid via
+                  below. Picking one immediately reveals its sub-category
+                  row (see below) instead of opening a separate screen. */}
+              <div>
+                <Label className="text-xs mb-2 block">Category</Label>
+                <div className="flex flex-wrap gap-2">
+                  {EXPENSE_CATEGORY_CHIPS.map(c => (
+                    <Chip
+                      key={c.value}
+                      label={c.label}
+                      icon={getCategoryIcon(c.value)}
+                      color={getCategoryColor(c.value)}
+                      active={category === c.value}
+                      onClick={() => selectBuiltInCategory(c.value)}
+                    />
+                  ))}
+                  {customCategories.map(c => (
+                    <Chip
+                      key={c.id}
+                      label={c.name}
+                      icon={getCategoryIcon("MISCELLANEOUS", c.name)}
+                      color={getCategoryColor("MISCELLANEOUS", c.name)}
+                      active={customCategoryName === c.name}
+                      onClick={() => selectCustomCategory(c.name)}
+                    />
+                  ))}
+                  <Chip label="+ New" dashed active={showNewCategory} onClick={() => setShowNewCategory(v => !v)} />
+                </div>
+                {showNewCategory && (
+                  <Input
+                    className="mt-2"
+                    placeholder="Category name (e.g. Kids)"
+                    value={customCategoryName}
+                    onChange={e => setCustomCategoryName(e.target.value)}
+                    autoFocus
+                  />
+                )}
+              </div>
+
+              {hasCategory && (
+                <div>
+                  <Label className="text-xs mb-2 block">Sub-category</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {subcatChips.map(name => (
+                      <Chip
+                        key={name}
+                        label={name}
+                        icon={getSubCategoryIcon(name)}
+                        color={getCategoryColor(category, customCategoryName || null)}
+                        active={subLabel === name}
+                        onClick={() => selectSubCategory(name)}
+                      />
+                    ))}
+                    <Chip label="+ New" dashed active={showNewSubcat} onClick={() => setShowNewSubcat(v => !v)} />
+                  </div>
+                  {showNewSubcat && (
+                    <Input
+                      className="mt-2"
+                      placeholder="Sub-category name (e.g. Coffee)"
+                      value={subLabel}
+                      onChange={e => setSubLabel(e.target.value)}
+                      autoFocus
+                    />
+                  )}
+                </div>
+              )}
+
               {/* Payment method — small, fixed option counts, chips suit these better than a dropdown */}
               <div>
                 <Label className="text-xs mb-2 block">Paid via</Label>
                 <div className="flex flex-wrap gap-2">
-                  <Chip label="Cash/UPI" active={paymentMethod === "CASH"} onClick={() => setPaymentMethod("CASH")} />
-                  <Chip label="Card" active={paymentMethod === "CARD"} onClick={() => setPaymentMethod("CARD")} />
+                  <Chip label="Cash/UPI" icon={Wallet} active={paymentMethod === "CASH"} onClick={() => setPaymentMethod("CASH")} />
+                  <Chip label="Card" icon={CreditCard} active={paymentMethod === "CARD"} onClick={() => setPaymentMethod("CARD")} />
                 </div>
                 {paymentMethod === "CARD" && ccCards.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">
@@ -232,6 +281,16 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
                 )}
               </div>
             </>
+          ) : (
+            <div>
+              <Label className="text-xs">Source</Label>
+              <Select value={category} onChange={e => handleIncomeSourceSelect(e.target.value)} required>
+                <option value="">Select...</option>
+                {INCOME_SOURCES.map(c => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </Select>
+            </div>
           )}
 
           <div>

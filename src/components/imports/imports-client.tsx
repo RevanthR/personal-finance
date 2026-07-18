@@ -6,13 +6,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Mail, RefreshCw, Check, X, Landmark, Plus, Loader2, Inbox, ChevronRight } from "lucide-react";
+import { Mail, RefreshCw, Check, X, Landmark, Plus, Loader2, Inbox, Wallet, CreditCard } from "lucide-react";
 import { toast } from "sonner";
-import { cn, getCategoryColor, getCategoryIcon } from "@/lib/utils";
+import { cn, EXPENSE_CATEGORY_CHIPS, getCategoryColor, getCategoryIcon, getSubCategoryIcon } from "@/lib/utils";
 import { Chip } from "@/components/ui/chip";
-import { CategoryBadge } from "@/components/ui/category-badge";
-import { CategoryPickerSheet, categoryPickerLabel } from "@/components/dashboard/category-picker-sheet";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 
 export type CCCard = { templateId: string; name: string };
@@ -417,23 +416,45 @@ function AddForm({ item, ccCards, customCategories, subCategorySuggestions, onDo
   const [ccTemplateId, setCCTemplateId] = useState(item.suggestedCcTemplateId ?? ccCards[0]?.templateId ?? "");
   const [category, setCategory] = useState("MISCELLANEOUS");
   const [customCategoryName, setCustomCategoryName] = useState("");
+  const [showNewCategory, setShowNewCategory] = useState(false);
   // Gemini's freeform suggestion pre-fills this before the user has
-  // touched anything — the picker sheet surfaces it as the initial
-  // selection, easily overridden via the same "Recent"/browse/search flow
-  // used everywhere else categories are picked.
+  // touched anything — the sub-category chip row surfaces it as the
+  // initial selection, easily overridden with a single tap.
   const [subLabel, setSubLabel] = useState(item.suggestedSubcategory ?? "");
-  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [showNewSubcat, setShowNewSubcat] = useState(false);
   const [amount, setAmount] = useState(String(item.amount));
   const [pendingAction, setPendingAction] = useState<"approve" | "reject" | null>(null);
   const loading = pendingAction !== null;
 
-  function handleCategoryPicked(result: { category?: string; customCategory?: string; subCategory?: string }) {
-    setCategory(result.category ?? "");
-    setCustomCategoryName(result.customCategory ?? "");
-    setSubLabel(result.subCategory ?? "");
+  function selectBuiltInCategory(value: string) {
+    setCategory(value); setCustomCategoryName(""); setShowNewCategory(false);
+    setSubLabel(""); setShowNewSubcat(false);
+  }
+  function selectCustomCategory(name: string) {
+    setCustomCategoryName(name); setCategory(""); setShowNewCategory(false);
+    setSubLabel(""); setShowNewSubcat(false);
+  }
+  function selectSubCategory(value: string) {
+    setSubLabel(value); setShowNewSubcat(false);
   }
 
   const hasCategory = !!category || !!customCategoryName.trim();
+
+  // Sub-category chips scoped to the selected category, same convention as
+  // the manual add-expense dialog — "Other" always offered first, plus
+  // Gemini's suggestion even if it's not yet part of real past usage (so
+  // it still renders as a selected chip instead of nothing matching).
+  const selectedCustomCategoryId = customCategoryName
+    ? customCategories.find(c => c.name.toLowerCase() === customCategoryName.trim().toLowerCase())?.id ?? null
+    : null;
+  const scopedPastSubcats = subCategorySuggestions
+    .filter(s => customCategoryName ? s.customCategoryId === selectedCustomCategoryId : (s.category === category && !s.customCategoryId))
+    .map(s => s.subCategory)
+    .filter((s): s is string => !!s && s.toLowerCase() !== "other");
+  const subcatChips = [
+    "Other",
+    ...new Set([...(subLabel && subLabel.toLowerCase() !== "other" ? [subLabel] : []), ...scopedPastSubcats]),
+  ];
 
   async function act(action: "approve" | "reject") {
     setPendingAction(action);
@@ -490,8 +511,8 @@ function AddForm({ item, ccCards, customCategories, subCategorySuggestions, onDo
         <div>
           <Label className="text-xs mb-1.5 block">Paid via</Label>
           <div className="flex flex-wrap gap-1.5">
-            <Chip label="Cash/UPI" active={paymentMethod === "CASH"} onClick={() => setPaymentMethod("CASH")} />
-            <Chip label="Card" active={paymentMethod === "CARD"} onClick={() => setPaymentMethod("CARD")} />
+            <Chip label="Cash/UPI" icon={Wallet} active={paymentMethod === "CASH"} onClick={() => setPaymentMethod("CASH")} />
+            <Chip label="Card" icon={CreditCard} active={paymentMethod === "CARD"} onClick={() => setPaymentMethod("CARD")} />
           </div>
           {isCC && ccCards.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-1.5">
@@ -509,29 +530,71 @@ function AddForm({ item, ccCards, customCategories, subCategorySuggestions, onDo
               : <>Looks like a credit or refund — this will be added as income (Other Income) instead of an expense.</>}
           </p>
         ) : (
-          <div>
-            <Label className="text-xs mb-1.5 block">Category</Label>
-            <button
-              type="button"
-              onClick={() => setShowCategoryPicker(true)}
-              className="flex h-10 w-full items-center gap-2 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            >
-              {hasCategory && (
-                <CategoryBadge icon={getCategoryIcon(category, customCategoryName || null)} color={getCategoryColor(category, customCategoryName || null)} size="sm" />
+          <>
+            <div>
+              <Label className="text-xs mb-1.5 block">Category</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {EXPENSE_CATEGORY_CHIPS.map(c => (
+                  <Chip
+                    key={c.value}
+                    label={c.label}
+                    icon={getCategoryIcon(c.value)}
+                    color={getCategoryColor(c.value)}
+                    active={category === c.value}
+                    onClick={() => selectBuiltInCategory(c.value)}
+                  />
+                ))}
+                {customCategories.map(c => (
+                  <Chip
+                    key={c.id}
+                    label={c.name}
+                    icon={getCategoryIcon("MISCELLANEOUS", c.name)}
+                    color={getCategoryColor("MISCELLANEOUS", c.name)}
+                    active={customCategoryName === c.name}
+                    onClick={() => selectCustomCategory(c.name)}
+                  />
+                ))}
+                <Chip label="+ New" dashed active={showNewCategory} onClick={() => setShowNewCategory(v => !v)} />
+              </div>
+              {showNewCategory && (
+                <Input
+                  className="mt-1.5"
+                  placeholder="Category name (e.g. Kids)"
+                  value={customCategoryName}
+                  onChange={e => setCustomCategoryName(e.target.value)}
+                  autoFocus
+                />
               )}
-              <span className={cn("flex-1 min-w-0 truncate text-left", !hasCategory && "text-muted-foreground")}>
-                {categoryPickerLabel(category, customCategoryName || null, subLabel || null)}
-              </span>
-              <ChevronRight className="w-4 h-4 text-muted-foreground/60 shrink-0" />
-            </button>
-            <CategoryPickerSheet
-              open={showCategoryPicker}
-              onOpenChange={setShowCategoryPicker}
-              customCategories={customCategories}
-              subCategorySuggestions={subCategorySuggestions}
-              onSelect={handleCategoryPicked}
-            />
-          </div>
+            </div>
+
+            {hasCategory && (
+              <div>
+                <Label className="text-xs mb-1.5 block">Sub-category</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {subcatChips.map(name => (
+                    <Chip
+                      key={name}
+                      label={name}
+                      icon={getSubCategoryIcon(name)}
+                      color={getCategoryColor(category, customCategoryName || null)}
+                      active={subLabel === name}
+                      onClick={() => selectSubCategory(name)}
+                    />
+                  ))}
+                  <Chip label="+ New" dashed active={showNewSubcat} onClick={() => setShowNewSubcat(v => !v)} />
+                </div>
+                {showNewSubcat && (
+                  <Input
+                    className="mt-1.5"
+                    placeholder="Sub-category name (e.g. Coffee)"
+                    value={subLabel}
+                    onChange={e => setSubLabel(e.target.value)}
+                    autoFocus
+                  />
+                )}
+              </div>
+            )}
+          </>
         )}
 
         <div className="flex flex-wrap gap-2 pt-1">

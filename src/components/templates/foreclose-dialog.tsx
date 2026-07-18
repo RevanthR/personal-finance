@@ -64,7 +64,6 @@ export function ForecloseDialog({ open, onOpenChange, template, onForeclose }: F
               onChange={e => setAmount(e.target.value)}
               placeholder={String(template.amount)}
               required
-              autoFocus
             />
             <p className="text-xs text-muted-foreground mt-1">
               Regular EMI was {fmt(template.amount)}/month
