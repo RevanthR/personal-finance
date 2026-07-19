@@ -5,6 +5,7 @@ import { validate, ParsedTransactionPatchSchema } from "@/lib/validation";
 import { applyCCEffect, reverseCCEffect } from "@/lib/cc-effects";
 import { resolveCustomCategory } from "@/lib/custom-category";
 import { resolveSubCategory } from "@/lib/sub-category";
+import { rememberMerchantCategory } from "@/lib/merchant-memory";
 import { computePaymentUpdate } from "@/lib/entry-payment";
 import type { Category } from "@/generated/prisma/client";
 
@@ -147,6 +148,7 @@ export async function PATCH(
       await tx.parsedTransaction.update({ where: { id }, data: { status: "APPROVED" } });
       return { item, updatedEntry };
     });
+    await rememberMerchantCategory(userId, finalName, { category: resolvedCategory, customCategoryId: customCat?.id ?? null, subCategory });
 
     return NextResponse.json({ item, updatedEntry });
   }
@@ -195,6 +197,7 @@ export async function PATCH(
     await tx.parsedTransaction.update({ where: { id }, data: { status: "APPROVED" } });
     return item;
   });
+  await rememberMerchantCategory(userId, finalName, { category: resolvedCategory, customCategoryId: customCat?.id ?? null, subCategory });
 
   return NextResponse.json({ item, updatedEntry: null });
 }

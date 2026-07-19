@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { ImportsClient } from "@/components/imports/imports-client";
 import { findExistingMatches, findParsedTransactionDuplicates } from "@/lib/gmail/dedupe";
 import { findEntryMatches } from "@/lib/gmail/entry-match";
+import { recallMerchantCategories, normalizeMerchantKey } from "@/lib/merchant-memory";
 
 export default async function ImportsPage() {
   const session = await auth();
@@ -46,6 +47,12 @@ export default async function ImportsPage() {
     pending.map(p => ({ id: p.id, date: p.date, amount: p.amount, merchant: p.merchant, bank: p.bank, paymentMethod: p.paymentMethod })),
   );
 
+  // Learned category per merchant, from past corrections in this same
+  // review flow (see src/lib/merchant-memory.ts) — resolved to a name here
+  // since the client picker matches custom categories by name, not id.
+  const customCategoryNameById = new Map(customCategories.map(c => [c.id, c.name]));
+  const merchantMemory = await recallMerchantCategories(userId, pending.map(p => p.merchant ?? p.bank));
+
   const gmail = {
     connected: !!gmailConnection,
     connectedEmail: gmailConnection?.email ?? null,
@@ -71,6 +78,16 @@ export default async function ImportsPage() {
       suggestedSubcategory: p.suggestedSubcategory,
       possibleMatch: matches.get(p.id) ?? dupes.get(p.id) ?? null,
       matchedEntry: entryMatches.get(p.id) ?? null,
+      learnedCategory: (() => {
+        const key = p.merchant ?? p.bank;
+        const memory = key ? merchantMemory.get(normalizeMerchantKey(key)) : undefined;
+        if (!memory) return null;
+        return {
+          category: memory.customCategoryId ? null : memory.category,
+          customCategoryName: memory.customCategoryId ? customCategoryNameById.get(memory.customCategoryId) ?? null : null,
+          subCategory: memory.subCategory,
+        };
+      })(),
     })),
   };
 

@@ -40,6 +40,7 @@ export interface ParsedTransactionItem {
   suggestedSubcategory: string | null;
   possibleMatch: PossibleMatch | null;
   matchedEntry: MatchedEntry | null;
+  learnedCategory: { category: string | null; customCategoryName: string | null; subCategory: string | null } | null;
 }
 
 const METHOD_LABEL: Record<PaymentMethod, string> = {
@@ -415,12 +416,15 @@ function AddForm({ item, ccCards, customCategories, subCategorySuggestions, onDo
   const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD">(item.paymentMethod === "CREDIT_CARD" ? "CARD" : "CASH");
   const isCC = paymentMethod === "CARD";
   const [ccTemplateId, setCCTemplateId] = useState(item.suggestedCcTemplateId ?? ccCards[0]?.templateId ?? "");
-  // Gemini's freeform suggestion pre-fills sub-category before the user has
-  // touched anything — the chip row surfaces it as the initial selection,
-  // easily overridden with a single tap.
+  // A remembered choice for this merchant (see src/lib/merchant-memory.ts)
+  // wins over the generic Family default and Gemini's freeform sub-category
+  // guess — either way, the chip row just surfaces a pre-fill, easily
+  // overridden with a single tap.
+  const learned = item.learnedCategory;
   const picker = useCategoryPicker({
-    initialCategory: "MISCELLANEOUS",
-    initialSubCategory: item.suggestedSubcategory ?? "",
+    initialCategory: learned?.customCategoryName ? "" : (learned?.category ?? "MISCELLANEOUS"),
+    initialCustomCategory: learned?.customCategoryName ?? "",
+    initialSubCategory: learned?.subCategory ?? item.suggestedSubcategory ?? "",
     customCategories,
     subCategorySuggestions,
   });

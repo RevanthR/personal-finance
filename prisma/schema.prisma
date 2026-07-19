@@ -81,6 +81,7 @@ model User {
   parsedTransactions ParsedTransaction[]
   gmailSeenMessages  GmailSeenMessage[]
   gmailSenderReputations GmailSenderReputation[]
+  merchantCategoryMemories MerchantCategoryMemory[]
 }
 
 // User-defined expense categories, reused (not retyped) across templates
@@ -94,6 +95,7 @@ model CustomCategory {
   templates   LineItemTemplate[]
   adHocItems  AdHocItem[]
   receivables Receivable[]
+  merchantMemories MerchantCategoryMemory[]
 
   @@unique([userId, name])
 }
@@ -406,6 +408,26 @@ model ParsedTransaction {
   createdAt              DateTime                        @default(now())
 
   @@unique([userId, gmailMessageId])
+}
+
+// Remembers the category/sub-category a user actually picked for a given
+// merchant, keyed by a normalized version of the merchant/payee string —
+// so the next time the same payee shows up in a Gmail-sync suggestion (or
+// a manual add), the review form starts from what they picked last time
+// instead of Gemini's freeform guess or the generic Family default.
+// Deliberately simple: last correction wins, no scoring/decay.
+model MerchantCategoryMemory {
+  id                String          @id @default(cuid())
+  userId            String
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  merchantKey       String
+  category          Category?
+  customCategoryId  String?
+  customCategoryRef CustomCategory? @relation(fields: [customCategoryId], references: [id], onDelete: SetNull)
+  subCategory       String?
+  updatedAt         DateTime        @updatedAt
+
+  @@unique([userId, merchantKey])
 }
 
 // Every Gmail message the sync has ever inspected, whether or not it turned
