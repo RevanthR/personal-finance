@@ -6,7 +6,7 @@ const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const db = new PrismaClient({ adapter });
 
 async function main() {
-  console.log("🌱 Seeding FinanceOS...");
+  console.log("🌱 Seeding Artha...");
 
   // Create admin user (will be linked once you sign in with Google)
   const user = await db.user.upsert({

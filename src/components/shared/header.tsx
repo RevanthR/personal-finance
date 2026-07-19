@@ -42,7 +42,7 @@ export function Header({ user }: HeaderProps) {
           <div className="w-7 h-7 bg-primary rounded-xl flex items-center justify-center shrink-0">
             <IndianRupee className="w-3.5 h-3.5 text-primary-foreground" />
           </div>
-          <span className="font-bold text-foreground">FinanceOS</span>
+          <span className="font-bold text-foreground">Artha</span>
         </div>
         <div className="hidden md:block" />
 

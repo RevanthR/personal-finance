@@ -1,6 +1,6 @@
-// Service Worker for FinanceOS PWA
-const STATIC_CACHE = "financeos-static-v4";
-const PAGE_CACHE   = "financeos-pages-v4";
+// Service Worker for Artha PWA
+const STATIC_CACHE = "artha-static-v1";
+const PAGE_CACHE   = "artha-pages-v1";
 const OFFLINE_URL  = "/offline.html";
 
 self.addEventListener("install", (event) => {
@@ -75,7 +75,7 @@ async function networkFirst(cacheName, request) {
 self.addEventListener("push", (event) => {
   const data = event.data?.json() ?? {};
   event.waitUntil(
-    self.registration.showNotification(data.title ?? "FinanceOS", {
+    self.registration.showNotification(data.title ?? "Artha", {
       body: data.body ?? "You have a pending payment",
       data: { url: data.url ?? "/dashboard" },
       actions: [{ action: "open", title: "View" }],

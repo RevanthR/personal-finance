@@ -1,4 +1,4 @@
-export const metadata = { title: "Cancellation & Refunds | FinanceOS" };
+export const metadata = { title: "Cancellation & Refunds | Artha" };
 
 export default function RefundsPage() {
   return (
@@ -9,7 +9,7 @@ export default function RefundsPage() {
       <section className="space-y-6 text-sm leading-relaxed text-muted-foreground">
         <div>
           <h2 className="text-base font-semibold text-foreground mb-2">1. Subscription Plans</h2>
-          <p>FinanceOS offers the following subscription plans, all providing full access to the platform:</p>
+          <p>Artha offers the following subscription plans, all providing full access to the platform:</p>
           <ul className="list-disc pl-5 mt-2 space-y-1">
             <li><strong>Weekly:</strong> ₹29 for 7 days</li>
             <li><strong>Monthly:</strong> ₹99 for 30 days</li>
@@ -21,7 +21,7 @@ export default function RefundsPage() {
 
         <div>
           <h2 className="text-base font-semibold text-foreground mb-2">2. Cancellation</h2>
-          <p>Since FinanceOS subscriptions are one-time purchases (not recurring mandates), there is nothing to &ldquo;cancel&rdquo; in the traditional sense. Access continues until the end of the paid period and does not automatically renew.</p>
+          <p>Since Artha subscriptions are one-time purchases (not recurring mandates), there is nothing to &ldquo;cancel&rdquo; in the traditional sense. Access continues until the end of the paid period and does not automatically renew.</p>
           <p className="mt-2">If you do not wish to continue using the service, simply do not repurchase when your plan expires.</p>
         </div>
 

@@ -8,7 +8,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 const inter = Inter({ variable: "--font-geist-sans", subsets: ["latin"], display: "swap" });
 
 export const metadata: Metadata = {
-  title: "FinanceOS",
+  title: "Artha",
   description: "Personal finance tracker",
   manifest: "/manifest.json",
   icons: {
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "FinanceOS",
+    title: "Artha",
   },
 };
 

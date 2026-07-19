@@ -36,7 +36,7 @@ function AppearanceCard() {
         <CardTitle className="text-base flex items-center gap-2">
           <Sun className="w-4 h-4" /> Appearance
         </CardTitle>
-        <CardDescription>Choose how FinanceOS looks on this device.</CardDescription>
+        <CardDescription>Choose how Artha looks on this device.</CardDescription>
       </CardHeader>
       <CardContent>
         {mounted ? (

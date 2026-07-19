@@ -1,6 +1,6 @@
 {
-  "name": "FinanceOS",
-  "short_name": "FinanceOS",
+  "name": "Artha",
+  "short_name": "Artha",
   "description": "Personal finance tracker",
   "start_url": "/dashboard",
   "display": "standalone",

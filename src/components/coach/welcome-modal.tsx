@@ -32,7 +32,7 @@ export function WelcomeModal() {
             <div className="w-12 h-12 bg-warning rounded-xl flex items-center justify-center mx-auto mb-3">
               <IndianRupee className="w-6 h-6 text-white" />
             </div>
-            <p className="text-lg font-bold text-foreground">Welcome to FinanceOS</p>
+            <p className="text-lg font-bold text-foreground">Welcome to Artha</p>
             <p className="text-sm text-muted-foreground mt-1">Your personal finance command centre</p>
           </div>
 

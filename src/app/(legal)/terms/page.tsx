@@ -1,4 +1,4 @@
-export const metadata = { title: "Terms & Conditions | FinanceOS" };
+export const metadata = { title: "Terms & Conditions | Artha" };
 
 export default function TermsPage() {
   return (
@@ -9,22 +9,22 @@ export default function TermsPage() {
       <section className="space-y-6 text-sm leading-relaxed text-muted-foreground">
         <div>
           <h2 className="text-base font-semibold text-foreground mb-2">1. Acceptance of Terms</h2>
-          <p>By accessing or using FinanceOS (&ldquo;the Service&rdquo;), you agree to be bound by these Terms &amp; Conditions. If you do not agree, please do not use the Service.</p>
+          <p>By accessing or using Artha (&ldquo;the Service&rdquo;), you agree to be bound by these Terms &amp; Conditions. If you do not agree, please do not use the Service.</p>
         </div>
 
         <div>
           <h2 className="text-base font-semibold text-foreground mb-2">2. Description of Service</h2>
-          <p>FinanceOS is a personal finance tracking web application that allows users to manage recurring income, expenses, loans, chit funds, and receivables. The Service is provided on a subscription basis.</p>
+          <p>Artha is a personal finance tracking web application that allows users to manage recurring income, expenses, loans, chit funds, and receivables. The Service is provided on a subscription basis.</p>
         </div>
 
         <div>
           <h2 className="text-base font-semibold text-foreground mb-2">3. User Accounts</h2>
-          <p>Access to FinanceOS requires authentication via Google OAuth. You are responsible for maintaining the confidentiality of your account and all activity that occurs under it. You must notify us immediately of any unauthorised use at revanth.rallabandi@gmail.com.</p>
+          <p>Access to Artha requires authentication via Google OAuth. You are responsible for maintaining the confidentiality of your account and all activity that occurs under it. You must notify us immediately of any unauthorised use at revanth.rallabandi@gmail.com.</p>
         </div>
 
         <div>
           <h2 className="text-base font-semibold text-foreground mb-2">4. Subscription and Payments</h2>
-          <p>FinanceOS offers paid subscription plans (Weekly, Monthly, Quarterly, Yearly). Payments are processed securely via Razorpay. By subscribing, you authorise us to charge the applicable fee to your chosen payment method. All prices are inclusive of applicable taxes.</p>
+          <p>Artha offers paid subscription plans (Weekly, Monthly, Quarterly, Yearly). Payments are processed securely via Razorpay. By subscribing, you authorise us to charge the applicable fee to your chosen payment method. All prices are inclusive of applicable taxes.</p>
         </div>
 
         <div>
@@ -39,7 +39,7 @@ export default function TermsPage() {
 
         <div>
           <h2 className="text-base font-semibold text-foreground mb-2">7. Limitation of Liability</h2>
-          <p>FinanceOS is a personal finance tracking tool and does not constitute financial advice. We are not liable for any financial decisions made based on information displayed in the app. The Service is provided &ldquo;as is&rdquo; without warranties of any kind.</p>
+          <p>Artha is a personal finance tracking tool and does not constitute financial advice. We are not liable for any financial decisions made based on information displayed in the app. The Service is provided &ldquo;as is&rdquo; without warranties of any kind.</p>
         </div>
 
         <div>

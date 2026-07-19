@@ -26,7 +26,7 @@ export function PwaInstallBanner() {
           </div>
 
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold">Add FinanceOS to your home screen</p>
+            <p className="text-sm font-semibold">Add Artha to your home screen</p>
 
             {isIOS ? (
               <p className="text-xs text-muted-foreground mt-1 leading-relaxed">

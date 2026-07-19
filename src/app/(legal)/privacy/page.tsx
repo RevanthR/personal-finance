@@ -1,4 +1,4 @@
-export const metadata = { title: "Privacy Policy | FinanceOS" };
+export const metadata = { title: "Privacy Policy | Artha" };
 
 export default function PrivacyPage() {
   return (
@@ -9,7 +9,7 @@ export default function PrivacyPage() {
       <section className="space-y-6 text-sm leading-relaxed text-muted-foreground">
         <div>
           <h2 className="text-base font-semibold text-foreground mb-2">1. Information We Collect</h2>
-          <p>We collect the following information when you use FinanceOS:</p>
+          <p>We collect the following information when you use Artha:</p>
           <ul className="list-disc pl-5 mt-2 space-y-1">
             <li><strong>Account information:</strong> Name, email address, and profile picture provided by Google OAuth during sign-in.</li>
             <li><strong>Financial data:</strong> Income, expenses, loan details, chit fund records, and receivables that you manually enter into the app.</li>
@@ -21,7 +21,7 @@ export default function PrivacyPage() {
         <div>
           <h2 className="text-base font-semibold text-foreground mb-2">2. How We Use Your Information</h2>
           <ul className="list-disc pl-5 space-y-1">
-            <li>To provide and personalise the FinanceOS service to you.</li>
+            <li>To provide and personalise the Artha service to you.</li>
             <li>To process subscription payments and maintain your account status.</li>
             <li>To send push notifications you have opted into.</li>
             <li>To improve and maintain the platform.</li>
@@ -55,7 +55,7 @@ export default function PrivacyPage() {
 
         <div>
           <h2 className="text-base font-semibold text-foreground mb-2">7. Changes to This Policy</h2>
-          <p>We may update this Privacy Policy from time to time. Continued use of FinanceOS after changes constitutes acceptance of the revised policy.</p>
+          <p>We may update this Privacy Policy from time to time. Continued use of Artha after changes constitutes acceptance of the revised policy.</p>
         </div>
 
         <div>

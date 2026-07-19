@@ -11,7 +11,7 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
             <div className="w-7 h-7 bg-foreground rounded-lg flex items-center justify-center">
               <IndianRupee className="w-3.5 h-3.5 text-background" />
             </div>
-            FinanceOS
+            Artha
           </Link>
           <nav className="flex items-center gap-4 text-sm text-muted-foreground">
             <Link href="/contact" className="hover:text-foreground transition-colors">Contact</Link>

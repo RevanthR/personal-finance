@@ -17,7 +17,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             <div className="mx-auto mb-4 w-14 h-14 bg-warning rounded-xl flex items-center justify-center text-white text-xl font-bold">
               ₹
             </div>
-            <CardTitle className="text-2xl font-bold">FinanceOS</CardTitle>
+            <CardTitle className="text-2xl font-bold">Artha</CardTitle>
             <CardDescription className="text-sm">
               Your personal finance command centre
             </CardDescription>
@@ -95,7 +95,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
               {[
                 { icon: MoreVertical, text: "Tap the ⋮ menu in the top-right corner of Chrome" },
                 { icon: Download, text: "Tap \"Add to Home screen\" or \"Install app\"" },
-                { icon: PlusSquare, text: "Tap Install, FinanceOS is added to your home screen" },
+                { icon: PlusSquare, text: "Tap Install, Artha is added to your home screen" },
               ].map(({ icon: Icon, text }, i) => (
                 <li key={i} className="flex items-start gap-2.5">
                   <span className="w-4 h-4 rounded-full bg-muted text-muted-foreground text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">

@@ -24,7 +24,7 @@ export async function POST() {
   }
 
   const messages = [
-    { title: "FinanceOS ✓", body: "Push notifications are working!", url: "/dashboard" },
+    { title: "Artha ✓", body: "Push notifications are working!", url: "/dashboard" },
     { title: "Reminder", body: "Your June salary entry is pending.", url: "/dashboard" },
   ];
 

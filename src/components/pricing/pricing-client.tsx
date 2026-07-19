@@ -88,7 +88,7 @@ export function PricingClient({ planType, planExpiry, trialEndsAt, razorpayKeyId
           order_id: orderId,
           amount,
           currency,
-          name: "FinanceOS",
+          name: "Artha",
           description: `${plan.label} subscription`,
           theme: { color: "#2563eb" },
           method: {
@@ -133,7 +133,7 @@ export function PricingClient({ planType, planExpiry, trialEndsAt, razorpayKeyId
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <PageHeader className="mb-2" title="Subscription" subtitle="Unlock full access to FinanceOS. Pay via UPI, cards, or net banking." />
+      <PageHeader className="mb-2" title="Subscription" subtitle="Unlock full access to Artha. Pay via UPI, cards, or net banking." />
 
       {/* Status banner */}
       {active && expiryDate && (
@@ -169,7 +169,7 @@ export function PricingClient({ planType, planExpiry, trialEndsAt, razorpayKeyId
           </div>
           <div className="text-sm">
             <span className="font-semibold text-negative">Your free trial has ended</span>
-            <p className="text-negative/80 text-xs mt-0.5">Choose a plan below to continue using FinanceOS.</p>
+            <p className="text-negative/80 text-xs mt-0.5">Choose a plan below to continue using Artha.</p>
           </div>
         </div>
       )}
