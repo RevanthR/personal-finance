@@ -185,7 +185,7 @@ async function DashboardData({
         id: true, month: true, year: true,
         salaryIncome: true, freelanceIncome: true, otherIncome: true,
         entries: { select: { id: true, templateId: true, amount: true, cashbackAmount: true } },
-        adHocItems: { select: { id: true, type: true, amount: true, category: true, customCategory: true, customCategoryId: true, subCategory: true, notes: true, ccTemplateId: true, date: true } },
+        adHocItems: { select: { id: true, type: true, amount: true, category: true, customCategory: true, customCategoryId: true, subCategory: true, notes: true, ccTemplateId: true, isCredit: true, date: true } },
       },
     }),
     db.lineItemTemplate.findMany({

@@ -162,14 +162,20 @@ export async function PATCH(
     // Reverse the old CC effect, then apply the new one. Order matters: the
     // row above is already updated to its new values before either call, so
     // a card/category change correctly excludes this item from the OLD
-    // card's live re-sum, and includes it in the NEW card's.
+    // card's live re-sum, and includes it in the NEW card's. A credit row
+    // (isCredit) is the inverse of a normal charge — "undo its effect"
+    // means adding back, "impose its effect" means reversing.
     const updatedEntries = new Map<string, EntryFields>();
     if (existing.type === "EXPENSE" && existing.ccTemplateId) {
-      const reversed = await reverseCCEffect(tx, userId, monthId, existing.ccTemplateId, existing.date, existing.amount);
+      const reversed = existing.isCredit
+        ? await applyCCEffect(tx, userId, monthId, existing.ccTemplateId, existing.date, existing.amount)
+        : await reverseCCEffect(tx, userId, monthId, existing.ccTemplateId, existing.date, existing.amount);
       if (reversed) updatedEntries.set(reversed.id, reversed);
     }
     if (item.type === "EXPENSE" && item.ccTemplateId) {
-      const applied = await applyCCEffect(tx, userId, monthId, item.ccTemplateId, nextDate, nextAmount);
+      const applied = item.isCredit
+        ? await reverseCCEffect(tx, userId, monthId, item.ccTemplateId, nextDate, nextAmount)
+        : await applyCCEffect(tx, userId, monthId, item.ccTemplateId, nextDate, nextAmount);
       if (applied) updatedEntries.set(applied.id, applied);
     }
     return { item, updatedEntries };
@@ -205,7 +211,11 @@ export async function DELETE(
 
     let updatedEntry: EntryFields | null = null;
     if (item?.type === "EXPENSE" && item.ccTemplateId) {
-      updatedEntry = await reverseCCEffect(tx, userId, monthId, item.ccTemplateId, item.date, item.amount);
+      // Deleting a credit row undoes its effect, which means adding its
+      // amount back (the inverse of deleting a normal charge).
+      updatedEntry = item.isCredit
+        ? await applyCCEffect(tx, userId, monthId, item.ccTemplateId, item.date, item.amount)
+        : await reverseCCEffect(tx, userId, monthId, item.ccTemplateId, item.date, item.amount);
     }
     return updatedEntry;
   });

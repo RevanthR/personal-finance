@@ -100,7 +100,7 @@ type RecentMonthSummary = {
   id: string; month: number; year: number;
   salaryIncome: number; freelanceIncome: number; otherIncome: number;
   entries: { id: string; templateId: string; amount: number; cashbackAmount: number | null }[];
-  adHocItems: { id: string; type: string; amount: number; category: string | null; customCategory: string | null; customCategoryId: string | null; subCategory: string | null; notes: string | null; ccTemplateId: string | null; date: string }[];
+  adHocItems: { id: string; type: string; amount: number; category: string | null; customCategory: string | null; customCategoryId: string | null; subCategory: string | null; notes: string | null; ccTemplateId: string | null; isCredit?: boolean; date: string }[];
 };
 
 type EntryWithTemplate = {
@@ -110,7 +110,7 @@ type EntryWithTemplate = {
 };
 
 type AdHocItem = {
-  id: string; name: string; amount: number; type: string; category: string | null; customCategory: string | null; customCategoryId: string | null; subCategory: string | null; date: string; notes: string | null; ccTemplateId: string | null;
+  id: string; name: string; amount: number; type: string; category: string | null; customCategory: string | null; customCategoryId: string | null; subCategory: string | null; date: string; notes: string | null; ccTemplateId: string | null; isCredit?: boolean;
 };
 
 
@@ -950,12 +950,12 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
           },
           ...(hasCCCards ? [{
             label: "CC Bill",
-            value: dispCCBills > 0 ? fmt(dispCCBills) : "—",
+            value: dispCCBills > 0 ? fmt(dispCCBills) : "-",
             hint: <span className="text-xs text-muted-foreground">{isProjected ? "last month's bill" : dispCCBills > 0 ? "from last month" : "no CC bills"}</span>,
           }] : []),
           ...(hasCCCards && !isProjected ? [{
             label: "CC Next Month",
-            value: ccNextMonth > 0 ? fmt(ccNextMonth) : "—",
+            value: ccNextMonth > 0 ? fmt(ccNextMonth) : "-",
             hint: <span className="text-xs text-muted-foreground">{ccNextMonth > 0 ? `building for ${nextMonthName}` : "nothing yet"}</span>,
           }] : []),
           {

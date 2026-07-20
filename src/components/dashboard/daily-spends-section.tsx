@@ -12,7 +12,7 @@ import { format } from "date-fns";
 export type AdHocItem = {
   id: string; name: string; amount: number; type: string;
   category: string | null; customCategory: string | null; customCategoryId: string | null; subCategory: string | null;
-  date: string; notes: string | null; ccTemplateId: string | null;
+  date: string; notes: string | null; ccTemplateId: string | null; isCredit?: boolean;
 };
 
 interface DailySpendsSectionProps {
@@ -57,7 +57,7 @@ export function DailySpendsSection({ adHocItems, ccCards, onDelete, onEditReques
       bySub.get(subKey)!.push(item);
     }
     const subGroups = [...bySub.entries()]
-      .map(([subKey, items]) => ({ key: subKey, items, total: items.reduce((s, i) => s + i.amount, 0) }))
+      .map(([subKey, items]) => ({ key: subKey, items, total: items.reduce((s, i) => s + (i.isCredit ? -i.amount : i.amount), 0) }))
       .sort((a, b) => b.total - a.total);
     return {
       key: v.key,
@@ -208,6 +208,10 @@ function TransactionRow({ item, ccCards, onDelete, onEditRequest, isRemoving }: 
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const isCarryForward = item.notes === "carry_forward";
   const cardName = item.ccTemplateId ? ccCards.find(c => c.templateId === item.ccTemplateId)?.name : null;
+  // A credit/refund against a card (isCredit) reduces the bill instead of
+  // being a spend — reads like income (green, "+") even though it's still
+  // an EXPENSE-type row under the hood.
+  const isReduction = item.type === "EXPENSE" && item.isCredit;
 
   return (
     <div className={cn(
@@ -215,7 +219,7 @@ function TransactionRow({ item, ccCards, onDelete, onEditRequest, isRemoving }: 
       isCarryForward && "border-warning-border bg-warning-bg/40",
       isRemoving && "opacity-0 scale-95 pointer-events-none"
     )}>
-      <div className={cn("w-0.5 h-7 rounded-full shrink-0", item.type === "INCOME" ? "bg-positive" : "bg-negative")} />
+      <div className={cn("w-0.5 h-7 rounded-full shrink-0", item.type === "INCOME" || isReduction ? "bg-positive" : "bg-negative")} />
       {/* Payment method — icon for at-a-glance scanning; the method name
           itself is spelled out in the meta line below since title/hover
           tooltips never surface on touch devices. */}
@@ -232,6 +236,9 @@ function TransactionRow({ item, ccCards, onDelete, onEditRequest, isRemoving }: 
           {isCarryForward && (
             <span className="text-xs font-semibold text-warning bg-warning-bg px-1 py-0.5 rounded">carried fwd</span>
           )}
+          {isReduction && (
+            <span className="text-xs font-semibold text-positive bg-positive-bg px-1 py-0.5 rounded">refund</span>
+          )}
         </div>
         <p className="text-xs text-muted-foreground">
           {format(new Date(item.date), "dd MMM")}
@@ -239,8 +246,8 @@ function TransactionRow({ item, ccCards, onDelete, onEditRequest, isRemoving }: 
           {item.notes && !isCarryForward ? ` · ${item.notes}` : ""}
         </p>
       </div>
-      <span className={cn("text-sm font-semibold shrink-0", item.type === "INCOME" ? "text-positive" : "text-negative")}>
-        {item.type === "INCOME" ? "+" : "-"}{fmt(item.amount)}
+      <span className={cn("text-sm font-semibold shrink-0", item.type === "INCOME" || isReduction ? "text-positive" : "text-negative")}>
+        {item.type === "INCOME" || isReduction ? "+" : "-"}{fmt(item.amount)}
       </span>
       {onEditRequest && !isCarryForward && (
         <Button variant="ghost" size="sm" onClick={() => onEditRequest(item)} className="h-10 w-10 p-0 text-muted-foreground hover:text-foreground shrink-0">

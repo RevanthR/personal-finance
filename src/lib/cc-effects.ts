@@ -22,19 +22,22 @@ async function recomputeStatementAmount(
 ): Promise<EntryFields> {
   const cardItems = await client.adHocItem.findMany({
     where: { monthId, type: "EXPENSE", ccTemplateId },
-    select: { amount: true, date: true },
+    select: { amount: true, date: true, isCredit: true },
   });
 
+  // Credits (refunds/reversals against this card, isCredit rows) net OUT of
+  // the post-close total instead of adding to it — floored at 0 since a
+  // credit larger than post-close spend can't make "owed so far" negative.
   const postCloseTotal = cardItems
     .filter(i => {
       const day = new Date(i.date).getDate();
       return statementDay === null || day > statementDay;
     })
-    .reduce((sum, i) => sum + i.amount, 0);
+    .reduce((sum, i) => sum + (i.isCredit ? -i.amount : i.amount), 0);
 
   return client.monthlyEntry.update({
     where: { id: entryId },
-    data: { statementAmount: postCloseTotal },
+    data: { statementAmount: Math.max(0, postCloseTotal) },
     select: { id: true, amount: true, statementAmount: true, billedAmount: true },
   });
 }

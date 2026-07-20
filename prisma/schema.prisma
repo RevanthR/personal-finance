@@ -286,6 +286,12 @@ model AdHocItem {
   // name out of the notes field, which broke if notes became user-editable.
   ccTemplateId      String?
   ccTemplate        LineItemTemplate? @relation(fields: [ccTemplateId], references: [id], onDelete: SetNull)
+  // A credit/refund against a CC card (not a new charge) — amount is still
+  // stored as a positive magnitude, this flags it to be netted OUT of the
+  // card's statement total instead of added, and out of spend totals
+  // instead of counted as a spend. Internal-only: never user-settable via
+  // the manual add-expense form, only ever set by the Gmail-approve flow.
+  isCredit          Boolean         @default(false)
   date              DateTime
   notes             String?
   createdAt         DateTime        @default(now())

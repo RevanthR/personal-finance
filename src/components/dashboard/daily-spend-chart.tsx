@@ -13,7 +13,14 @@ import {
 type AdHocItem = {
   id: string; type: string; amount: number; date: string;
   category: string | null; customCategory: string | null; customCategoryId: string | null; subCategory: string | null; ccTemplateId: string | null;
+  isCredit?: boolean;
 };
+
+// A credit/refund row's amount is stored as a positive magnitude but nets
+// OUT of spend totals instead of adding to them.
+function signedAmount(item: AdHocItem): number {
+  return item.isCredit ? -item.amount : item.amount;
+}
 
 type RecentMonthSummary = {
   id: string; month: number; year: number;
@@ -81,15 +88,16 @@ export function DailySpendChart({ recentMonths, targetMonth, targetYear, todayMo
     for (const item of expenseItems) {
       const d = new Date(item.date).getDate();
       if (d < 1 || d > lastDay) continue;
-      total += item.amount;
-      if (item.ccTemplateId) cardTotal += item.amount; else cashTotal += item.amount;
+      const amt = signedAmount(item);
+      total += amt;
+      if (item.ccTemplateId) cardTotal += amt; else cashTotal += amt;
       const key = mode === "category"
         ? (() => {
             const raw = item.customCategory ?? item.category ?? "MISCELLANEOUS";
             return seriesKeys.has(raw) ? raw : OTHER_KEY;
           })()
         : (item.ccTemplateId ? "Card" : "Cash");
-      buckets[d - 1][key] = (buckets[d - 1][key] ?? 0) + item.amount;
+      buckets[d - 1][key] = (buckets[d - 1][key] ?? 0) + amt;
     }
 
     return { buckets, series, average: lastDay > 0 ? total / lastDay : 0, total, cashTotal, cardTotal };
@@ -107,7 +115,7 @@ export function DailySpendChart({ recentMonths, targetMonth, targetYear, todayMo
       // previously this silently dropped every untagged transaction from
       // the list rather than counting it anywhere.
       const key = item.subCategory ?? "Other";
-      totals.set(key, (totals.get(key) ?? 0) + item.amount);
+      totals.set(key, (totals.get(key) ?? 0) + signedAmount(item));
     }
     return [...totals.entries()]
       .sort((a, b) => b[1] - a[1])

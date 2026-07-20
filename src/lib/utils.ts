@@ -116,7 +116,7 @@ export function getCategoryColor(category: string, customCategory?: string | nul
 // Shared by daily-spend-chart.tsx's category series and
 // daily-spends-section.tsx's category -> sub-category breakdown, which
 // previously each rebuilt this same grouping map independently.
-export function groupItemsByCategory<T extends { category: string | null; customCategory: string | null; amount: number }>(
+export function groupItemsByCategory<T extends { category: string | null; customCategory: string | null; amount: number; isCredit?: boolean }>(
   items: T[]
 ): { key: string; category: string; customCategory: string | null; items: T[]; total: number }[] {
   const map = new Map<string, { category: string; customCategory: string | null; items: T[] }>();
@@ -126,12 +126,14 @@ export function groupItemsByCategory<T extends { category: string | null; custom
     if (!map.has(key)) map.set(key, { category: cat, customCategory: item.customCategory, items: [] });
     map.get(key)!.items.push(item);
   }
+  // A credit/refund row (isCredit) nets OUT of its category's total instead
+  // of adding to it — it's a reduction in spend, not more spend.
   return [...map.entries()].map(([key, v]) => ({
     key,
     category: v.category,
     customCategory: v.customCategory,
     items: v.items,
-    total: v.items.reduce((s, i) => s + i.amount, 0),
+    total: v.items.reduce((s, i) => s + (i.isCredit ? -i.amount : i.amount), 0),
   }));
 }
 

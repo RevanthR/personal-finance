@@ -112,14 +112,39 @@ export async function PATCH(
   if (isCC) {
     if (isIncome) {
       // A refund/credit against the card reduces what's owed on the
-      // statement — it isn't a new charge, so no AdHocItem is created for
-      // it, and the effect is reversed instead of applied.
-      const updatedEntry = await db.$transaction(async (tx) => {
+      // statement rather than adding a new charge — but it still has to be
+      // a real, queryable row (isCredit: true) rather than a bare arithmetic
+      // adjustment, since a post-close statement total is re-summed from
+      // scratch on every subsequent charge; a decrement with no persisted
+      // trace would just get silently erased by the next resum.
+      const customCat = body.customCategory ? await resolveCustomCategory(userId, body.customCategory) : null;
+      const resolvedCategory = (customCat ? "MISCELLANEOUS" : (body.category as Category | undefined)) ?? "MISCELLANEOUS";
+      const subCategory = body.subCategory
+        ? await resolveSubCategory(userId, { category: resolvedCategory, customCategoryId: customCat?.id ?? null }, body.subCategory)
+        : null;
+
+      const { item, updatedEntry } = await db.$transaction(async (tx) => {
+        const item = await tx.adHocItem.create({
+          data: {
+            monthId: monthRow.id,
+            name: finalName,
+            amount: finalAmount,
+            type: "EXPENSE",
+            category: resolvedCategory,
+            customCategory: customCat?.name ?? null,
+            customCategoryId: customCat?.id ?? null,
+            subCategory,
+            ccTemplateId,
+            isCredit: true,
+            date: finalDate,
+            notes: "Refund/credit imported from Gmail",
+          },
+        });
         const updatedEntry = await reverseCCEffect(tx, userId, monthRow.id, ccTemplateId, finalDate, finalAmount);
         await tx.parsedTransaction.update({ where: { id }, data: { status: "APPROVED" } });
-        return updatedEntry;
+        return { item, updatedEntry };
       });
-      return NextResponse.json({ item: null, updatedEntry });
+      return NextResponse.json({ item, updatedEntry });
     }
 
     const customCat = body.customCategory ? await resolveCustomCategory(userId, body.customCategory) : null;

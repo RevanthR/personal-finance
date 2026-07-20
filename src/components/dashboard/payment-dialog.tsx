@@ -88,7 +88,7 @@ export function PaymentDialog({ tick, entryName, amount, fmt }: PaymentDialogPro
 
           {payMode === "full" ? (
             <Button className="w-full" onClick={handlePayFull}>
-              Mark paid · {fmt(amount - parsedCashback())}
+              Mark paid · {fmt(isPartial ? Math.max(0, amount - parsedCashback() - paidAmount!) : amount - parsedCashback())}
             </Button>
           ) : (
             <div className="space-y-2">
