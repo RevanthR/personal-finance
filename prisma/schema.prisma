@@ -82,6 +82,7 @@ model User {
   gmailSeenMessages  GmailSeenMessage[]
   gmailSenderReputations GmailSenderReputation[]
   merchantCategoryMemories MerchantCategoryMemory[]
+  geminiUsageLogs   GeminiUsageLog[]
 }
 
 // User-defined expense categories, reused (not retyped) across templates
@@ -448,6 +449,23 @@ model GmailSeenMessage {
   createdAt      DateTime @default(now())
 
   @@unique([userId, gmailMessageId])
+}
+
+// One row per actual Gemini API call made during sync (not per email — a
+// batched call covering several emails is still one row, one token count).
+// batchSize lets "emails sent to Gemini" and "API calls made" stay two
+// distinct numbers instead of conflating them; promptTokens/candidatesTokens
+// are stored raw so cost can be recomputed from an updated pricing table
+// later without a data migration (see src/lib/gmail/gemini-usage.ts).
+model GeminiUsageLog {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  model            String
+  batchSize        Int
+  promptTokens     Int
+  candidatesTokens Int
+  createdAt        DateTime @default(now())
 }
 
 // Self-tuning cost control: tracks how often mail from a given sender

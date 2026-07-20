@@ -24,6 +24,21 @@ const zExtraction = z.object({
 
 export type ExtractedTransaction = z.infer<typeof zExtraction>;
 
+// Shared between both call sites below and src/lib/gmail/gemini-usage.ts's
+// pricing table, which is keyed by this exact string.
+export const MODEL = "gemini-flash-latest";
+
+export interface GeminiCallUsage {
+  promptTokens: number;
+  candidatesTokens: number;
+}
+
+function toUsage(response: { usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number } }): GeminiCallUsage | null {
+  const meta = response.usageMetadata;
+  if (!meta || meta.promptTokenCount == null || meta.candidatesTokenCount == null) return null;
+  return { promptTokens: meta.promptTokenCount, candidatesTokens: meta.candidatesTokenCount };
+}
+
 let client: GoogleGenAI | null = null;
 function getClient() {
   if (!client) {
@@ -83,11 +98,11 @@ const RESPONSE_SCHEMA = {
 // null if it isn't one / couldn't be confidently parsed. Never throws for
 // bad model output — a malformed or off-schema response is treated the
 // same as "not a transaction" rather than surfaced as a garbled suggestion.
-export async function extractTransaction(emailText: string): Promise<ExtractedTransaction | null> {
+export async function extractTransaction(emailText: string): Promise<{ result: ExtractedTransaction | null; usage: GeminiCallUsage | null }> {
   const ai = getClient();
 
   const response = await ai.models.generateContent({
-    model: "gemini-flash-latest",
+    model: MODEL,
     contents: [{ role: "user", parts: [{ text: emailText.slice(0, 8000) }] }],
     config: {
       systemInstruction: SYSTEM_INSTRUCTION,
@@ -95,18 +110,19 @@ export async function extractTransaction(emailText: string): Promise<ExtractedTr
       responseSchema: RESPONSE_SCHEMA,
     },
   });
+  const usage = toUsage(response);
 
   const text = response.text;
-  if (!text) return null;
+  if (!text) return { result: null, usage };
 
   let json: unknown;
   try {
     json = JSON.parse(text);
   } catch {
-    return null;
+    return { result: null, usage };
   }
 
-  return toResult(json);
+  return { result: toResult(json), usage };
 }
 
 function toResult(item: unknown): ExtractedTransaction | null {
@@ -137,8 +153,8 @@ const BATCH_RESPONSE_SCHEMA = {
 // JSON, non-array response — so the caller can fall back to individual
 // per-email calls instead of ever attributing one email's amount to
 // another.
-export async function extractTransactionsBatch(emailTexts: string[]): Promise<(ExtractedTransaction | null)[]> {
-  if (emailTexts.length === 0) return [];
+export async function extractTransactionsBatch(emailTexts: string[]): Promise<{ results: (ExtractedTransaction | null)[]; usage: GeminiCallUsage | null }> {
+  if (emailTexts.length === 0) return { results: [], usage: null };
 
   const ai = getClient();
   const combined = emailTexts
@@ -146,7 +162,7 @@ export async function extractTransactionsBatch(emailTexts: string[]): Promise<(E
     .join("\n\n");
 
   const response = await ai.models.generateContent({
-    model: "gemini-flash-latest",
+    model: MODEL,
     contents: [{ role: "user", parts: [{ text: combined }] }],
     config: {
       systemInstruction: BATCH_SYSTEM_INSTRUCTION,
@@ -154,6 +170,7 @@ export async function extractTransactionsBatch(emailTexts: string[]): Promise<(E
       responseSchema: BATCH_RESPONSE_SCHEMA,
     },
   });
+  const usage = toUsage(response);
 
   const text = response.text;
   if (!text) throw new Error("Empty batch response");
@@ -171,5 +188,5 @@ export async function extractTransactionsBatch(emailTexts: string[]): Promise<(E
     );
   }
 
-  return json.map(toResult);
+  return { results: json.map(toResult), usage };
 }

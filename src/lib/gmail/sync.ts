@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { getGmailClientForUser } from "./client";
-import { extractTransaction, extractTransactionsBatch, type ExtractedTransaction } from "./extract";
+import { extractTransaction, extractTransactionsBatch, MODEL, type ExtractedTransaction } from "./extract";
+import { logGeminiCall } from "./gemini-usage";
 import { matchCard } from "./card-match";
 import { getInrRate } from "./fx-rate";
 import { sendPushToUser } from "@/lib/push";
@@ -376,7 +377,9 @@ export async function syncGmailForUser(userId: string, onProgress?: ProgressCall
   async function classifyIndividually(c: CandidateInfo): Promise<void> {
     let extracted: ExtractedTransaction | null = null;
     try {
-      extracted = await extractTransaction(c.text);
+      const { result, usage } = await extractTransaction(c.text);
+      extracted = result;
+      if (usage) await logGeminiCall(userId, { model: MODEL, batchSize: 1, ...usage });
     } catch (err) {
       failed++;
       processed++;
@@ -396,7 +399,9 @@ export async function syncGmailForUser(userId: string, onProgress?: ProgressCall
       const chunk = needsGemini.slice(i, i + MAX_BATCH_SIZE);
       let results: (ExtractedTransaction | null)[] | null = null;
       try {
-        results = await extractTransactionsBatch(chunk.map(c => c.text));
+        const batchResponse = await extractTransactionsBatch(chunk.map(c => c.text));
+        results = batchResponse.results;
+        if (batchResponse.usage) await logGeminiCall(userId, { model: MODEL, batchSize: chunk.length, ...batchResponse.usage });
       } catch (err) {
         // Never let a batch failure (malformed response, length mismatch,
         // network error) lose these candidates — fall back to individual
