@@ -152,7 +152,7 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
           </div>
           {isEditing && (
             <p className="text-xs text-muted-foreground -mt-2">
-              Type can&apos;t be changed here — delete and re-add for that.
+              Type can&apos;t be changed here, delete and re-add for that.
             </p>
           )}
 

@@ -119,7 +119,7 @@ export function TemplatesClient({
     // Deactivating stops future months from generating an entry for this —
     // it doesn't touch any entry already created for the current (or a
     // past) month, which otherwise wasn't obvious from the toggle alone.
-    if (wasActive) toast.success(`${t.name} deactivated — this month's entry, if any, is unaffected`);
+    if (wasActive) toast.success(`${t.name} deactivated, this month's entry (if any) is unaffected`);
   }
 
   async function saveEdit(data: SaveData) {

@@ -366,7 +366,7 @@ function TransactionRow({ item, ccCards, customCategories, subCategorySuggestion
             <p className="text-sm font-semibold shrink-0">₹{item.amount.toLocaleString("en-IN")}</p>
           </div>
           <div className="text-xs text-muted-foreground bg-background rounded-md p-2 border border-border break-words">
-            Looks like a payment toward <span className="font-medium text-foreground">{templateName}</span> — ₹{outstanding.toLocaleString("en-IN")} owed
+            Looks like a payment toward <span className="font-medium text-foreground">{templateName}</span>, ₹{outstanding.toLocaleString("en-IN")} owed
             {alreadyPaid > 0 ? `, ₹${alreadyPaid.toLocaleString("en-IN")} already paid` : ""}.
             {isOverpayment && ` Pays it off with ₹${overBy.toLocaleString("en-IN")} extra, credited toward next month's bill.`}
           </div>
@@ -502,8 +502,8 @@ function AddForm({ item, ccCards, customCategories, subCategorySuggestions, onDo
         {isIncome ? (
           <p className="text-xs text-warning bg-warning-bg border border-warning-border rounded-md px-2 py-1">
             {isCC
-              ? <>Looks like a refund or credit — this will reduce the card&apos;s bill instead of adding a charge.</>
-              : <>Looks like a credit or refund — this will be added as income (Other Income) instead of an expense.</>}
+              ? <>Looks like a refund or credit, this will reduce the card&apos;s bill instead of adding a charge.</>
+              : <>Looks like a credit or refund, this will be added as income (Other Income) instead of an expense.</>}
           </p>
         ) : (
           <CategoryChipPicker picker={picker} customCategories={customCategories} />

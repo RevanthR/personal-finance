@@ -320,7 +320,7 @@ function CCCardTile({ card, fmt, onEntryUpdate, onDelete, onMetaUpdate }: {
         card.template.statementDay && `Closes ${card.template.statementDay}th`,
         card.template.dueDateDay && `Due ${card.template.dueDateDay}th`,
       ].filter(Boolean).join(" · ")
-    : "—";
+    : "-";
 
   return (
     <Card className={cn(entry?.isPaid && "opacity-60")}>
@@ -384,7 +384,7 @@ function CCCardTile({ card, fmt, onEntryUpdate, onDelete, onMetaUpdate }: {
           <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
             <button className="text-left" onClick={() => { setBillInput(billed != null ? String(billed) : ""); setSettingBill(true); }}>
               <p className="text-xs text-muted-foreground flex items-center gap-1">Bill<Pencil className="w-2.5 h-2.5 text-muted-foreground/60" /></p>
-              <p className="font-semibold">{billed != null ? fmt(billed) : "—"}</p>
+              <p className="font-semibold">{billed != null ? fmt(billed) : "-"}</p>
               {rolling > 0 && <p className="text-xs text-warning mt-0.5">{fmt(rolling)} rolling</p>}
             </button>
             <div>
@@ -587,7 +587,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
         iconClass="text-positive"
         bgClass="bg-positive-bg border-positive-border"
         title="Vault"
-        desc="Manage your credit cards, chit funds, and money owed to you — all in one place."
+        desc="Manage your credit cards, chit funds, and money owed to you, all in one place."
       />
 
       <PageHeader
