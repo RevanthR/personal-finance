@@ -20,6 +20,18 @@ function headerValue(headers: gmail_v1.Schema$MessagePartHeader[] | undefined, n
   return headers?.find(h => h.name?.toLowerCase() === name.toLowerCase())?.value ?? "";
 }
 
+export interface HistoryCandidates {
+  candidateIds: string[];
+  // The mailbox's historyId as of this exact query — NOT "now" (that's a
+  // different, later point in time than what was actually just fetched).
+  // The caller must persist this value verbatim as the next cursor, rather
+  // than making a separate getProfile() call afterward: a message that
+  // lands in the gap between "history.list ran" and "getProfile ran" would
+  // otherwise get silently stepped over forever, since incremental sync
+  // only ever looks forward from the stored cursor.
+  historyId: string | null;
+}
+
 // Every mailbox change since `startHistoryId` — new messages only (not
 // reads/labels/deletes), each checked against the same keyword filter the
 // full search applies server-side, via a cheap metadata-only fetch (no
@@ -29,9 +41,10 @@ function headerValue(headers: gmail_v1.Schema$MessagePartHeader[] | undefined, n
 export async function listCandidatesViaHistory(
   gmail: gmail_v1.Gmail,
   startHistoryId: string,
-): Promise<string[]> {
+): Promise<HistoryCandidates> {
   const messageIds = new Set<string>();
   let pageToken: string | undefined;
+  let historyId: string | null = null;
 
   do {
     const { data } = await gmail.users.history.list({
@@ -45,10 +58,14 @@ export async function listCandidatesViaHistory(
         if (added.message?.id) messageIds.add(added.message.id);
       }
     }
+    // Last page wins — Gmail's own docs describe this as "the mailbox's
+    // current history record" as of this response, so the final page's
+    // value is the correct one to advance the cursor to.
+    if (data.historyId) historyId = data.historyId;
     pageToken = data.nextPageToken ?? undefined;
   } while (pageToken);
 
-  if (messageIds.size === 0) return [];
+  if (messageIds.size === 0) return { candidateIds: [], historyId };
 
   const candidates: string[] = [];
   for (const id of messageIds) {
@@ -62,7 +79,7 @@ export async function listCandidatesViaHistory(
     const from = headerValue(data.payload?.headers, "From");
     if (matchesKeywordFilter(subject, from)) candidates.push(id);
   }
-  return candidates;
+  return { candidateIds: candidates, historyId };
 }
 
 export async function listCandidatesViaSearch(gmail: gmail_v1.Gmail, query: string): Promise<string[]> {

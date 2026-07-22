@@ -181,7 +181,18 @@ type CandidateInfo = {
   snippet: string | null | undefined;
 };
 
-export async function syncGmailForUser(userId: string, onProgress?: ProgressCallback): Promise<SyncResult> {
+export interface SyncOptions {
+  // Skips the incremental history-based path entirely and always does a
+  // full newer_than:7d search instead — a self-healing reconciliation
+  // sweep run daily by the gmail-watch-renew cron, independent of whatever
+  // state the historyId cursor is in. GmailSeenMessage dedup (below) makes
+  // this cheap: anything already processed is filtered out before any
+  // Gmail body fetch or Gemini call, so only genuinely-missed messages
+  // actually get reprocessed.
+  forceFullScan?: boolean;
+}
+
+export async function syncGmailForUser(userId: string, onProgress?: ProgressCallback, opts?: SyncOptions): Promise<SyncResult> {
   const gmailClient = await getGmailClientForUser(userId);
   if (!gmailClient) return { synced: 0, skipped: 0, failed: 0, error: "Gmail not connected" };
   const gmail = gmailClient; // non-null, closed over below
@@ -192,12 +203,20 @@ export async function syncGmailForUser(userId: string, onProgress?: ProgressCall
   // last check, instead of re-searching the whole rolling 7-day window on
   // every trigger. Falls back to the full search on any failure (most
   // commonly Gmail's own "historyId too old" error once the account's
-  // history retention window has passed), so a stale/invalid cursor never
-  // just silently misses new mail.
+  // history retention window has passed) or when forceFullScan is set, so
+  // a stale/invalid cursor — or a gap the incremental path silently
+  // missed — never just permanently loses new mail.
   let candidateIds: string[];
-  if (conn?.historyId) {
+  // Only the history-based path sets this, from the exact response it
+  // just queried — see listCandidatesViaHistory's doc comment for why this
+  // must never be swapped for a separately-fetched "now".
+  let nextHistoryId: string | null = null;
+
+  if (conn?.historyId && !opts?.forceFullScan) {
     try {
-      candidateIds = await listCandidatesViaHistory(gmail, conn.historyId);
+      const result = await listCandidatesViaHistory(gmail, conn.historyId);
+      candidateIds = result.candidateIds;
+      nextHistoryId = result.historyId;
     } catch (err) {
       console.error(`[gmail-sync] history.list failed for user ${userId}, falling back to full search:`, err instanceof Error ? err.message : err);
       candidateIds = await listCandidatesViaSearch(gmail, SEARCH_QUERY);
@@ -206,13 +225,24 @@ export async function syncGmailForUser(userId: string, onProgress?: ProgressCall
     candidateIds = await listCandidatesViaSearch(gmail, SEARCH_QUERY);
   }
 
-  // Advance the cursor for next time regardless of which path just ran —
-  // best-effort; a failure here just means the next sync falls back to a
-  // full search too, not a lost transaction.
+  // Advance the cursor for next time. The history-based path already has
+  // the query-scoped historyId in hand (nextHistoryId) — use it directly
+  // instead of a separate getProfile() call, which would ask "what's
+  // current right now" (a later, different point in time than what was
+  // actually just queried) and could silently step the cursor past a
+  // message that arrived in between. getProfile() is only needed when
+  // there's no query-scoped value at all (first-ever sync, the search
+  // fallback path, or a forced full scan) — best-effort either way; a
+  // failure here just means the next sync falls back to a full search
+  // too, not a lost transaction.
   try {
-    const profile = await gmail.users.getProfile({ userId: "me" });
-    if (profile.data.historyId) {
-      await db.gmailConnection.update({ where: { userId }, data: { historyId: profile.data.historyId } });
+    if (nextHistoryId) {
+      await db.gmailConnection.update({ where: { userId }, data: { historyId: nextHistoryId } });
+    } else {
+      const profile = await gmail.users.getProfile({ userId: "me" });
+      if (profile.data.historyId) {
+        await db.gmailConnection.update({ where: { userId }, data: { historyId: profile.data.historyId } });
+      }
     }
   } catch (err) {
     console.error(`[gmail-sync] failed to refresh historyId for user ${userId}:`, err instanceof Error ? err.message : err);
