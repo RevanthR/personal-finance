@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { getGmailClientForUser } from "./client";
+import { getGmailClientForUser, isInvalidGrantError } from "./client";
 import { extractTransaction, extractTransactionsBatch, MODEL, type ExtractedTransaction } from "./extract";
 import { logGeminiCall } from "./gemini-usage";
 import { matchCard } from "./card-match";
@@ -212,17 +212,30 @@ export async function syncGmailForUser(userId: string, onProgress?: ProgressCall
   // must never be swapped for a separately-fetched "now".
   let nextHistoryId: string | null = null;
 
-  if (conn?.historyId && !opts?.forceFullScan) {
-    try {
-      const result = await listCandidatesViaHistory(gmail, conn.historyId);
-      candidateIds = result.candidateIds;
-      nextHistoryId = result.historyId;
-    } catch (err) {
-      console.error(`[gmail-sync] history.list failed for user ${userId}, falling back to full search:`, err instanceof Error ? err.message : err);
+  // A dead refresh token (most commonly Google's 7-day Testing-mode expiry)
+  // surfaces right here, on the first real Gmail API call of the run — it's
+  // either dead from the start or it isn't. Caught once at this outer level
+  // rather than threaded through every call site below.
+  try {
+    if (conn?.historyId && !opts?.forceFullScan) {
+      try {
+        const result = await listCandidatesViaHistory(gmail, conn.historyId);
+        candidateIds = result.candidateIds;
+        nextHistoryId = result.historyId;
+      } catch (err) {
+        if (isInvalidGrantError(err)) throw err; // bubble to the outer catch below — search would fail identically
+        console.error(`[gmail-sync] history.list failed for user ${userId}, falling back to full search:`, err instanceof Error ? err.message : err);
+        candidateIds = await listCandidatesViaSearch(gmail, SEARCH_QUERY);
+      }
+    } else {
       candidateIds = await listCandidatesViaSearch(gmail, SEARCH_QUERY);
     }
-  } else {
-    candidateIds = await listCandidatesViaSearch(gmail, SEARCH_QUERY);
+  } catch (err) {
+    if (isInvalidGrantError(err)) {
+      await db.gmailConnection.update({ where: { userId }, data: { needsReauth: true } });
+      return { synced: 0, skipped: 0, failed: 0, error: "Gmail authorization expired — reconnect Gmail to resume syncing" };
+    }
+    throw err;
   }
 
   // Advance the cursor for next time. The history-based path already has
@@ -453,7 +466,10 @@ export async function syncGmailForUser(userId: string, onProgress?: ProgressCall
     }
   }
 
-  await db.gmailConnection.update({ where: { userId }, data: { lastSyncAt: new Date() } });
+  // Reaching here means the token worked end to end — self-healing in case
+  // needsReauth was ever set incorrectly, or a later reconnect raced ahead
+  // of some other update.
+  await db.gmailConnection.update({ where: { userId }, data: { lastSyncAt: new Date(), needsReauth: false } });
 
   // One summary notification per sync run, not one per transaction — a
   // single real-world purchase can show up as several separate bank

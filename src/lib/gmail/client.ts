@@ -1,6 +1,16 @@
 import { google } from "googleapis";
 import { db } from "@/lib/db";
 
+// Google's token endpoint responds with this exact shape when a refresh
+// token is dead — most commonly the 7-day expiry Testing-mode OAuth apps
+// are subject to, or an explicit user revoke. Distinguishes "reconnect
+// Gmail" from any other transient/unexpected sync failure.
+export function isInvalidGrantError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const data = (err as { response?: { data?: { error?: string } } }).response?.data;
+  return data?.error === "invalid_grant";
+}
+
 // gmail.modify (superset of readonly — read + label/trash, still no send)
 // is required for users.watch() to succeed: Google's Gmail API rejects
 // that call with a 403 ACCESS_TOKEN_SCOPE_INSUFFICIENT under gmail.readonly

@@ -28,6 +28,7 @@ import { CategoryBadge } from "@/components/ui/category-badge";
 import { PaymentDialog } from "./payment-dialog";
 import { usePaymentTick } from "@/hooks/use-payment-tick";
 import { DashboardTour } from "@/components/coach/dashboard-tour";
+import { GmailReconnectBanner, type GmailStatus } from "./gmail-reconnect-banner";
 import type { CCCard, AdHocSubmitFields } from "./adhoc-dialog";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -86,6 +87,7 @@ interface DashboardClientProps {
   nextUrl?: string;
   projectedIncome?: number;
   projectedEntries?: ProjectedEntry[];
+  gmailStatus?: GmailStatus;
 }
 
 type MonthWithDetails = {
@@ -308,7 +310,7 @@ function CCCardBlock({
   );
 }
 
-export function DashboardClient({ currentMonth: initialMonth, recentMonths: initialRecentMonths, ccTemplates, customCategories, subCategorySuggestions, incomeTemplates, todayMonth, todayYear, targetMonth, targetYear, prevUrl, nextUrl, projectedIncome, projectedEntries }: DashboardClientProps) {
+export function DashboardClient({ currentMonth: initialMonth, recentMonths: initialRecentMonths, ccTemplates, customCategories, subCategorySuggestions, incomeTemplates, todayMonth, todayYear, targetMonth, targetYear, prevUrl, nextUrl, projectedIncome, projectedEntries, gmailStatus = "ok" }: DashboardClientProps) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const viewMonth = targetMonth ?? todayMonth;
@@ -865,6 +867,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     <div className="space-y-4">
       <DashboardTour />
       <PageHeader title="Dashboard" subtitle="This month's income, expenses, and bills" className="!mb-4" />
+      <GmailReconnectBanner status={gmailStatus} />
       {/* Header */}
       <div className="space-y-2 mb-7">
         <div className="flex items-center gap-2">

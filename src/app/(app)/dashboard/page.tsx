@@ -73,6 +73,21 @@ async function DashboardData({
   prevUrl: string; nextUrl: string;
   isFuture: boolean;
 }) {
+  // Account-level (not month-scoped), so fetched once here regardless of
+  // which branch below renders — see gmail-reconnect-banner.tsx.
+  const gmailConn = await db.gmailConnection.findUnique({
+    where: { userId },
+    select: { needsReauth: true, connectedAt: true },
+  });
+  const gmailReconnectDays = gmailConn ? (new Date().getTime() - gmailConn.connectedAt.getTime()) / (1000 * 60 * 60 * 24) : 0;
+  const gmailStatus: "ok" | "reminder" | "broken" = !gmailConn
+    ? "ok"
+    : gmailConn.needsReauth
+      ? "broken"
+      : gmailReconnectDays >= 6
+        ? "reminder"
+        : "ok";
+
   // ── Future month → projected view ─────────────────────────────────────────
   if (isFuture) {
     const isImmediateNext =
@@ -161,6 +176,7 @@ async function DashboardData({
         nextUrl={nextUrl}
         projectedIncome={projIncome}
         projectedEntries={projExpenses}
+        gmailStatus={gmailStatus}
       />
     );
   }
@@ -242,6 +258,7 @@ async function DashboardData({
       targetYear={targetYear}
       prevUrl={prevUrl}
       nextUrl={nextUrl}
+      gmailStatus={gmailStatus}
     />
   );
 }

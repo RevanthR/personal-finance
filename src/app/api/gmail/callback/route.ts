@@ -30,21 +30,26 @@ export async function GET(req: NextRequest) {
     const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
     const { data: userinfo } = await oauth2.userinfo.get();
 
+    // connectedAt/needsReauth/reminderSentAt are set explicitly on BOTH
+    // branches, not left to the schema's create-only @default(now()) —
+    // this route doesn't require disconnecting first, so a user can land
+    // on the `update` branch (a connection row already exists) while still
+    // getting a genuinely fresh refresh token from Google. The reconnect
+    // reminder's timing depends on connectedAt being accurate regardless
+    // of which branch ran.
+    const freshConnection = {
+      email: userinfo.email ?? null,
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+      tokenExpiry: new Date(tokens.expiry_date),
+      connectedAt: new Date(),
+      needsReauth: false,
+      reminderSentAt: null,
+    };
     await db.gmailConnection.upsert({
       where: { userId: session.user.id },
-      create: {
-        userId: session.user.id,
-        email: userinfo.email ?? null,
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
-        tokenExpiry: new Date(tokens.expiry_date),
-      },
-      update: {
-        email: userinfo.email ?? null,
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
-        tokenExpiry: new Date(tokens.expiry_date),
-      },
+      create: { userId: session.user.id, ...freshConnection },
+      update: freshConnection,
     });
   } catch {
     return NextResponse.redirect(new URL("/settings?gmail=error", req.url));

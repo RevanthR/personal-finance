@@ -368,6 +368,14 @@ model GmailConnection {
   connectedAt  DateTime  @default(now())
   historyId       String?
   watchExpiration DateTime?
+  // Set the moment a sync actually hits an invalid/revoked refresh token
+  // (Google's Testing-mode OAuth apps expire these after 7 days) — a
+  // definitive "reconnect now" signal, not a guess from elapsed time.
+  needsReauth     Boolean   @default(false)
+  // Last time the proactive "reconnect soon" reminder fired for the
+  // CURRENT token's lifecycle — reset on every reconnect so the next
+  // 7-day cycle can remind again.
+  reminderSentAt  DateTime?
 }
 
 enum ParsedTransactionStatus {
