@@ -1,4 +1,10 @@
 import type { gmail_v1 } from "googleapis";
+import { runPool } from "./pool";
+
+// Each metadata-only fetch below is fully independent (its own Gmail call,
+// no shared state) — matches sync.ts's own concurrency for this kind of
+// per-message I/O-bound work.
+const CONCURRENCY = 4;
 
 // Mirrors SEARCH_QUERY's subject/from keyword logic in sync.ts, for use
 // against candidates discovered via history.list (item 5) — Gmail's own
@@ -67,8 +73,12 @@ export async function listCandidatesViaHistory(
 
   if (messageIds.size === 0) return { candidateIds: [], historyId };
 
-  const candidates: string[] = [];
-  for (const id of messageIds) {
+  // Fetched concurrently (was sequential) — each call is independent, and
+  // order doesn't matter here: the result just collects into a Set, and
+  // sync.ts's own downstream candidate handling doesn't care about order
+  // either.
+  const candidates = new Set<string>();
+  await runPool(Array.from(messageIds), CONCURRENCY, async (id) => {
     const { data } = await gmail.users.messages.get({
       userId: "me",
       id,
@@ -77,9 +87,9 @@ export async function listCandidatesViaHistory(
     });
     const subject = headerValue(data.payload?.headers, "Subject");
     const from = headerValue(data.payload?.headers, "From");
-    if (matchesKeywordFilter(subject, from)) candidates.push(id);
-  }
-  return { candidateIds: candidates, historyId };
+    if (matchesKeywordFilter(subject, from)) candidates.add(id);
+  });
+  return { candidateIds: [...candidates], historyId };
 }
 
 export async function listCandidatesViaSearch(gmail: gmail_v1.Gmail, query: string): Promise<string[]> {

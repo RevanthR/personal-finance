@@ -8,6 +8,7 @@ import { sendPushToUser } from "@/lib/push";
 import { hasAmountSignal } from "./amount-signal";
 import { tryKnownTemplate } from "./known-templates";
 import { listCandidatesViaHistory, listCandidatesViaSearch, extractSenderEmail } from "./candidates";
+import { runPool } from "./pool";
 import type { gmail_v1 } from "googleapis";
 import type { ParsedTransactionPaymentMethod, ParsedTransactionType } from "@/generated/prisma/client";
 
@@ -119,20 +120,6 @@ const CONCURRENCY = 4;
 // reliable, and bounds how much work a single failed call (falling back
 // to individual calls) has to redo.
 const MAX_BATCH_SIZE = 8;
-
-// Dependency-free worker pool: each worker pulls the next index off a
-// shared cursor until the list is exhausted. No ordering guarantee across
-// items, which is fine — onProgress only reports a count, not identity.
-async function runPool<T>(items: T[], concurrency: number, worker: (item: T) => Promise<void>): Promise<void> {
-  let cursor = 0;
-  async function runWorker() {
-    while (cursor < items.length) {
-      const item = items[cursor++];
-      await worker(item);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, runWorker));
-}
 
 // Bank alert emails only ever show the foreign-currency amount, the actual
 // INR-converted figure (with the bank's forex markup) is only known after
