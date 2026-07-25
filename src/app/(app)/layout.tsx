@@ -11,6 +11,7 @@ import { PullToRefresh } from "@/components/shared/pull-to-refresh";
 import { TrialBanner } from "@/components/shared/trial-banner";
 import { isAccessAllowed, isTrialActive } from "@/lib/plans";
 import { db } from "@/lib/db";
+import { reconcilePendingPaymentsForUser } from "@/lib/payments/reconcile";
 import { Suspense } from "react";
 
 // Server-computed so it updates on every navigation and every router.refresh()
@@ -35,7 +36,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   // Admins always have access
   if (!isAdmin && !isAccessAllowed({ trialEndsAt: user.trialEndsAt, planExpiry: user.planExpiry })) {
-    redirect("/pricing");
+    // A payment can succeed on Razorpay's side while both our capture paths
+    // (the client-side verify call, the webhook) miss it. Checking here means
+    // a stranded payment self-heals the moment the affected user is blocked
+    // and reopens the app, instead of waiting on the daily cron.
+    const reconciled = await reconcilePendingPaymentsForUser(user.id);
+    if (!reconciled) redirect("/pricing");
+
+    const refreshed = await db.user.findUnique({ where: { id: user.id }, select: { trialEndsAt: true, planExpiry: true } });
+    if (!refreshed || !isAccessAllowed(refreshed)) redirect("/pricing");
   }
 
   const showTrialBanner = !isAdmin && isTrialActive(user.trialEndsAt) && !user.planExpiry;

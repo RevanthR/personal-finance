@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { getPlan, addDays, PlanType } from "@/lib/plans";
+import { capturePayment } from "@/lib/payments/capture";
 
 export async function POST(req: NextRequest) {
   const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
@@ -29,27 +29,7 @@ export async function POST(req: NextRequest) {
 
   if (event.event === "payment.captured") {
     const { order_id, id: paymentId } = event.payload.payment.entity;
-
-    const payment = await db.payment.findUnique({ where: { razorpayOrderId: order_id } });
-    if (!payment || payment.status === "CAPTURED") return NextResponse.json({ ok: true });
-
-    const plan = getPlan(payment.planType as PlanType);
-    if (!plan) return NextResponse.json({ ok: true });
-
-    const user = await db.user.findUnique({ where: { id: payment.userId }, select: { planExpiry: true } });
-    const base = user?.planExpiry && user.planExpiry > new Date() ? user.planExpiry : new Date();
-    const newExpiry = addDays(base, plan.durationDays);
-
-    await db.$transaction([
-      db.payment.update({
-        where: { razorpayOrderId: order_id },
-        data: { razorpayPaymentId: paymentId, status: "CAPTURED" },
-      }),
-      db.user.update({
-        where: { id: payment.userId },
-        data: { planType: payment.planType, planExpiry: newExpiry },
-      }),
-    ]);
+    await capturePayment(order_id, paymentId);
   }
 
   if (event.event === "payment.failed") {
