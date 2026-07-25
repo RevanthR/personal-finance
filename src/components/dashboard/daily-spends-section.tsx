@@ -77,6 +77,11 @@ export function DailySpendsSection({ adHocItems, ccCards, onDelete, onEditReques
   if (allExpenseItems.length === 0) return null;
 
   const visibleGroups = activeFilter ? groups.filter(g => g.key === activeFilter) : groups;
+  // Sum across whatever's currently visible (both filters already applied
+  // upstream: activeMethod in expenseItems, activeFilter in visibleGroups),
+  // so this always matches what's on screen, not just one category's total.
+  const isFiltered = activeFilter !== null || activeMethod !== "ALL";
+  const filteredTotal = visibleGroups.reduce((s, g) => s + g.total, 0);
 
   // Categories default open (so the sub-category list is visible without an
   // extra tap — the whole point of this redesign), sub-categories default
@@ -124,6 +129,16 @@ export function DailySpendsSection({ adHocItems, ccCards, onDelete, onEditReques
               onClick={() => setActiveMethod(activeMethod === card.templateId ? "ALL" : card.templateId)}
             />
           ))}
+        </div>
+      )}
+
+      {/* Combined total for whatever's currently filtered, hidden when no
+          filter is active since the per-category totals below already sum
+          to the same thing and a repeated grand total would just be noise. */}
+      {isFiltered && visibleGroups.length > 0 && (
+        <div className="flex items-center justify-between px-0.5 mb-3">
+          <span className="text-xs text-muted-foreground">Selected total</span>
+          <span className="text-sm font-semibold tabular-nums">{fmt(filteredTotal)}</span>
         </div>
       )}
 
