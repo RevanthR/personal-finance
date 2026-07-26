@@ -6,13 +6,20 @@ interface RazorpayPaymentEntity {
   status: string;
 }
 
+// Anything older than this was either abandoned (never actually paid) or
+// already resolved one way or another. Bounding the window keeps this a
+// small, fixed-cost check regardless of how many abandoned checkouts have
+// accumulated over the app's lifetime — without it, every stray CREATED
+// row anyone ever left behind gets re-queried against Razorpay forever.
+const RECONCILE_WINDOW_MS = 48 * 60 * 60 * 1000; // 48h
+
 // Both capture paths we normally rely on are best-effort: the client-side
 // verify call fires from inside Razorpay's checkout `handler` callback, so
 // it's lost if the tab/PWA is closed or backgrounded the instant a payment
-// succeeds (common right after a UPI app-switch); the webhook is lost if its
-// secret or registered URL is ever wrong. Asking Razorpay directly whether
-// an order was actually paid closes that gap regardless of which of the two
-// went missing.
+// succeeds (common right after a UPI app-switch); the webhook is lost if
+// its secret or registered URL is ever wrong. Asking Razorpay directly
+// whether an order was actually paid closes that gap regardless of which
+// of the two went missing.
 export async function reconcilePayment(razorpayOrderId: string): Promise<boolean> {
   const keyId = process.env.RAZORPAY_KEY_ID;
   const keySecret = process.env.RAZORPAY_KEY_SECRET;
@@ -31,11 +38,13 @@ export async function reconcilePayment(razorpayOrderId: string): Promise<boolean
   return capturePayment(razorpayOrderId, captured.id);
 }
 
-// Called opportunistically whenever a user with a stranded CREATED payment
-// is about to be turned away at the access gate, so the fix lands the next
-// time they open the app instead of waiting for the daily cron sweep.
+// Called opportunistically from the pricing page when a user who's blocked
+// for lacking an active plan loads it — the moment that matters most to
+// self-heal, since that's exactly where someone in Ajay's situation lands.
 export async function reconcilePendingPaymentsForUser(userId: string): Promise<boolean> {
-  const pending = await db.payment.findMany({ where: { userId, status: "CREATED" } });
+  const pending = await db.payment.findMany({
+    where: { userId, status: "CREATED", createdAt: { gt: new Date(Date.now() - RECONCILE_WINDOW_MS) } },
+  });
   let any = false;
   for (const payment of pending) {
     try {

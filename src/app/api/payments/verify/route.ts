@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { validate, PaymentVerifySchema } from "@/lib/validation";
 import { capturePayment } from "@/lib/payments/capture";
+import { safeEqual } from "@/lib/payments/signature";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest) {
     .update(`${razorpay_order_id}|${razorpay_payment_id}`)
     .digest("hex");
 
-  if (expected !== razorpay_signature) {
+  if (!safeEqual(expected, razorpay_signature)) {
     return NextResponse.json({ error: "Signature mismatch" }, { status: 400 });
   }
 
