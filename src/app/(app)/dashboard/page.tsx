@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { getSession } from "@/lib/get-session";
 import { getActiveTemplates } from "@/lib/cached-queries";
 import { db } from "@/lib/db";
+import { setupMonth } from "@/lib/months/setup-month";
 import { redirect } from "next/navigation";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { getCurrentMonthYear } from "@/lib/utils";
@@ -232,6 +233,26 @@ async function DashboardData({
     }),
   ]);
 
+  // A brand-new account's very first month: skip the "enter your income to
+  // start" prompt entirely. It's pure friction here (real dropoff, per user
+  // feedback) and there are no templates yet to populate anyway, so it buys
+  // nothing. Silently create the month with 0 income and land straight on
+  // a normal, mostly-empty dashboard instead. recentMonths.length === 0
+  // means no Month row has ever existed for this user, not just this one —
+  // a returning user opening any other month still gets the normal
+  // "Set Up This Month" prompt below.
+  let resolvedMonth = currentMonth;
+  if (!resolvedMonth && recentMonths.length === 0) {
+    await setupMonth(userId, targetMonth, targetYear, 0);
+    resolvedMonth = await db.month.findUnique({
+      where: { userId_month_year: { userId, month: targetMonth, year: targetYear } },
+      include: {
+        entries: { include: { template: { include: { chitFund: true } } }, orderBy: { template: { sortOrder: "asc" } } },
+        adHocItems: { orderBy: [{ date: "desc" }, { createdAt: "desc" }] },
+      },
+    });
+  }
+
   const incomeTemplates = allTemplates
     .filter(t => t.templateType === "INCOME")
     .map(t => ({
@@ -245,7 +266,7 @@ async function DashboardData({
 
   return (
     <DashboardClient
-      currentMonth={currentMonth ? JSON.parse(JSON.stringify(currentMonth)) : null}
+      currentMonth={resolvedMonth ? JSON.parse(JSON.stringify(resolvedMonth)) : null}
       recentMonths={JSON.parse(JSON.stringify(recentMonths))}
       ccTemplates={JSON.parse(JSON.stringify(ccTemplates))}
       customCategories={customCategories}
