@@ -220,7 +220,7 @@ export async function syncGmailForUser(userId: string, onProgress?: ProgressCall
   } catch (err) {
     if (isInvalidGrantError(err)) {
       await db.gmailConnection.update({ where: { userId }, data: { needsReauth: true } });
-      return { synced: 0, skipped: 0, failed: 0, error: "Gmail authorization expired — reconnect Gmail to resume syncing" };
+      return { synced: 0, skipped: 0, failed: 0, error: "Gmail authorization expired. Reconnect Gmail to resume syncing." };
     }
     throw err;
   }

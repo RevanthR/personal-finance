@@ -502,8 +502,8 @@ function AddForm({ item, ccCards, customCategories, subCategorySuggestions, onDo
         {isIncome ? (
           <p className="text-xs text-warning bg-warning-bg border border-warning-border rounded-md px-2 py-1">
             {isCC
-              ? <>Looks like a refund or credit, this will reduce the card&apos;s bill instead of adding a charge.</>
-              : <>Looks like a credit or refund, this will be added as income (Other Income) instead of an expense.</>}
+              ? <>Looks like a refund or credit. This will reduce the card&apos;s bill instead of adding a charge.</>
+              : <>Looks like a credit or refund. This will be added as income (Other Income) instead of an expense.</>}
           </p>
         ) : (
           <CategoryChipPicker picker={picker} customCategories={customCategories} />

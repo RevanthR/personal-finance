@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
       try {
         await sendPushToUser(userId, {
           title: "Gmail sync needs reconnecting soon",
-          body: "Your Gmail connection expires in a couple of days — reconnect to keep transactions syncing.",
+          body: "Your Gmail connection expires in a couple of days. Reconnect to keep transactions syncing.",
           url: "/dashboard",
         });
         await db.gmailConnection.update({ where: { userId }, data: { reminderSentAt: new Date() } });
