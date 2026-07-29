@@ -140,3 +140,104 @@ body {
   text-transform: uppercase;
   color: var(--muted-foreground);
 }
+
+/* ── Login page ambience ──────────────────────────────────────────────────────
+   Everything here is transform/opacity only (no animated blur/filter, no
+   layout-affecting properties) so it stays cheap on low-end devices and
+   doesn't compete with real interaction work. */
+
+@keyframes login-glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--warning) 35%, transparent), 0 8px 24px -8px color-mix(in srgb, var(--warning) 40%, transparent); }
+  50%      { box-shadow: 0 0 0 10px color-mix(in srgb, var(--warning) 0%, transparent), 0 8px 30px -6px color-mix(in srgb, var(--warning) 55%, transparent); }
+}
+@keyframes login-wordmark-in {
+  from { opacity: 0; transform: translateY(10px); clip-path: inset(0 0 100% 0); }
+  to   { opacity: 1; transform: translateY(0);    clip-path: inset(0 0 0 0); }
+}
+@keyframes login-shine-sweep {
+  from { transform: translateX(-130%) skewX(-12deg); }
+  to   { transform: translateX(130%) skewX(-12deg); }
+}
+
+.login-glass {
+  background: color-mix(in srgb, var(--card) 78%, transparent);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+}
+
+.login-mark-glow {
+  animation: login-glow-pulse 4.5s ease-in-out infinite;
+}
+
+.login-wordmark {
+  animation: login-wordmark-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.login-shine {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  border-radius: inherit;
+}
+.login-shine::after {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: 0;
+  width: 40%;
+  height: 200%;
+  background: linear-gradient(
+    to right,
+    transparent,
+    color-mix(in srgb, var(--primary-foreground) 35%, transparent),
+    transparent
+  );
+  transform: translateX(-130%) skewX(-12deg);
+}
+.group:hover .login-shine::after {
+  animation: login-shine-sweep 0.9s ease-in-out;
+}
+
+@keyframes login-illo-card-in {
+  from { opacity: 0; transform: translateY(14px) rotate(0deg); }
+  to   { opacity: 1; transform: translateY(0) rotate(-4deg); }
+}
+@keyframes login-illo-draw {
+  from { stroke-dashoffset: 160; opacity: 0; }
+  to   { stroke-dashoffset: 0; opacity: 1; }
+}
+@keyframes login-illo-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+
+.login-illo-card {
+  transform: rotate(-4deg);
+  animation: login-illo-card-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.login-illo-line {
+  stroke-dasharray: 160;
+  animation: login-illo-draw 1s 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.login-illo-coin {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: login-illo-bob 4s ease-in-out infinite;
+}
+.login-illo-coin-2 { animation-duration: 5s; animation-delay: 0.3s; }
+.login-illo-coin-3 { animation-duration: 4.5s; animation-delay: 0.8s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .login-mark-glow, .login-illo-coin {
+    animation: none;
+  }
+  .login-wordmark, .login-illo-card, .login-illo-line {
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+  }
+  .login-shine::after {
+    animation: none !important;
+  }
+}
