@@ -119,15 +119,19 @@ export function usePaymentTick(entry: PaymentTickEntry, onUpdate: PaymentTickUpd
     if (isNaN(num) || num < 0) return;
     const cb = parsedCashback();
     const netAmt = entry.amount - cb;
-    if (num >= netAmt) {
+    // Accumulate onto whatever's already been paid — this field is a running
+    // total, and "amount paying now" is only the new increment (see the
+    // matching accumulation in gmail/parsed/[id]/route.ts's settle action).
+    const newTotal = (paidAmount ?? 0) + num;
+    if (newTotal >= netAmt) {
       setOptimisticPaid(true);
-      setOptimisticPaidAmount(num > netAmt ? num : null);
+      setOptimisticPaidAmount(newTotal > netAmt ? newTotal : null);
     } else {
-      setOptimisticPaidAmount(num > 0 ? num : null);
+      setOptimisticPaidAmount(newTotal > 0 ? newTotal : null);
     }
     setOptimisticCashback(cb > 0 ? cb : null);
     setShowDialog(false);
-    await onUpdate(entry.id, { paidAmount: num, ...(isCC && { cashbackAmount: cb }) });
+    await onUpdate(entry.id, { paidAmount: newTotal, ...(isCC && { cashbackAmount: cb }) });
   }
 
   return {
