@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { NavItem } from "@/components/ui/nav-item";
 import {
   LayoutDashboard,
@@ -13,7 +13,7 @@ import {
   Sparkles,
   Inbox,
 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 // Each destination gets its own icon-circle color — Coin by Zerodha gives
 // every sidebar item a distinct hue rather than tinting all of them with
@@ -33,25 +33,37 @@ interface SidebarProps {
 
 export function Sidebar({ isAdmin, importsBadge = 0 }: SidebarProps) {
   const pathname = usePathname();
-  const router = useRouter();
+  const [liveImportsBadge, setLiveImportsBadge] = useState(importsBadge);
+
+  // Keep in sync with real navigations (the layout recomputes importsBadge
+  // server-side on every route change).
+  useEffect(() => { setLiveImportsBadge(importsBadge); }, [importsBadge]);
 
   // The sidebar (and its badge count) is present on every authenticated
   // page, but sync now happens silently in the background via push
   // notifications — nothing tells the client it happened. Present here
   // (not just on /imports) so the badge stays live regardless of which
-  // page you're on when a background sync lands.
+  // page you're on when a background sync lands. Polls a single cheap
+  // count endpoint instead of router.refresh() — that used to re-run the
+  // entire server-component tree (layout + whatever page you're on) every
+  // 20s and on every tab focus, which on a remote DB meant real network
+  // round trips competing with actual user interactions.
   useEffect(() => {
-    const interval = setInterval(() => router.refresh(), 20_000);
-    const onFocus = () => router.refresh();
-    const onVisibilityChange = () => { if (document.visibilityState === "visible") router.refresh(); };
+    const poll = () => {
+      fetch("/api/gmail/parsed/count")
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d) setLiveImportsBadge(d.count); })
+        .catch(() => {});
+    };
+    const interval = setInterval(poll, 20_000);
+    const onVisibilityChange = () => { if (document.visibilityState === "visible") poll(); };
     document.addEventListener("visibilitychange", onVisibilityChange);
-    window.addEventListener("focus", onFocus);
+    window.addEventListener("focus", poll);
     return () => {
       clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisibilityChange);
-      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("focus", poll);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -75,7 +87,7 @@ export function Sidebar({ isAdmin, importsBadge = 0 }: SidebarProps) {
               icon={icon}
               variant="desktop"
               active={pathname === href || pathname.startsWith(href + "/")}
-              badge={badge ? importsBadge : undefined}
+              badge={badge ? liveImportsBadge : undefined}
               iconClass={iconClass}
             />
           ))}
@@ -119,7 +131,7 @@ export function Sidebar({ isAdmin, importsBadge = 0 }: SidebarProps) {
               icon={icon}
               variant="mobile"
               active={pathname === href || pathname.startsWith(href + "/")}
-              badge={badge ? importsBadge : undefined}
+              badge={badge ? liveImportsBadge : undefined}
             />
           ))}
         </div>
