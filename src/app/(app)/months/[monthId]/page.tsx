@@ -33,7 +33,7 @@ export default async function MonthDetailPage({
       take: 6,
       select: {
         id: true, month: true, year: true,
-        salaryIncome: true, freelanceIncome: true, otherIncome: true,
+        salaryIncome: true, freelanceIncome: true, otherIncome: true, openingBalance: true,
         entries: { select: { id: true, templateId: true, amount: true, cashbackAmount: true } },
         adHocItems: { select: { id: true, type: true, amount: true, category: true, customCategory: true, customCategoryId: true, subCategory: true, notes: true, ccTemplateId: true, isCredit: true, date: true } },
       },

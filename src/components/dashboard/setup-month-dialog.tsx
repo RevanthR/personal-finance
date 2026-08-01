@@ -19,12 +19,14 @@ interface SetupMonthDialogProps {
   onOpenChange: (open: boolean) => void;
   month: number;
   year: number;
-  suggestedIncome?: number;
   onConfirm: (salaryIncome: number) => Promise<void>;
 }
 
-export function SetupMonthDialog({ open, onOpenChange, month, year, suggestedIncome, onConfirm }: SetupMonthDialogProps) {
-  const [salary, setSalary] = useState(suggestedIncome ? String(suggestedIncome) : "");
+// Only rendered when there's no recurring income template to derive a
+// number from — with a template, the month starts automatically instead
+// (see dashboard-client.tsx's auto-setup effect).
+export function SetupMonthDialog({ open, onOpenChange, month, year, onConfirm }: SetupMonthDialogProps) {
+  const [salary, setSalary] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -40,9 +42,7 @@ export function SetupMonthDialog({ open, onOpenChange, month, year, suggestedInc
         <DialogHeader>
           <DialogTitle>Set Up {formatMonthYear(month, year)}</DialogTitle>
           <DialogDescription>
-            {suggestedIncome
-              ? "Income pre-filled from your templates. Adjust if needed, then start the month."
-              : "Enter your income to kick off the month. All your recurring templates will auto-populate."}
+            Enter your income to kick off the month. All your recurring templates will auto-populate.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -52,13 +52,8 @@ export function SetupMonthDialog({ open, onOpenChange, month, year, suggestedInc
               type="number"
               value={salary}
               onChange={(e) => setSalary(e.target.value)}
-              placeholder="e.g. 164000"
+              placeholder="e.g. 50000"
             />
-            {(suggestedIncome ?? 0) > 0 && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Pre-filled from income templates · edit if your actual income differs
-              </p>
-            )}
           </div>
           <DialogFooter>
             <Button type="submit" disabled={loading} className="w-full">

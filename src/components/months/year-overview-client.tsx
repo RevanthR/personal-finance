@@ -100,12 +100,14 @@ type InsightData = {
 export function YearOverviewClient({
   months,
   fyKey,
+  fyOpeningBalance = 0,
   pastFYSummaries = [],
   currentMonthInsights = null,
   analyticsData,
 }: {
   months: MonthData[];
   fyKey: string;
+  fyOpeningBalance?: number;
   pastFYSummaries?: PastFY[];
   currentMonthInsights?: InsightData;
   analyticsData?: AnalyticsData;
@@ -115,7 +117,9 @@ export function YearOverviewClient({
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const totalIncome   = months.reduce((s, m) => s + m.income, 0);
   const totalExpenses = months.reduce((s, m) => s + m.expenses, 0);
-  const yearEndBalance = totalIncome - totalExpenses;
+  // Starting cash carried in from before this FY + the full year's net —
+  // a true ending-balance figure, not just this year's isolated net.
+  const yearEndBalance = fyOpeningBalance + totalIncome - totalExpenses;
   const actualCount   = months.filter(m => m.isPopulated).length;
   const projCount     = 12 - actualCount;
 
