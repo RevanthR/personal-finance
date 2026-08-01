@@ -114,6 +114,17 @@ export async function setupMonth(userId: string, month: number, year: number, sa
           if (year < chitStartY || (year === chitStartY && month < chitStartM)) continue;
         }
 
+        // Skip a loan's EMI before its own start date — same idea as the
+        // chit fund check above. Without this, a loan added with (or later
+        // edited to have) a future EMI start date still generated a bill
+        // for the current month.
+        if (t.category === "LOAN" && t.loanStartDate) {
+          const loanStart = new Date(t.loanStartDate);
+          const loanStartY = loanStart.getUTCFullYear();
+          const loanStartM = loanStart.getUTCMonth() + 1;
+          if (year < loanStartY || (year === loanStartY && month < loanStartM)) continue;
+        }
+
         // Promote pending amount if its effective month has arrived
         let baseAmount = t.amount;
         if (pendingAmountKicks(t, month, year)) {

@@ -106,6 +106,30 @@ export async function PATCH(
     }
   }
 
+  // Pushing a loan's EMI start date into the future means it hasn't
+  // actually started yet — setupMonth's own start-date check (see
+  // setup-month.ts) stops generating new bills for it going forward, but
+  // the current month's entry may already have been created (e.g. right
+  // when the loan was first added, before the start date was corrected).
+  // Clean that up the same way foreclosure does above; only touches it
+  // while still unpaid.
+  if (body.loanStartDate !== undefined && updatedTemplate?.category === "LOAN" && updatedTemplate.loanStartDate) {
+    const now = new Date();
+    const loanStart = new Date(updatedTemplate.loanStartDate);
+    const startsAfterNow = now.getUTCFullYear() < loanStart.getUTCFullYear()
+      || (now.getUTCFullYear() === loanStart.getUTCFullYear() && now.getUTCMonth() < loanStart.getUTCMonth());
+    if (startsAfterNow) {
+      const currentMonth = await db.month.findFirst({
+        where: { userId: session.user.id, month: now.getMonth() + 1, year: now.getFullYear() },
+      });
+      if (currentMonth) {
+        await db.monthlyEntry.deleteMany({
+          where: { monthId: currentMonth.id, templateId, isPaid: false },
+        });
+      }
+    }
+  }
+
   revalidateTag(templateCacheTag, {});
 
   // Auto-apply amount change to current month's existing unpaid entry (expense templates only)

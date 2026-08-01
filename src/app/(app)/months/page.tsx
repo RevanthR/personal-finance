@@ -172,6 +172,15 @@ export default async function MonthsPage() {
       const chitStartM = chitStart.getUTCMonth() + 1;
       if (projYear < chitStartY || (projYear === chitStartY && projMonth < chitStartM)) return false;
     }
+    // Loan: mirror the chit fund check above — don't project an EMI before
+    // its own start date (same gap as setup-month.ts's real-entry creation,
+    // just on the projected-months path here).
+    if (t.category === "LOAN" && t.loanStartDate) {
+      const loanStart = new Date(t.loanStartDate);
+      const loanStartY = loanStart.getUTCFullYear();
+      const loanStartM = loanStart.getUTCMonth() + 1;
+      if (projYear < loanStartY || (projYear === loanStartY && projMonth < loanStartM)) return false;
+    }
     return true;
   }
 
@@ -458,7 +467,17 @@ export default async function MonthsPage() {
   const now2 = new Date();
   const todayM2 = now2.getUTCMonth() + 1, todayY2 = now2.getUTCFullYear();
   const loans = allTemplates
-    .filter(t => t.category === "LOAN" && t.templateType !== "INCOME" && t.isActive && !t.foreClosedOn)
+    .filter(t => {
+      if (t.category !== "LOAN" || t.templateType === "INCOME" || !t.isActive || t.foreClosedOn) return false;
+      // A loan that hasn't started yet shouldn't show up here yet either —
+      // without this, the amortization math below clamps "months elapsed"
+      // to 0 and reports it as if payments had already begun.
+      if (t.loanStartDate) {
+        const start = new Date(t.loanStartDate);
+        if (todayY2 < start.getUTCFullYear() || (todayY2 === start.getUTCFullYear() && todayM2 < start.getUTCMonth() + 1)) return false;
+      }
+      return true;
+    })
     .map(t => {
       let remainingMonths: number | null = null, totalRemaining: number | null = null;
       if (t.endsOnMonth && t.endsOnYear) {

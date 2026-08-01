@@ -757,9 +757,16 @@ function TemplateDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Header and the Save footer live outside the scrollable middle —
+          max-h+overflow-y-auto directly on DialogContent (the same fixed-
+          position element the close button anchors to) used to scroll the
+          close button away with the content, and on mobile Safari a scroll
+          region nested straight inside position:fixed can fail to respond
+          to touch-drag at all. Both read as the dialog "not responding". */}
+      <DialogContent className="max-w-sm max-h-[85vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="p-4 sm:p-6 pb-0 shrink-0"><DialogTitle>{title}</DialogTitle></DialogHeader>
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+        <div className="space-y-4 overflow-y-auto overscroll-contain p-4 sm:p-6 pt-1">
 
           {/* Income vs Expense toggle — new templates only */}
           {!isEditing && (
@@ -844,14 +851,21 @@ function TemplateDialog({
                 <p className="text-xs text-negative/70 mt-0.5">Optional. Enables principal vs interest breakdown on the dashboard.</p>
               </div>
 
+              {/* min-h + items-end on the labels: "Original loan amount (₹)"
+                  wraps to two lines at this column width while "Interest
+                  rate (% p.a.)" fits on one, and with no shared height
+                  between them the two Inputs below used to land at
+                  different vertical positions. Reserving the same two-line
+                  space for both, bottom-aligned, keeps every Input in a row
+                  starting from the same baseline regardless of wrap. */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs text-muted-foreground uppercase tracking-wide">Original loan amount (₹)</label>
+                  <label className="text-xs text-muted-foreground uppercase tracking-wide min-h-8 flex items-end">Original loan amount (₹)</label>
                   <Input type="number" value={loanPrincipal} onChange={e => setLoanPrincipal(e.target.value)}
                     placeholder="e.g. 20,00,000" className="mt-1 h-8 text-sm" />
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground uppercase tracking-wide">Interest rate (% p.a.)</label>
+                  <label className="text-xs text-muted-foreground uppercase tracking-wide min-h-8 flex items-end">Interest rate (% p.a.)</label>
                   <Input type="number" step="0.01" value={loanRate} onChange={e => setLoanRate(e.target.value)}
                     placeholder="e.g. 8.5" className="mt-1 h-8 text-sm" />
                 </div>
@@ -876,11 +890,11 @@ function TemplateDialog({
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs text-muted-foreground uppercase tracking-wide">Loan start date</label>
+                  <label className="text-xs text-muted-foreground uppercase tracking-wide min-h-8 flex items-end">EMI start date</label>
                   <Input type="date" value={loanStartDate} onChange={e => setLoanStartDate(e.target.value)} className="mt-1 h-8 text-sm" />
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground uppercase tracking-wide">
+                  <label className="text-xs text-muted-foreground uppercase tracking-wide min-h-8 flex items-end">
                     Current balance (₹){loanRateType === "FLOATING" && <span className="text-negative">*</span>}
                   </label>
                   <Input type="number" value={loanOutstanding} onChange={e => setLoanOutstanding(e.target.value)}
@@ -920,12 +934,12 @@ function TemplateDialog({
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs text-muted-foreground uppercase tracking-wide">Duration (months)</label>
+                  <label className="text-xs text-muted-foreground uppercase tracking-wide min-h-8 flex items-end">Duration (months)</label>
                   <Input type="number" value={chitDuration} onChange={e => setChitDuration(e.target.value)}
                     placeholder="e.g. 20" className="mt-1 h-8 text-sm" />
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground uppercase tracking-wide">Pot value (₹)</label>
+                  <label className="text-xs text-muted-foreground uppercase tracking-wide min-h-8 flex items-end">Pot value (₹)</label>
                   <Input type="number" value={chitTotalValue} onChange={e => setChitTotalValue(e.target.value)}
                     placeholder="e.g. 300000" className="mt-1 h-8 text-sm" />
                 </div>
@@ -1098,7 +1112,8 @@ function TemplateDialog({
             </div>
           )}
 
-          <DialogFooter>
+        </div>
+          <DialogFooter className="p-4 sm:p-6 pt-3 shrink-0 border-t border-border">
             <Button type="submit" disabled={loading || !isValid} className="w-full">
               {loading ? "Saving..." : "Save"}
             </Button>
