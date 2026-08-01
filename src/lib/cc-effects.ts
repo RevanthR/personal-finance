@@ -130,6 +130,13 @@ export async function settleCarriedDebtBackward(
         ...(nowFullyPaid && { isPaid: true, paidOn: new Date() }),
       },
     });
+    // Record the actual amount applied in THIS event — paidAmount above is
+    // a cumulative snapshot and can't tell how much of it happened now vs.
+    // in the bill's own month, but Payables' "settled this month" figure
+    // needs exactly that.
+    await client.carriedDebtSettlement.create({
+      data: { userId, templateId, billMonth: m, billYear: y, amount: applied },
+    });
 
     remaining -= applied;
     if (!nowFullyPaid || !prevEntry.carriedInAmount || prevEntry.carriedInAmount <= 0) break;

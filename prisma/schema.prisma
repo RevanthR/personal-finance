@@ -83,6 +83,7 @@ model User {
   gmailSenderReputations GmailSenderReputation[]
   merchantCategoryMemories MerchantCategoryMemory[]
   geminiUsageLogs   GeminiUsageLog[]
+  carriedDebtSettlements CarriedDebtSettlement[]
 }
 
 // User-defined expense categories, reused (not retyped) across templates
@@ -182,6 +183,7 @@ model LineItemTemplate {
   chitFund         ChitFund?
   creditCard       CreditCard?
   adHocCharges     AdHocItem[]
+  carriedDebtSettlements CarriedDebtSettlement[]
 }
 
 // One record per calendar month per user
@@ -239,6 +241,27 @@ model MonthlyEntry {
   createdAt       DateTime         @default(now())
 
   @@unique([monthId, templateId])
+}
+
+// One row per real payment event that settles a bill from an EARLIER
+// month during a LATER month (a card's carried-forward debt paid off
+// mid-cycle, or a plain recurring bill paid late). MonthlyEntry only ever
+// keeps a cumulative isPaid/paidAmount snapshot, which can't tell "paid
+// ₹198,000 total" apart from "₹114,000 of it in the bill's own month,
+// ₹84,009 more two months later" — this table is the only place that
+// records the actual per-event amount and when it happened, so Payables'
+// "carried forward, settled this month" breakdown shows what really moved
+// this month instead of the bill's whole original amount.
+model CarriedDebtSettlement {
+  id         String           @id @default(cuid())
+  userId     String
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  templateId String
+  template   LineItemTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  billMonth  Int
+  billYear   Int
+  amount     Float
+  settledOn  DateTime         @default(now())
 }
 
 // Chit fund details — linked 1:1 to a LineItemTemplate

@@ -248,30 +248,24 @@ async function DashboardData({
           orderBy: [{ month: { year: "asc" } }, { month: { month: "asc" } }],
         })
       : Promise.resolve([]),
-    // Bills from an earlier month that got settled (isPaid flipped true)
-    // during the month being viewed — a real, already-owed debt paid off
-    // this cycle, wherever the debt itself originally lived. Belongs in
-    // Payables (cash that actually moved this month) even though its own
-    // bill isn't this month's own commitment.
-    db.monthlyEntry.findMany({
+    // Real payment EVENTS that settled an earlier month's own bill during
+    // the month being viewed — the exact amount moved this cycle (not the
+    // bill's whole original amount, which may have been partly paid back
+    // in its own month already). Belongs in Payables even though the bill
+    // itself isn't this month's own commitment. See CarriedDebtSettlement.
+    db.carriedDebtSettlement.findMany({
       where: {
-        isPaid: true,
-        paidOn: {
+        userId,
+        settledOn: {
           gte: new Date(targetYear, targetMonth - 1, 1),
           lt: new Date(targetMonth === 12 ? targetYear + 1 : targetYear, targetMonth === 12 ? 0 : targetMonth, 1),
         },
-        template: { category: { notIn: ["LOAN", "CHIT_FUND"] } },
-        month: {
-          userId,
-          OR: [{ year: { lt: targetYear } }, { year: targetYear, month: { lt: targetMonth } }],
-        },
       },
       select: {
-        id: true, amount: true, cashbackAmount: true,
-        template: { select: { name: true, category: true, customCategory: true } },
-        month: { select: { month: true, year: true } },
+        id: true, amount: true, billMonth: true, billYear: true,
+        template: { select: { name: true } },
       },
-      orderBy: [{ month: { year: "asc" } }, { month: { month: "asc" } }],
+      orderBy: [{ billYear: "asc" }, { billMonth: "asc" }],
     }),
   ]);
 

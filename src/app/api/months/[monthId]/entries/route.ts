@@ -138,6 +138,15 @@ export async function PATCH(
           data: { carriedDebtPaid: { increment: delta } },
         });
       }
+      // Record the actual amount moved by this event (not the bill's whole
+      // amount) — same reasoning as settleCarriedDebtBackward, for Payables'
+      // "settled this month" figure. Skip un-pay (delta < 0): nothing was
+      // paid, so there's nothing to log as settled.
+      if (delta > 0) {
+        await tx.carriedDebtSettlement.create({
+          data: { userId: session.user.id, templateId: updatedEntry.templateId, billMonth: entry.month.month, billYear: entry.month.year, amount: delta },
+        });
+      }
     }
 
     return updatedEntry;

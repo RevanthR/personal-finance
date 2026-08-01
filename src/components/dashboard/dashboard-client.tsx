@@ -80,14 +80,14 @@ type CarriedOverEntry = {
   month: { month: number; year: number };
 };
 
-// A bill from an earlier month that got settled (isPaid flipped true)
-// during the month being viewed — real cash paid this cycle even though
-// the bill itself isn't this month's own commitment. Shown in Payables
-// alongside this month's own bills instead of just vanishing from Pending.
+// A real payment event that settled part or all of an earlier month's own
+// bill during the month being viewed — `amount` here is exactly what moved
+// in THIS event, not the bill's whole original amount (see
+// CarriedDebtSettlement). Shown in Payables alongside this month's own
+// bills instead of just vanishing from Pending.
 type SettledCarryOverEntry = {
-  id: string; amount: number; cashbackAmount: number | null;
-  template: { name: string; category: string; customCategory: string | null };
-  month: { month: number; year: number };
+  id: string; amount: number; billMonth: number; billYear: number;
+  template: { name: string };
 };
 
 interface DashboardClientProps {
@@ -521,7 +521,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   // out this cycle, even though the bill itself belongs to an earlier
   // month. Belongs in Payables alongside this month's own bills.
   const settledCarryOverTotal = useMemo(
-    () => settledCarryOverEntries.reduce((s, e) => s + (e.amount - (e.cashbackAmount ?? 0)), 0),
+    () => settledCarryOverEntries.reduce((s, e) => s + e.amount, 0),
     [settledCarryOverEntries]
   );
 
@@ -1807,11 +1807,11 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                   <div key={e.id} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
                     <div className="min-w-0">
                       <p className="truncate">{e.template.name}</p>
-                      <p className="text-xs text-muted-foreground">from {formatMonthYear(e.month.month, e.month.year)}</p>
+                      <p className="text-xs text-muted-foreground">from {formatMonthYear(e.billMonth, e.billYear)}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-2">
                       <span className="text-xs text-positive">Paid</span>
-                      <span className="font-semibold">{fmt(e.amount - (e.cashbackAmount ?? 0))}</span>
+                      <span className="font-semibold">{fmt(e.amount)}</span>
                     </div>
                   </div>
                 ))}

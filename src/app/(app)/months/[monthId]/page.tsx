@@ -59,25 +59,19 @@ export default async function MonthDetailPage({
     }),
     // Same "settled during the month being viewed" query as the live
     // dashboard (src/app/(app)/dashboard/page.tsx) — see comment there.
-    db.monthlyEntry.findMany({
+    db.carriedDebtSettlement.findMany({
       where: {
-        isPaid: true,
-        paidOn: {
+        userId: session.user.id,
+        settledOn: {
           gte: new Date(currentMonth.year, currentMonth.month - 1, 1),
           lt: new Date(currentMonth.month === 12 ? currentMonth.year + 1 : currentMonth.year, currentMonth.month === 12 ? 0 : currentMonth.month, 1),
         },
-        template: { category: { notIn: ["LOAN", "CHIT_FUND"] } },
-        month: {
-          userId: session.user.id,
-          OR: [{ year: { lt: currentMonth.year } }, { year: currentMonth.year, month: { lt: currentMonth.month } }],
-        },
       },
       select: {
-        id: true, amount: true, cashbackAmount: true,
-        template: { select: { name: true, category: true, customCategory: true } },
-        month: { select: { month: true, year: true } },
+        id: true, amount: true, billMonth: true, billYear: true,
+        template: { select: { name: true } },
       },
-      orderBy: [{ month: { year: "asc" } }, { month: { month: "asc" } }],
+      orderBy: [{ billYear: "asc" }, { billMonth: "asc" }],
     }),
   ]);
 
