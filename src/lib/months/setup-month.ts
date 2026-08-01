@@ -65,7 +65,11 @@ export async function setupMonth(userId: string, month: number, year: number, sa
       const prevAdHocExpense = prevMonth.adHocItems
         .filter(i => i.type === "EXPENSE" && !i.ccTemplateId)
         .reduce((s, i) => s + i.amount, 0);
-      openingBalance = prevMonth.openingBalance + (prevIncome - prevPaid - prevAdHocExpense);
+      // prevMonth.openingBalance is frozen (never mutated after that month
+      // was populated) — carriedDebtPaid separately holds whatever real cash
+      // left during prevMonth to settle bills from before prevMonth, so it
+      // has to be subtracted here explicitly to keep the true cash total.
+      openingBalance = prevMonth.openingBalance + (prevIncome - prevPaid - prevAdHocExpense) - prevMonth.carriedDebtPaid;
     }
 
     // Every write below is one atomic unit — a mid-way failure (timeout,

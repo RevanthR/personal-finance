@@ -83,7 +83,7 @@ export async function PATCH(
             carriedInAmount: carried - pay,
           },
         });
-        await tx.month.update({ where: { id: entry.month.id }, data: { openingBalance: { decrement: settleAmount } } });
+        await tx.month.update({ where: { id: entry.month.id }, data: { carriedDebtPaid: { increment: settleAmount } } });
       } else {
         const netAmount = entry.amount - (entry.cashbackAmount ?? 0);
         // Accumulate onto whatever's already been paid this month — two

@@ -104,6 +104,7 @@ type MonthWithDetails = {
   id: string; month: number; year: number;
   salaryIncome: number; freelanceIncome: number; otherIncome: number;
   openingBalance: number;
+  carriedDebtPaid: number;
   isPopulated: boolean;
   entries: EntryWithTemplate[];
   adHocItems: AdHocItem[];
@@ -488,8 +489,13 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   } = metrics;
 
   const openingBalance = currentMonth?.openingBalance ?? 0;
-  const balance   = openingBalance + grandIncome - totalCommitted - adHocExpense;
-  const inHandNow = openingBalance + grandIncome - totalPaid - adHocExpense;
+  // Real cash paid this month toward a bill from an earlier month — kept
+  // separate from openingBalance (a frozen "what I started the month with"
+  // snapshot) so that snapshot never gets silently overwritten by a later
+  // payment. Still has to reduce the actual cash totals below.
+  const carriedDebtPaid = currentMonth?.carriedDebtPaid ?? 0;
+  const balance   = openingBalance + grandIncome - totalCommitted - adHocExpense - carriedDebtPaid;
+  const inHandNow = openingBalance + grandIncome - totalPaid - adHocExpense - carriedDebtPaid;
 
   // Still-unpaid bills from earlier months are real pending money — they
   // belong in the headline Pending total, not just tucked away in their own
@@ -785,7 +791,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     withReorderTransition(() => {
       setCurrentMonth(prev => prev ? {
         ...prev, entries: prev.entries.map(e => e.id === entryId ? { ...e, ...updated } : e),
-        ...(updates.payCarriedAmount !== undefined && { openingBalance: prev.openingBalance - updates.payCarriedAmount }),
+        ...(updates.payCarriedAmount !== undefined && { carriedDebtPaid: prev.carriedDebtPaid + updates.payCarriedAmount }),
       } : prev);
     });
     if (updates.amount !== undefined || updates.cashbackAmount !== undefined) {
@@ -805,7 +811,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   // real original monthId (not the currently-viewed month — that entry was
   // never copied here), and moves cash out of today's balance immediately
   // rather than backdating it, since the payment is genuinely happening now.
-  // The server does the authoritative openingBalance decrement in the same
+  // The server does the authoritative carriedDebtPaid increment in the same
   // transaction; the effectivePaid delta below just mirrors that locally so
   // the tile updates without waiting on a refetch.
   async function handleCarriedOverUpdate(item: CarriedOverEntry, updates: { isPaid?: boolean; paidAmount?: number; cashbackAmount?: number }) {
@@ -826,7 +832,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     const paidAfter = _effectivePaid(entryBase(updated.paidAmount, updated.isPaid));
     const delta = paidAfter - paidBefore;
 
-    setCurrentMonth(prev => prev ? { ...prev, openingBalance: prev.openingBalance - delta } : prev);
+    setCurrentMonth(prev => prev ? { ...prev, carriedDebtPaid: prev.carriedDebtPaid + delta } : prev);
     setCarriedOver(prev => updated.isPaid
       ? prev.filter(e => e.id !== item.id)
       : prev.map(e => e.id === item.id ? { ...e, paidAmount: updated.paidAmount } : e));
@@ -1785,6 +1791,12 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
               <span>Paid out this month</span>
               <span className="font-semibold text-negative">-{fmt(totalPaid + adHocExpense)}</span>
             </div>
+            {carriedDebtPaid > 0 && (
+              <div className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
+                <span>Paid toward old debts this month</span>
+                <span className="font-semibold text-negative">-{fmt(carriedDebtPaid)}</span>
+              </div>
+            )}
             <div className="flex items-center justify-between pt-2 border-t border-border">
               <p className="text-sm font-semibold">Cash/UPI balance now</p>
               <span className="text-sm font-bold text-positive">{fmt(inHandNow)}</span>

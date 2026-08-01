@@ -40,8 +40,10 @@ export async function PATCH(
   // billed debt from before, and shouldn't have to wait for this cycle's
   // statement to close before it can be paid off. Reduces amount/billedAmount
   // by the same delta (that debt should not reappear once this cycle's
-  // statement does close) and moves the cash out of today's balance right
-  // now, same as paying any other carried-over bill.
+  // statement does close) and moves the cash out today via carriedDebtPaid,
+  // NOT openingBalance — openingBalance is a frozen "what I started the
+  // month with" snapshot; a mid-month payment toward old debt is tracked
+  // separately so that snapshot never gets silently overwritten.
   if (payCarriedAmount !== undefined) {
     const carried = Math.max(0, entry.carriedInAmount ?? 0);
     const pay = Math.min(payCarriedAmount, carried);
@@ -58,7 +60,7 @@ export async function PATCH(
       });
       await tx.month.updateMany({
         where: { userId: session.user.id, month: entry.month.month, year: entry.month.year },
-        data: { openingBalance: { decrement: pay } },
+        data: { carriedDebtPaid: { increment: pay } },
       });
       return updatedEntry;
     });
@@ -115,9 +117,9 @@ export async function PATCH(
     }
 
     // Paying (or unpaying) a carried-over bill from an earlier month moves
-    // real cash today — decrement today's running balance by exactly what
-    // changed hands just now, without touching the bill's own (already
-    // closed) month.
+    // real cash today — track it via carriedDebtPaid (today's month), not
+    // openingBalance (a frozen start-of-month snapshot), without touching
+    // the bill's own (already closed) month.
     if (isCarriedOverBill) {
       const paidAfter = effectivePaid({
         amount: updatedEntry.amount, isPaid: updatedEntry.isPaid, paidAmount: updatedEntry.paidAmount,
@@ -128,7 +130,7 @@ export async function PATCH(
       if (delta !== 0) {
         await tx.month.updateMany({
           where: { userId: session.user.id, month: todayMonth, year: todayYear },
-          data: { openingBalance: { decrement: delta } },
+          data: { carriedDebtPaid: { increment: delta } },
         });
       }
     }

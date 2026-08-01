@@ -196,7 +196,17 @@ model Month {
   otherIncome     Float          @default(0)
   // Actual cash left over from the previous month (income - what was
   // actually paid out, not just committed), carried forward by setupMonth.
+  // Frozen once the month is populated — never mutated afterward, so it stays
+  // a true snapshot of what carried in. See carriedDebtPaid below for money
+  // that moves during the month itself.
   openingBalance  Float          @default(0)
+  // Real cash paid THIS month toward a bill that belongs to an earlier
+  // month (a carried-over payable, or a credit card's carried-in debt paid
+  // before its statement closes) — tracked separately from openingBalance
+  // so that field can stay a frozen "what I started the month with" snapshot
+  // instead of silently absorbing later-month payments and misreporting
+  // what carried in.
+  carriedDebtPaid Float          @default(0)
   isPopulated     Boolean        @default(false)
   createdAt       DateTime       @default(now())
   entries         MonthlyEntry[]

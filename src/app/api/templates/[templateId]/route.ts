@@ -75,23 +75,33 @@ export async function PATCH(
     include: { chitFund: true },
   });
 
-  // If foreclosing, optionally add a one-off expense to the current month
-  if (body.foreClosedOn && body.addToCurrentMonth && body.foreCloseAmount) {
+  // Foreclosing settles the whole remaining balance in one lump sum — this
+  // month's own EMI entry (already created when the month started, before
+  // the foreclosure) would otherwise keep sitting there as a separate
+  // still-owed payable for a loan that's now closed. Only removes an entry
+  // that's still unpaid; one already paid this month was a real, separate
+  // installment made before the foreclosure, not part of it.
+  if (body.foreClosedOn) {
     const now = new Date();
     const currentMonth = await db.month.findFirst({
       where: { userId: session.user.id, month: now.getMonth() + 1, year: now.getFullYear() },
     });
     if (currentMonth) {
-      await db.adHocItem.create({
-        data: {
-          monthId: currentMonth.id,
-          name: `Foreclosure ${updatedTemplate?.name ?? ""}`.trim(),
-          amount: body.foreCloseAmount,
-          type: "EXPENSE",
-          category: "LOAN",
-          date: new Date(body.foreClosedOn),
-          notes: body.note ?? null,
-        },
+      if (body.addToCurrentMonth && body.foreCloseAmount) {
+        await db.adHocItem.create({
+          data: {
+            monthId: currentMonth.id,
+            name: `Foreclosure ${updatedTemplate?.name ?? ""}`.trim(),
+            amount: body.foreCloseAmount,
+            type: "EXPENSE",
+            category: "LOAN",
+            date: new Date(body.foreClosedOn),
+            notes: body.note ?? null,
+          },
+        });
+      }
+      await db.monthlyEntry.deleteMany({
+        where: { monthId: currentMonth.id, templateId, isPaid: false },
       });
     }
   }
