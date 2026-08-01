@@ -26,7 +26,7 @@ export default async function MonthDetailPage({
 
   if (!currentMonth) notFound();
 
-  const [recentMonths, ccTemplates, allTemplates, customCategories, subCategorySuggestions] = await Promise.all([
+  const [recentMonths, ccTemplates, allTemplates, customCategories, subCategorySuggestions, settledCarryOverEntries] = await Promise.all([
     db.month.findMany({
       where: { userId: session.user.id },
       orderBy: [{ year: "desc" }, { month: "desc" }],
@@ -56,6 +56,28 @@ export default async function MonthDetailPage({
       select: { category: true, customCategoryId: true, subCategory: true },
       distinct: ["category", "customCategoryId", "subCategory"],
       orderBy: { date: "desc" },
+    }),
+    // Same "settled during the month being viewed" query as the live
+    // dashboard (src/app/(app)/dashboard/page.tsx) — see comment there.
+    db.monthlyEntry.findMany({
+      where: {
+        isPaid: true,
+        paidOn: {
+          gte: new Date(currentMonth.year, currentMonth.month - 1, 1),
+          lt: new Date(currentMonth.month === 12 ? currentMonth.year + 1 : currentMonth.year, currentMonth.month === 12 ? 0 : currentMonth.month, 1),
+        },
+        template: { category: { notIn: ["LOAN", "CHIT_FUND"] } },
+        month: {
+          userId: session.user.id,
+          OR: [{ year: { lt: currentMonth.year } }, { year: currentMonth.year, month: { lt: currentMonth.month } }],
+        },
+      },
+      select: {
+        id: true, amount: true, cashbackAmount: true,
+        template: { select: { name: true, category: true, customCategory: true } },
+        month: { select: { month: true, year: true } },
+      },
+      orderBy: [{ month: { year: "asc" } }, { month: { month: "asc" } }],
     }),
   ]);
 
@@ -87,6 +109,7 @@ export default async function MonthDetailPage({
       targetMonth={currentMonth.month}
       targetYear={currentMonth.year}
       userId={session.user.id}
+      settledCarryOverEntries={JSON.parse(JSON.stringify(settledCarryOverEntries))}
     />
   );
 }

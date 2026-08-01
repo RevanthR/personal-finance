@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { validate, ParsedTransactionPatchSchema } from "@/lib/validation";
-import { applyCCEffect, reverseCCEffect } from "@/lib/cc-effects";
+import { applyCCEffect, reverseCCEffect, settleCarriedDebtBackward } from "@/lib/cc-effects";
 import { resolveCustomCategory } from "@/lib/custom-category";
 import { resolveSubCategory } from "@/lib/sub-category";
 import { rememberMerchantCategory } from "@/lib/merchant-memory";
@@ -46,7 +46,7 @@ export async function PATCH(
     const entry = await db.monthlyEntry.findFirst({
       where: { id: body.entryId, month: { userId } },
       select: {
-        id: true, amount: true, billedAmount: true, carriedInAmount: true, cashbackAmount: true, paidAmount: true,
+        id: true, templateId: true, amount: true, billedAmount: true, carriedInAmount: true, cashbackAmount: true, paidAmount: true,
         month: { select: { id: true, month: true, year: true } },
         template: { select: { category: true, statementDay: true } },
       },
@@ -84,6 +84,11 @@ export async function PATCH(
           },
         });
         await tx.month.update({ where: { id: entry.month.id }, data: { carriedDebtPaid: { increment: settleAmount } } });
+        // Same reasoning as the manual "pay overdue amount" flow — this
+        // settles carriedInAmount on THIS entry, but the debt originally
+        // belonged to an earlier month's own bill, which never otherwise
+        // hears that it's been paid.
+        await settleCarriedDebtBackward(tx, userId, entry.templateId, entry.month.month, entry.month.year, settleAmount);
       } else {
         const netAmount = entry.amount - (entry.cashbackAmount ?? 0);
         // Accumulate onto whatever's already been paid this month — two

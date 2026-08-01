@@ -182,7 +182,7 @@ async function DashboardData({
   const isRealCurrentMonth = targetMonth === todayMonth && targetYear === todayYear;
 
   // ── Actual (past or current) month ────────────────────────────────────────
-  const [currentMonth, recentMonths, ccTemplates, allTemplates, customCategories, subCategorySuggestions, carriedOverEntries] = await Promise.all([
+  const [currentMonth, recentMonths, ccTemplates, allTemplates, customCategories, subCategorySuggestions, carriedOverEntries, settledCarryOverEntries] = await Promise.all([
     db.month.findUnique({
       where: { userId_month_year: { userId, month: targetMonth, year: targetYear } },
       include: {
@@ -248,6 +248,31 @@ async function DashboardData({
           orderBy: [{ month: { year: "asc" } }, { month: { month: "asc" } }],
         })
       : Promise.resolve([]),
+    // Bills from an earlier month that got settled (isPaid flipped true)
+    // during the month being viewed — a real, already-owed debt paid off
+    // this cycle, wherever the debt itself originally lived. Belongs in
+    // Payables (cash that actually moved this month) even though its own
+    // bill isn't this month's own commitment.
+    db.monthlyEntry.findMany({
+      where: {
+        isPaid: true,
+        paidOn: {
+          gte: new Date(targetYear, targetMonth - 1, 1),
+          lt: new Date(targetMonth === 12 ? targetYear + 1 : targetYear, targetMonth === 12 ? 0 : targetMonth, 1),
+        },
+        template: { category: { notIn: ["LOAN", "CHIT_FUND"] } },
+        month: {
+          userId,
+          OR: [{ year: { lt: targetYear } }, { year: targetYear, month: { lt: targetMonth } }],
+        },
+      },
+      select: {
+        id: true, amount: true, cashbackAmount: true,
+        template: { select: { name: true, category: true, customCategory: true } },
+        month: { select: { month: true, year: true } },
+      },
+      orderBy: [{ month: { year: "asc" } }, { month: { month: "asc" } }],
+    }),
   ]);
 
   // A brand-new account's very first month: skip the "enter your income to
@@ -298,6 +323,7 @@ async function DashboardData({
       nextUrl={nextUrl}
       gmailStatus={gmailStatus}
       carriedOverEntries={JSON.parse(JSON.stringify(carriedOverEntries))}
+      settledCarryOverEntries={JSON.parse(JSON.stringify(settledCarryOverEntries))}
     />
   );
 }

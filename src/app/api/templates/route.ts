@@ -7,6 +7,7 @@ import { templateCacheTag } from "@/lib/cached-queries";
 import { validate, TemplatePostSchema } from "@/lib/validation";
 import { resolveCustomCategory } from "@/lib/custom-category";
 import { computeTemplateEntryAmount, computePrevCCState } from "@/lib/entry-amount";
+import { isZeroCCBalance } from "@/lib/finance-utils";
 
 export async function GET() {
   const session = await auth();
@@ -80,9 +81,15 @@ export async function POST(req: NextRequest) {
         prevCC = computePrevCCState(prevEntry);
       }
       const { amount, billedAmount, carriedInAmount } = computeTemplateEntryAmount(template, template.amount, prevCC);
+      const autoPaid = template.category === "CREDIT_CARD" && isZeroCCBalance(amount, carriedInAmount);
       await db.monthlyEntry.upsert({
         where: { monthId_templateId: { monthId: curMonthRecord.id, templateId: template.id } },
-        create: { monthId: curMonthRecord.id, templateId: template.id, amount, ...(billedAmount !== undefined && { billedAmount }), ...(carriedInAmount !== undefined && { carriedInAmount }) },
+        create: {
+          monthId: curMonthRecord.id, templateId: template.id, amount,
+          ...(billedAmount !== undefined && { billedAmount }),
+          ...(carriedInAmount !== undefined && { carriedInAmount }),
+          ...(autoPaid && { isPaid: true, paidOn: new Date() }),
+        },
         update: {},
       });
     }

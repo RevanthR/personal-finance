@@ -80,6 +80,16 @@ type CarriedOverEntry = {
   month: { month: number; year: number };
 };
 
+// A bill from an earlier month that got settled (isPaid flipped true)
+// during the month being viewed — real cash paid this cycle even though
+// the bill itself isn't this month's own commitment. Shown in Payables
+// alongside this month's own bills instead of just vanishing from Pending.
+type SettledCarryOverEntry = {
+  id: string; amount: number; cashbackAmount: number | null;
+  template: { name: string; category: string; customCategory: string | null };
+  month: { month: number; year: number };
+};
+
 interface DashboardClientProps {
   currentMonth: MonthWithDetails | null;
   recentMonths: RecentMonthSummary[];
@@ -98,6 +108,7 @@ interface DashboardClientProps {
   projectedEntries?: ProjectedEntry[];
   gmailStatus?: GmailStatus;
   carriedOverEntries?: CarriedOverEntry[];
+  settledCarryOverEntries?: SettledCarryOverEntry[];
 }
 
 type MonthWithDetails = {
@@ -366,7 +377,7 @@ function CCCardBlock({
   );
 }
 
-export function DashboardClient({ currentMonth: initialMonth, recentMonths: initialRecentMonths, ccTemplates, customCategories, subCategorySuggestions, incomeTemplates, todayMonth, todayYear, targetMonth, targetYear, prevUrl, nextUrl, projectedIncome, projectedEntries, gmailStatus = "ok", carriedOverEntries: initialCarriedOver = [] }: DashboardClientProps) {
+export function DashboardClient({ currentMonth: initialMonth, recentMonths: initialRecentMonths, ccTemplates, customCategories, subCategorySuggestions, incomeTemplates, todayMonth, todayYear, targetMonth, targetYear, prevUrl, nextUrl, projectedIncome, projectedEntries, gmailStatus = "ok", carriedOverEntries: initialCarriedOver = [], settledCarryOverEntries = [] }: DashboardClientProps) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const viewMonth = targetMonth ?? todayMonth;
@@ -506,6 +517,14 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   );
   const totalPendingWithCarryOver = totalPending + carriedOverPending;
 
+  // Old debt actually paid off during the month being viewed — real cash
+  // out this cycle, even though the bill itself belongs to an earlier
+  // month. Belongs in Payables alongside this month's own bills.
+  const settledCarryOverTotal = useMemo(
+    () => settledCarryOverEntries.reduce((s, e) => s + (e.amount - (e.cashbackAmount ?? 0)), 0),
+    [settledCarryOverEntries]
+  );
+
   const nextMonthName  = MONTHS[todayMonth % 12]; // todayMonth is 1-12; % 12 maps Dec→Jan correctly
 
   type GroupedItem =
@@ -617,7 +636,12 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       .map(({ data: e }) => {
         const pending = _isBillPending(e, isCurrentMonth, todayDay);
         const amount = pending ? Math.max(0, (e.carriedInAmount ?? 0) - (e.cashbackAmount ?? 0)) : _net(e);
-        return { id: e.id, name: e.template.name, amount, pending };
+        // `amount` above is the full committed bill — right for Expenditure/CC
+        // Bill (spend happened regardless of payment). Pending needs what's
+        // actually still owed, which is 0 once the entry is paid — otherwise
+        // a settled bill keeps showing its full original amount there forever.
+        const outstanding = pending ? amount : Math.max(0, _net(e) - _effectivePaid(e));
+        return { id: e.id, name: e.template.name, amount, pending, outstanding, isPaid: e.isPaid, isPartial: !e.isPaid && _effectivePaid(e) > 0 };
       })
       .filter(c => c.amount > 0);
   }, [ccEntries, isCurrentMonth, todayDay]);
@@ -1116,8 +1140,8 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                 : undefined,
           },
           {
-            label: "Expenditure",
-            value: fmt(dispCommitted + dispAdHoc),
+            label: "Payables",
+            value: fmt(dispCommitted + dispAdHoc + (isProjected ? 0 : settledCarryOverTotal)),
             onClick: isProjected ? undefined : () => setShowExpenditureDrilldown(true),
             hint: <span className="text-xs text-muted-foreground">{fmt(dispRecurringNonCC)} recurring</span>,
           },
@@ -1661,10 +1685,13 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                 <span>Recurring</span>
                 <span className="font-semibold">{fmt(recurringPendingTotal)}</span>
               </div>
-              {ccBillBreakdown.filter(c => !c.pending).map(c => (
+              {ccBillBreakdown.filter(c => !c.pending && c.outstanding > 0).map(c => (
                 <div key={c.id} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
-                  <span>{c.name}</span>
-                  <span className="font-semibold">{fmt(c.amount)}</span>
+                  <div className="min-w-0">
+                    <span className="truncate">{c.name}</span>
+                    {c.isPartial && <p className="text-xs text-muted-foreground">{fmt(c.amount - c.outstanding)} of {fmt(c.amount)} paid</p>}
+                  </div>
+                  <span className="font-semibold shrink-0 ml-2">{fmt(c.outstanding)}</span>
                 </div>
               ))}
             </div>
@@ -1728,14 +1755,14 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
         </DialogContent>
       </Dialog>
 
-      {/* Expenditure drilldown */}
+      {/* Payables drilldown */}
       <Dialog open={showExpenditureDrilldown} onOpenChange={setShowExpenditureDrilldown}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Expenditure: {formatMonthYear(currentMonth?.month ?? viewMonth, currentMonth?.year ?? viewYear)}</DialogTitle>
+        <DialogContent className="max-w-sm max-h-[85vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="p-4 sm:p-6 pb-0 shrink-0">
+            <DialogTitle>Payables: {formatMonthYear(currentMonth?.month ?? viewMonth, currentMonth?.year ?? viewYear)}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 pt-1">
-            <p className="text-xs text-muted-foreground">Only this month&apos;s own bills — carried-over debt from earlier months lives under Pending instead, never counted twice.</p>
+          <div className="space-y-4 p-4 sm:p-6 pt-1 overflow-y-auto overscroll-contain">
+            <p className="text-xs text-muted-foreground">This month&apos;s own bills, plus any older debt actually paid off this month.</p>
 
             {/* Recurring is already fully itemized in the Payables tab —
                 a summary line here is enough, no need to repeat it. */}
@@ -1751,20 +1778,41 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                 <p className="fin-label">Credit cards</p>
                 {ccBillBreakdown.filter(c => !c.pending).map(c => (
                   <div key={c.id} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
-                    <span>{c.name}</span>
-                    <span className="font-semibold">{fmt(c.amount)}</span>
+                    <div className="min-w-0">
+                      <span className="truncate">{c.name}</span>
+                      {c.isPartial && <p className="text-xs text-muted-foreground">{fmt(c.amount - c.outstanding)} of {fmt(c.amount)} paid</p>}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 ml-2">
+                      <span className={cn("text-xs", c.isPaid ? "text-positive" : "text-muted-foreground")}>{c.isPaid ? "Paid" : "Pending"}</span>
+                      <span className="font-semibold">{fmt(c.amount)}</span>
+                    </div>
                   </div>
                 ))}
               </div>
             )}
 
             {adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).length > 0 && (
+              <div className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
+                <span>One-time (this month)</span>
+                <span className="font-semibold">
+                  {fmt(adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0))}
+                </span>
+              </div>
+            )}
+
+            {settledCarryOverEntries.length > 0 && (
               <div className="space-y-1.5">
-                <p className="fin-label">One-time (this month)</p>
-                {adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).map(i => (
-                  <div key={i.id} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
-                    <span className="truncate">{i.name}</span>
-                    <span className="font-semibold shrink-0 ml-2">{fmt(i.amount)}</span>
+                <p className="fin-label">Carried forward, settled this month</p>
+                {settledCarryOverEntries.map(e => (
+                  <div key={e.id} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="truncate">{e.template.name}</p>
+                      <p className="text-xs text-muted-foreground">from {formatMonthYear(e.month.month, e.month.year)}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 ml-2">
+                      <span className="text-xs text-positive">Paid</span>
+                      <span className="font-semibold">{fmt(e.amount - (e.cashbackAmount ?? 0))}</span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1772,7 +1820,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
 
             <div className="flex items-center justify-between pt-2 border-t border-border">
               <p className="text-sm font-semibold">Total</p>
-              <span className="text-sm font-bold">{fmt(dispCommitted + dispAdHoc)}</span>
+              <span className="text-sm font-bold">{fmt(dispCommitted + dispAdHoc + settledCarryOverTotal)}</span>
             </div>
           </div>
         </DialogContent>

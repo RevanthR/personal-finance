@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { isTemplateActiveInMonth } from "@/lib/loan-utils";
 import { computeTemplateEntryAmount, computePrevCCState, type PrevCCState } from "@/lib/entry-amount";
 import { pendingAmountKicks } from "@/lib/utils";
-import { computeMonthIncome, computeMetrics } from "@/lib/finance-utils";
+import { computeMonthIncome, computeMetrics, isZeroCCBalance } from "@/lib/finance-utils";
 import type { Month } from "@/generated/prisma/client";
 
 // Shared by POST /api/months (the user explicitly clicking "Start Month")
@@ -111,10 +111,19 @@ export async function setupMonth(userId: string, month: number, year: number, sa
         }
 
         const { amount, billedAmount, carriedInAmount } = computeTemplateEntryAmount(t, baseAmount, prevCCState.get(t.id));
+        // A card that rolls in with nothing carried and nothing billed yet
+        // owes nothing this cycle — close it immediately instead of making
+        // the user tap "paid" on a bill that was never going to have one.
+        const autoPaid = t.category === "CREDIT_CARD" && isZeroCCBalance(amount, carriedInAmount);
 
         await tx.monthlyEntry.upsert({
           where: { monthId_templateId: { monthId: monthRecord.id, templateId: t.id } },
-          create: { monthId: monthRecord.id, templateId: t.id, amount, ...(billedAmount !== undefined && { billedAmount }), ...(carriedInAmount !== undefined && { carriedInAmount }) },
+          create: {
+            monthId: monthRecord.id, templateId: t.id, amount,
+            ...(billedAmount !== undefined && { billedAmount }),
+            ...(carriedInAmount !== undefined && { carriedInAmount }),
+            ...(autoPaid && { isPaid: true, paidOn: new Date() }),
+          },
           update: {},
         });
       }

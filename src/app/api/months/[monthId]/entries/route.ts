@@ -5,6 +5,7 @@ import { validate, EntryPatchSchema } from "@/lib/validation";
 import { computePaymentUpdate } from "@/lib/entry-payment";
 import { effectivePaid } from "@/lib/finance-utils";
 import { getCurrentMonthYear } from "@/lib/utils";
+import { settleCarriedDebtBackward } from "@/lib/cc-effects";
 
 // PATCH /api/months/[monthId]/entries — update a single entry (mark paid, change amount)
 export async function PATCH(
@@ -28,7 +29,7 @@ export async function PATCH(
   const entry = await db.monthlyEntry.findFirst({
     where: { id: entryId, monthId, month: { userId: session.user.id } },
     select: {
-      amount: true, billedAmount: true, carriedInAmount: true, cashbackAmount: true, isPaid: true, paidAmount: true,
+      templateId: true, amount: true, billedAmount: true, carriedInAmount: true, cashbackAmount: true, isPaid: true, paidAmount: true,
       month: { select: { month: true, year: true } },
     },
   });
@@ -62,6 +63,10 @@ export async function PATCH(
         where: { userId: session.user.id, month: entry.month.month, year: entry.month.year },
         data: { carriedDebtPaid: { increment: pay } },
       });
+      // The debt being paid down here originally belonged to an earlier
+      // month's own bill — settle that bill's own record too, or it stays
+      // looking perpetually unpaid even after the money's actually moved.
+      await settleCarriedDebtBackward(tx, session.user.id, entry.templateId, entry.month.month, entry.month.year, pay);
       return updatedEntry;
     });
 

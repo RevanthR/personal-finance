@@ -172,6 +172,21 @@ export function computeCashBalance(params: {
   return params.openingBalance + params.income - params.expense - params.carriedDebtPaid;
 }
 
+/**
+ * True when a CC entry owes nothing at all this cycle — no carried-forward
+ * debt, no net spend — so it can auto-close as paid without the user ever
+ * having to tap anything. Shared by entry creation (setup-month.ts,
+ * templates/route.ts's addToCurrentMonth) and the mid-month self-heal in
+ * cc-effects.ts (a reversed/deleted charge dropping a card back to zero).
+ */
+export function isZeroCCBalance(
+  amount: number,
+  carriedInAmount: number | null | undefined,
+  cashbackAmount: number | null | undefined = 0,
+): boolean {
+  return amount - (cashbackAmount ?? 0) <= 0 && (carriedInAmount ?? 0) <= 0;
+}
+
 /** All progress and CC metrics in one pass over entries. */
 export function computeMetrics(
   entries: EntryBase[],

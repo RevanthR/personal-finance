@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client";
+import { isZeroCCBalance } from "@/lib/finance-utils";
 
 export type EntryFields = { id: string; amount: number; statementAmount: number | null; billedAmount: number | null };
 
@@ -85,6 +86,56 @@ export async function applyCCEffect(
   return recomputeStatementAmount(client, entry.id, monthId, ccTemplateId, statementDay);
 }
 
+// Paying down a card's carriedInAmount only ever touches the entry that's
+// CURRENTLY tracking the debt (this cycle's entry) — the original bill's
+// own month, where the debt actually came from, never gets told it was
+// settled and is left looking perpetually unpaid forever. This walks
+// backward from the entry whose carriedInAmount just got reduced, applying
+// the payment to the original (earlier) bill's own paidAmount/isPaid, and
+// keeps walking further back only if that earlier bill was itself still
+// carrying unresolved debt from before it.
+export async function settleCarriedDebtBackward(
+  client: DbClient,
+  userId: string,
+  templateId: string,
+  month: number,
+  year: number,
+  payAmount: number,
+): Promise<void> {
+  let remaining = payAmount;
+  let m = month;
+  let y = year;
+  for (let hops = 0; hops < 12 && remaining > 0.5; hops++) {
+    m = m === 1 ? 12 : m - 1;
+    y = m === 12 ? y - 1 : y;
+    const prevEntry = await client.monthlyEntry.findFirst({
+      where: { templateId, isPaid: false, month: { userId, month: m, year: y } },
+      select: { id: true, amount: true, cashbackAmount: true, paidAmount: true, carriedInAmount: true },
+    });
+    if (!prevEntry) break;
+
+    const net = prevEntry.amount - (prevEntry.cashbackAmount ?? 0);
+    const alreadyPaid = prevEntry.paidAmount ?? 0;
+    const outstanding = net - alreadyPaid;
+    if (outstanding <= 0) break;
+
+    const applied = Math.min(remaining, outstanding);
+    const newPaid = alreadyPaid + applied;
+    const nowFullyPaid = newPaid >= net;
+
+    await client.monthlyEntry.update({
+      where: { id: prevEntry.id },
+      data: {
+        paidAmount: nowFullyPaid ? (newPaid > net ? newPaid : null) : newPaid,
+        ...(nowFullyPaid && { isPaid: true, paidOn: new Date() }),
+      },
+    });
+
+    remaining -= applied;
+    if (!nowFullyPaid || !prevEntry.carriedInAmount || prevEntry.carriedInAmount <= 0) break;
+  }
+}
+
 // Reverse a CC charge's effect off its card's MonthlyEntry. Call this
 // BEFORE the AdHocItem row is deleted (post-close needs it excluded from
 // the live re-sum) or AFTER it's been updated to new values (edit — the
@@ -101,6 +152,7 @@ export async function reverseCCEffect(
     where: { monthId, template: { id: ccTemplateId, category: "CREDIT_CARD", userId } },
     select: {
       id: true, amount: true, statementAmount: true, billedAmount: true,
+      carriedInAmount: true, cashbackAmount: true, isPaid: true,
       template: { select: { statementDay: true } },
     },
   });
@@ -110,11 +162,18 @@ export async function reverseCCEffect(
   const isPreClose = statementDay !== null && date.getDate() <= statementDay;
 
   if (isPreClose) {
+    const newAmount = Math.max(0, entry.amount - amount);
+    // Deleting/refunding the only charge this cycle can bring a card back
+    // down to owing nothing — self-heal it the same way a freshly-created
+    // zero-balance entry is auto-closed, instead of leaving it pending for
+    // a "paid" tap that settles nothing.
+    const autoPaid = !entry.isPaid && isZeroCCBalance(newAmount, entry.carriedInAmount, entry.cashbackAmount);
     return client.monthlyEntry.update({
       where: { id: entry.id },
       data: {
-        amount: Math.max(0, entry.amount - amount),
+        amount: newAmount,
         billedAmount: Math.max(0, (entry.billedAmount ?? entry.amount) - amount),
+        ...(autoPaid && { isPaid: true, paidOn: new Date() }),
       },
       select: { id: true, amount: true, statementAmount: true, billedAmount: true },
     });
