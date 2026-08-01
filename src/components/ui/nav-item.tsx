@@ -31,7 +31,7 @@ export function NavItem({ href, label, icon: Icon, active, variant, badge, iconC
       <Link
         href={href}
         className={cn(
-          "flex-1 flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-md text-xs transition-colors",
+          "flex-1 flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-md text-xs transition-all duration-100 active:scale-90",
           active ? "text-primary" : "text-muted-foreground",
         )}
       >
@@ -52,7 +52,7 @@ export function NavItem({ href, label, icon: Icon, active, variant, badge, iconC
     <Link
       href={href}
       className={cn(
-        "flex flex-col items-center gap-1 px-0.5 py-2 rounded-md text-center transition-colors",
+        "flex flex-col items-center gap-1 px-0.5 py-2 rounded-md text-center transition-all duration-100 active:scale-95",
         active ? "bg-accent" : "hover:bg-muted",
       )}
     >
