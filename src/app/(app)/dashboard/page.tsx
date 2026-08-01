@@ -182,8 +182,16 @@ async function DashboardData({
     );
   }
 
+  // Old unpaid bills (any category except CC/LOAN/CHIT_FUND, which carry
+  // forward or amortize on their own) are never copied into the new month
+  // anymore — they stay payable against their real original entry, in
+  // their real original month. Only worth surfacing on the actual current
+  // month (paying something "as of now" only makes sense there, not while
+  // browsing a past or projected month).
+  const isRealCurrentMonth = targetMonth === todayMonth && targetYear === todayYear;
+
   // ── Actual (past or current) month ────────────────────────────────────────
-  const [currentMonth, recentMonths, ccTemplates, allTemplates, customCategories, subCategorySuggestions] = await Promise.all([
+  const [currentMonth, recentMonths, ccTemplates, allTemplates, customCategories, subCategorySuggestions, carriedOverEntries] = await Promise.all([
     db.month.findUnique({
       where: { userId_month_year: { userId, month: targetMonth, year: targetYear } },
       include: {
@@ -200,7 +208,7 @@ async function DashboardData({
       take: 6,
       select: {
         id: true, month: true, year: true,
-        salaryIncome: true, freelanceIncome: true, otherIncome: true,
+        salaryIncome: true, freelanceIncome: true, otherIncome: true, openingBalance: true,
         entries: { select: { id: true, templateId: true, amount: true, cashbackAmount: true } },
         adHocItems: { select: { id: true, type: true, amount: true, category: true, customCategory: true, customCategoryId: true, subCategory: true, notes: true, ccTemplateId: true, isCredit: true, date: true } },
       },
@@ -231,6 +239,24 @@ async function DashboardData({
       distinct: ["category", "customCategoryId", "subCategory"],
       orderBy: { date: "desc" },
     }),
+    isRealCurrentMonth
+      ? db.monthlyEntry.findMany({
+          where: {
+            isPaid: false,
+            template: { category: { notIn: ["CREDIT_CARD", "LOAN", "CHIT_FUND"] } },
+            month: {
+              userId,
+              OR: [{ year: { lt: todayYear } }, { year: todayYear, month: { lt: todayMonth } }],
+            },
+          },
+          select: {
+            id: true, monthId: true, amount: true, cashbackAmount: true, paidAmount: true,
+            template: { select: { name: true, category: true, customCategory: true, dueDateDay: true, statementDay: true } },
+            month: { select: { month: true, year: true } },
+          },
+          orderBy: [{ month: { year: "asc" } }, { month: { month: "asc" } }],
+        })
+      : Promise.resolve([]),
   ]);
 
   // A brand-new account's very first month: skip the "enter your income to
@@ -280,6 +306,7 @@ async function DashboardData({
       prevUrl={prevUrl}
       nextUrl={nextUrl}
       gmailStatus={gmailStatus}
+      carriedOverEntries={JSON.parse(JSON.stringify(carriedOverEntries))}
     />
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useTransition, Fragment, type CSSProperties } from "react";
+import { useState, useMemo, useEffect, useRef, useTransition, Fragment, type CSSProperties } from "react";
 import { flushSync } from "react-dom";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
@@ -15,7 +15,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Plus, Pencil, ChevronDown, Trash2, ChevronLeft, ChevronRight, Check, Calendar,
+  Plus, Pencil, ChevronDown, Trash2, ChevronLeft, ChevronRight, Check, Calendar, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { EntryRow } from "./entry-row";
@@ -71,6 +71,15 @@ type IncomeTemplate = {
   pendingFromYear: number | null;
 };
 
+// An unpaid bill still sitting in an earlier month — surfaced here so it can
+// be paid directly against its real original entry (in its real original
+// month) instead of ever being copied into the current one.
+type CarriedOverEntry = {
+  id: string; monthId: string; amount: number; cashbackAmount: number | null; paidAmount: number | null;
+  template: { name: string; category: string; customCategory: string | null; dueDateDay: number | null; statementDay: number | null };
+  month: { month: number; year: number };
+};
+
 interface DashboardClientProps {
   currentMonth: MonthWithDetails | null;
   recentMonths: RecentMonthSummary[];
@@ -88,11 +97,13 @@ interface DashboardClientProps {
   projectedIncome?: number;
   projectedEntries?: ProjectedEntry[];
   gmailStatus?: GmailStatus;
+  carriedOverEntries?: CarriedOverEntry[];
 }
 
 type MonthWithDetails = {
   id: string; month: number; year: number;
   salaryIncome: number; freelanceIncome: number; otherIncome: number;
+  openingBalance: number;
   isPopulated: boolean;
   entries: EntryWithTemplate[];
   adHocItems: AdHocItem[];
@@ -101,13 +112,14 @@ type MonthWithDetails = {
 type RecentMonthSummary = {
   id: string; month: number; year: number;
   salaryIncome: number; freelanceIncome: number; otherIncome: number;
+  openingBalance: number;
   entries: { id: string; templateId: string; amount: number; cashbackAmount: number | null }[];
   adHocItems: { id: string; type: string; amount: number; category: string | null; customCategory: string | null; customCategoryId: string | null; subCategory: string | null; notes: string | null; ccTemplateId: string | null; isCredit?: boolean; date: string }[];
 };
 
 type EntryWithTemplate = {
   id: string; amount: number; isPaid: boolean; paidOn: string | null; paidAmount: number | null; cashbackAmount: number | null; notes: string | null; templateId: string;
-  statementAmount: number | null; billedAmount: number | null;
+  statementAmount: number | null; billedAmount: number | null; carriedInAmount?: number | null;
   template: { id: string; name: string; category: string; customCategory: string | null; isFixed: boolean; dueDateDay: number | null; statementDay: number | null; loanInterestRate: number | null; loanRateType: string | null; loanOriginalPrincipal: number | null; loanStartDate: string | null; loanOutstandingOverride: number | null };
 };
 
@@ -160,13 +172,14 @@ function CCCardBlock({
   hasPostCloseSpend: boolean;
   nextMonthName: string;
   isBillPending: boolean;
-  onUpdate: (id: string, updates: { isPaid?: boolean; amount?: number; notes?: string; paidAmount?: number; cashbackAmount?: number }) => Promise<void>;
+  onUpdate: (id: string, updates: { isPaid?: boolean; amount?: number; notes?: string; paidAmount?: number; cashbackAmount?: number; payCarriedAmount?: number }) => Promise<void>;
   onClearStatement: (entryId: string) => Promise<void>;
   collapsed: boolean;
   onToggle: () => void;
 }) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
+  const [payingCarried, setPayingCarried] = useState(false);
   const statementDay = entry.template.statementDay;
   const nextBillTotal = entry.statementAmount ?? 0;
   const billedTotal = entry.billedAmount ?? entry.amount;
@@ -177,6 +190,14 @@ function CCCardBlock({
   // and the expanded EntryRow's tick, so they never fall out of sync.
   const tick = usePaymentTick(entry, onUpdate);
 
+  // While the statement hasn't closed yet, `amount` is a blend of real
+  // already-owed debt (carriedInAmount) and new spend still accumulating
+  // toward this cycle's own bill (not owed yet). Showing the blended total
+  // as "the bill" makes it look like more is due than actually is —
+  // headline shows just what's really owed, the rest shows separately.
+  const carriedInAmount = Math.max(0, entry.carriedInAmount ?? 0);
+  const buildingThisCycle = isBillPending ? Math.max(0, entry.amount - carriedInAmount) : 0;
+
   // One secondary status at a time instead of stacking multiple colored
   // hints — partial payment (informational) takes priority over a due
   // date (urgent, the only thing that earns the warning color) over a
@@ -184,18 +205,23 @@ function CCCardBlock({
   // doesn't repeat the expanded breakdown below).
   const rightStatus = tick.isPartial
     ? { text: `${fmt(tick.paidAmount!)} paid so far`, warn: false }
-    : entry.template.dueDateDay && !tick.isPaid
-      ? { text: `due ${ordinal(entry.template.dueDateDay)}${isDueNextMonth ? ` ${nextMonthName}` : ""}`, warn: true }
-      : collapsed && nextBillTotal > 0
-        ? { text: `+${fmt(nextBillTotal)} for ${nextMonthName}`, warn: false }
-        : null;
+    : isBillPending && buildingThisCycle > 0
+      ? { text: `+${fmt(buildingThisCycle)} current outstanding`, warn: false }
+      : entry.template.dueDateDay && !tick.isPaid
+        ? { text: `due ${ordinal(entry.template.dueDateDay)}${isDueNextMonth ? ` ${nextMonthName}` : ""}`, warn: true }
+        : collapsed && nextBillTotal > 0
+          ? { text: `+${fmt(nextBillTotal)} for ${nextMonthName}`, warn: false }
+          : null;
 
   // The expanded section only ever renders the "billed vs paying" rollover
-  // note or the next-cycle bill total — if neither applies there's nothing
-  // to reveal, so the chevron/expand affordance would be a dead control
-  // that visibly does nothing on tap. Render a plain, non-interactive
-  // header in that case instead of a collapsible one.
-  const hasExpandableContent = (entry.billedAmount != null && entry.billedAmount > entry.amount) || nextBillTotal > 0;
+  // note, the still-accumulating-this-cycle breakdown, or the next-cycle
+  // bill total — if none apply there's nothing to reveal, so the
+  // chevron/expand affordance would be a dead control that visibly does
+  // nothing on tap. Render a plain, non-interactive header in that case
+  // instead of a collapsible one.
+  const hasExpandableContent = (entry.billedAmount != null && entry.billedAmount > entry.amount)
+    || nextBillTotal > 0
+    || (isBillPending && carriedInAmount > 0 && buildingThisCycle > 0);
 
   return (
     <div className={cn(
@@ -244,7 +270,7 @@ function CCCardBlock({
           <CategoryBadge icon={ccIcon} color={ccColor} size="sm" />
           <span className={cn("text-sm font-semibold truncate flex-1 min-w-0 text-left", tick.isPaid && "text-muted-foreground")}>{entry.template.name}</span>
           <span className={cn("text-sm font-semibold tabular-nums shrink-0", tick.isPaid && "text-muted-foreground line-through")}>
-            {tick.isPartial ? fmt(tick.outstanding) : tick.cashback > 0 && !tick.isPaid ? fmt(tick.netBill) : fmt(billedTotal)}
+            {tick.isPartial ? fmt(tick.outstanding) : tick.cashback > 0 && !tick.isPaid ? fmt(tick.netBill) : isBillPending ? fmt(carriedInAmount) : fmt(billedTotal)}
           </span>
           {hasExpandableContent && (
             <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/60 transition-transform duration-200 shrink-0", !collapsed && "rotate-180")} />
@@ -279,6 +305,35 @@ function CCCardBlock({
             </div>
           )}
 
+          {/* Owed now vs still building — only while the statement hasn't
+              closed and there's real carried debt to separate from new
+              spend (see carriedInAmount/buildingThisCycle above). */}
+          {isBillPending && carriedInAmount > 0 && buildingThisCycle > 0 && (
+            <div className="px-3 py-2 border-b border-border space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Overdue amount (last month)</span>
+                <span className="font-semibold">{fmt(carriedInAmount)}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Current outstanding</span>
+                <span className="font-semibold text-muted-foreground">{fmt(buildingThisCycle)}</span>
+              </div>
+              {/* Real debt shouldn't have to wait for this cycle's own
+                  statement to close before it can be paid off. */}
+              <button
+                disabled={payingCarried}
+                onClick={async () => {
+                  setPayingCarried(true);
+                  await onUpdate(entry.id, { payCarriedAmount: carriedInAmount });
+                  setPayingCarried(false);
+                }}
+                className="w-full mt-1 text-xs font-medium text-primary border border-primary/30 bg-primary/5 px-2.5 py-1.5 rounded-md hover:bg-primary/10 transition-colors disabled:opacity-50"
+              >
+                {payingCarried ? "Paying…" : `Pay ${fmt(carriedInAmount)} overdue amount`}
+              </button>
+            </div>
+          )}
+
           {/* Next cycle bill total — the purchases building it are browsable
               in Daily/Regular Spends, tagged with this card's name. */}
           {nextBillTotal > 0 && (
@@ -310,7 +365,7 @@ function CCCardBlock({
   );
 }
 
-export function DashboardClient({ currentMonth: initialMonth, recentMonths: initialRecentMonths, ccTemplates, customCategories, subCategorySuggestions, incomeTemplates, todayMonth, todayYear, targetMonth, targetYear, prevUrl, nextUrl, projectedIncome, projectedEntries, gmailStatus = "ok" }: DashboardClientProps) {
+export function DashboardClient({ currentMonth: initialMonth, recentMonths: initialRecentMonths, ccTemplates, customCategories, subCategorySuggestions, incomeTemplates, todayMonth, todayYear, targetMonth, targetYear, prevUrl, nextUrl, projectedIncome, projectedEntries, gmailStatus = "ok", carriedOverEntries: initialCarriedOver = [] }: DashboardClientProps) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const viewMonth = targetMonth ?? todayMonth;
@@ -329,6 +384,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     startTransition(() => router.push(url));
   }
   const [currentMonth, setCurrentMonth] = useState(initialMonth);
+  const [carriedOver, setCarriedOver] = useState(initialCarriedOver);
   const [recentMonths, setRecentMonths] = useState(initialRecentMonths);
   // A custom category / sub-category created inline while adding or editing
   // a spend needs to show up as a chip immediately for the *next* add/edit
@@ -342,6 +398,10 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
   const [showSetup, setShowSetup] = useState(!initialMonth && !isProjected);
   const [showIncomeEdit, setShowIncomeEdit] = useState(false);
+  const [showPendingDrilldown, setShowPendingDrilldown] = useState(false);
+  const [showCCBillDrilldown, setShowCCBillDrilldown] = useState(false);
+  const [showExpenditureDrilldown, setShowExpenditureDrilldown] = useState(false);
+  const [showCashDrilldown, setShowCashDrilldown] = useState(false);
   // Payables (recurring bills + card dues, both action-oriented) vs Daily
   // Spend (browsing/logging ad-hoc transactions) — splitting these into
   // tabs instead of stacking every section on one long page.
@@ -413,7 +473,9 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   const hasCCCards = ccTemplates.length > 0;
   const adHocIncome   = useMemo(() => adHocItems.filter(i => i.type === "INCOME" && !i.notes?.startsWith("income_override:")).reduce((s, i) => s + i.amount, 0), [adHocItems]);
   const adHocExpense  = useMemo(() => adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0), [adHocItems]);
-  const grandIncome   = templateIncome + adHocIncome;
+  // With no income template to derive a live figure from, fall back to the
+  // manually-entered salaryIncome instead of letting it silently read as 0.
+  const grandIncome   = (incomeTemplates.length === 0 ? (currentMonth?.salaryIncome ?? 0) : templateIncome) + adHocIncome;
 
   // Single-pass metric computation via shared finance-utils
   const metrics = useMemo(
@@ -425,8 +487,18 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     ccBillsThisMonth, recurringNonCC, ccNextMonth,
   } = metrics;
 
-  const balance   = grandIncome - totalCommitted - adHocExpense;
-  const inHandNow = grandIncome - totalPaid - adHocExpense;
+  const openingBalance = currentMonth?.openingBalance ?? 0;
+  const balance   = openingBalance + grandIncome - totalCommitted - adHocExpense;
+  const inHandNow = openingBalance + grandIncome - totalPaid - adHocExpense;
+
+  // Still-unpaid bills from earlier months are real pending money — they
+  // belong in the headline Pending total, not just tucked away in their own
+  // Payables section where they'd look like they don't count.
+  const carriedOverPending = useMemo(
+    () => carriedOver.reduce((s, e) => s + (e.amount - (e.cashbackAmount ?? 0) - (e.paidAmount ?? 0)), 0),
+    [carriedOver]
+  );
+  const totalPendingWithCarryOver = totalPending + carriedOverPending;
 
   const nextMonthName  = MONTHS[todayMonth % 12]; // todayMonth is 1-12; % 12 maps Dec→Jan correctly
 
@@ -521,10 +593,33 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   const ccHasPending = ccEntries.some(item => item.kind === "entry" && !item.data.isPaid);
   const payablesSectionsSwapped = recurringFullySettled && ccHasPending;
 
+  // Drilldown breakdowns — same figures the top-line tiles already sum,
+  // just itemized so a click answers "where did this number come from"
+  // instead of having to trust it.
+  // This month's own recurring pending (non-CC) — a single total for the
+  // drilldown summary line, since every one of these is already itemized
+  // in the Payables tab's Recurring Payments list, no need to repeat it here.
+  const recurringPendingTotal = useMemo(() => {
+    return entries
+      .filter(e => e.template.category !== "CREDIT_CARD" && !e.isPaid)
+      .reduce((s, e) => s + (_net(e) - _effectivePaid(e)), 0);
+  }, [entries]);
+
+  const ccBillBreakdown = useMemo(() => {
+    return ccEntries
+      .filter((i): i is { kind: "entry"; data: EntryWithTemplate } => i.kind === "entry")
+      .map(({ data: e }) => {
+        const pending = _isBillPending(e, isCurrentMonth, todayDay);
+        const amount = pending ? Math.max(0, (e.carriedInAmount ?? 0) - (e.cashbackAmount ?? 0)) : _net(e);
+        return { id: e.id, name: e.template.name, amount, pending };
+      })
+      .filter(c => c.amount > 0);
+  }, [ccEntries, isCurrentMonth, todayDay]);
+
   const { fyIncome, fyExpenses, fyBalance, trendData } = useMemo(() => {
     const ccStatementDayById = new Map(ccTemplates.map(t => [t.id, t.statementDay]));
     const monthIncome = (m: typeof recentMonths[0]) =>
-      computeMonthIncome(m.adHocItems, incomeTemplates, m.month, m.year);
+      computeMonthIncome(m.adHocItems, incomeTemplates, m.month, m.year, m.salaryIncome);
     const monthExpenses = (m: typeof recentMonths[0]) => {
       const isCurrent = m.month === todayMonth && m.year === todayYear;
       return m.entries.reduce((a, e) => {
@@ -544,7 +639,14 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       Income: monthIncome(m),
       Expenses: monthExpenses(m),
     }));
-    return { fyIncome, fyExpenses, fyBalance: fyIncome - fyExpenses, trendData };
+    // recentMonths is ordered most-recent-first — the oldest month's
+    // openingBalance is this window's real starting cash position, so
+    // chaining forward from it (instead of a bare income-minus-expenses)
+    // keeps this "In hand"/"Deficit" figure consistent with the tiles
+    // above, which already account for carried-forward balance.
+    const oldestMonth = recentMonths[recentMonths.length - 1];
+    const fyBalance = (oldestMonth?.openingBalance ?? 0) + fyIncome - fyExpenses;
+    return { fyIncome, fyExpenses, fyBalance, trendData };
   }, [recentMonths, incomeTemplates, ccTemplates, todayMonth, todayYear, todayDay]);
 
   const { prevMonthName, expensesDelta } = useMemo(() => {
@@ -671,7 +773,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     if (existing) await handleAdHocDelete(existing.id);
   }
 
-  async function handleEntryUpdate(entryId: string, updates: { isPaid?: boolean; amount?: number; notes?: string; paidAmount?: number; cashbackAmount?: number }) {
+  async function handleEntryUpdate(entryId: string, updates: { isPaid?: boolean; amount?: number; notes?: string; paidAmount?: number; cashbackAmount?: number; payCarriedAmount?: number }) {
     if (!currentMonth) return;
     const res = await fetch(`/api/months/${currentMonth.id}/entries`, {
       method: "PATCH",
@@ -683,6 +785,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     withReorderTransition(() => {
       setCurrentMonth(prev => prev ? {
         ...prev, entries: prev.entries.map(e => e.id === entryId ? { ...e, ...updated } : e),
+        ...(updates.payCarriedAmount !== undefined && { openingBalance: prev.openingBalance - updates.payCarriedAmount }),
       } : prev);
     });
     if (updates.amount !== undefined || updates.cashbackAmount !== undefined) {
@@ -695,6 +798,41 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     if (updates.isPaid !== undefined) toast.success(updates.isPaid ? "Marked paid ✓" : "Marked pending");
     if (updates.paidAmount !== undefined && !updated.isPaid) toast.success("Partial payment recorded");
     if (updates.cashbackAmount !== undefined) toast.success(`Cashback of ${formatCurrency(updates.cashbackAmount)} applied`);
+    if (updates.payCarriedAmount !== undefined) toast.success(`${formatCurrency(updates.payCarriedAmount)} paid toward last cycle's balance`);
+  }
+
+  // Paying an old bill from a previous month, right now: PATCHes against its
+  // real original monthId (not the currently-viewed month — that entry was
+  // never copied here), and moves cash out of today's balance immediately
+  // rather than backdating it, since the payment is genuinely happening now.
+  // The server does the authoritative openingBalance decrement in the same
+  // transaction; the effectivePaid delta below just mirrors that locally so
+  // the tile updates without waiting on a refetch.
+  async function handleCarriedOverUpdate(item: CarriedOverEntry, updates: { isPaid?: boolean; paidAmount?: number; cashbackAmount?: number }) {
+    const res = await fetch(`/api/months/${item.monthId}/entries`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entryId: item.id, ...updates }),
+    });
+    if (!res.ok) { toast.error("Failed to save"); return; }
+    const updated = await res.json();
+
+    const entryBase = (paidAmount: number | null, isPaid: boolean) => ({
+      amount: item.amount, isPaid, paidAmount,
+      cashbackAmount: item.cashbackAmount, statementAmount: null, billedAmount: null,
+      template: { category: item.template.category, statementDay: item.template.statementDay },
+    });
+    const paidBefore = _effectivePaid(entryBase(item.paidAmount, false));
+    const paidAfter = _effectivePaid(entryBase(updated.paidAmount, updated.isPaid));
+    const delta = paidAfter - paidBefore;
+
+    setCurrentMonth(prev => prev ? { ...prev, openingBalance: prev.openingBalance - delta } : prev);
+    setCarriedOver(prev => updated.isPaid
+      ? prev.filter(e => e.id !== item.id)
+      : prev.map(e => e.id === item.id ? { ...e, paidAmount: updated.paidAmount } : e));
+
+    if (updates.isPaid !== undefined) toast.success(updates.isPaid ? "Marked paid ✓" : "Marked pending");
+    if (updates.paidAmount !== undefined && !updated.isPaid) toast.success("Partial payment recorded");
   }
 
   async function handleAdHocAdd(item: AdHocSubmitFields) {
@@ -824,12 +962,28 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       return [{
         id: fullMonth.id, month: fullMonth.month, year: fullMonth.year,
         salaryIncome: fullMonth.salaryIncome, freelanceIncome: fullMonth.freelanceIncome, otherIncome: fullMonth.otherIncome,
+        openingBalance: fullMonth.openingBalance,
         entries: (fullMonth.entries ?? []).map((e: EntryWithTemplate) => ({ id: e.id, templateId: e.templateId, amount: e.amount, cashbackAmount: e.cashbackAmount })),
         adHocItems: (fullMonth.adHocItems ?? []).map((i: AdHocItem) => ({ id: i.id, type: i.type, amount: i.amount, category: i.category })),
       }, ...prev].slice(0, 6);
     });
     toast.success("Month ready");
   }
+
+  // When a recurring income template exists, its live amount is what the
+  // dashboard will show regardless of what anyone types — so asking for a
+  // manual number at month-start is pure theater. Skip the prompt and start
+  // the month silently with the template total instead. Only the
+  // zero-income-template case still needs a real manual entry (see
+  // SetupMonthDialog below), since there's nothing to derive it from.
+  const autoSetupTriggered = useRef(false);
+  useEffect(() => {
+    if (currentMonth || isProjected || incomeTemplates.length === 0) return;
+    if (autoSetupTriggered.current) return;
+    autoSetupTriggered.current = true;
+    handleSetupMonth(templateIncome);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentMonth, isProjected, incomeTemplates.length]);
 
   if (!currentMonth && !isProjected) {
     return (
@@ -846,18 +1000,27 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             </button>
           </div>
         )}
-        <EmptyState
-          icon={Calendar}
-          title={formatMonthYear(viewMonth, viewYear)}
-          titleClassName="text-2xl font-bold"
-          description="Set up this month to start tracking"
-          action={
-            <Button onClick={() => setShowSetup(true)}>
-              <Plus className="w-4 h-4 mr-2" /> Set Up {formatMonthYear(viewMonth, viewYear)}
-            </Button>
-          }
-        />
-        <SetupMonthDialog open={showSetup} onOpenChange={setShowSetup} month={viewMonth} year={viewYear} suggestedIncome={templateIncome} onConfirm={handleSetupMonth} />
+        {incomeTemplates.length > 0 ? (
+          <div className="flex flex-col items-center gap-3 text-muted-foreground">
+            <Loader2 className="w-6 h-6 animate-spin" />
+            <p className="text-sm">Setting up {formatMonthYear(viewMonth, viewYear)}...</p>
+          </div>
+        ) : (
+          <>
+            <EmptyState
+              icon={Calendar}
+              title={formatMonthYear(viewMonth, viewYear)}
+              titleClassName="text-2xl font-bold"
+              description="Set up this month to start tracking"
+              action={
+                <Button onClick={() => setShowSetup(true)}>
+                  <Plus className="w-4 h-4 mr-2" /> Set Up {formatMonthYear(viewMonth, viewYear)}
+                </Button>
+              }
+            />
+            <SetupMonthDialog open={showSetup} onOpenChange={setShowSetup} month={viewMonth} year={viewYear} onConfirm={handleSetupMonth} />
+          </>
+        )}
       </div>
       </div>
     );
@@ -949,11 +1112,13 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
           {
             label: "Expenditure",
             value: fmt(dispCommitted + dispAdHoc),
+            onClick: isProjected ? undefined : () => setShowExpenditureDrilldown(true),
             hint: <span className="text-xs text-muted-foreground">{fmt(dispRecurringNonCC)} recurring</span>,
           },
           ...(hasCCCards ? [{
             label: "CC Bill",
             value: dispCCBills > 0 ? fmt(dispCCBills) : "-",
+            onClick: isProjected || dispCCBills <= 0 ? undefined : () => setShowCCBillDrilldown(true),
             hint: <span className="text-xs text-muted-foreground">{isProjected ? "last month's bill" : dispCCBills > 0 ? "from last month" : "no CC bills"}</span>,
           }] : []),
           ...(hasCCCards && !isProjected ? [{
@@ -963,18 +1128,23 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
           }] : []),
           {
             label: "Pending",
-            value: isProjected ? fmt(dispPending) : fmt(totalPending),
+            value: isProjected ? fmt(dispPending) : fmt(totalPendingWithCarryOver),
             valueClass: "text-negative",
+            onClick: isProjected ? undefined : () => setShowPendingDrilldown(true),
             hint: isProjected
               ? <span className="text-xs text-muted-foreground">projected</span>
-              : balance < 0
-                ? <span className="text-xs text-negative">{fmt(Math.abs(balance))} over income</span>
+              : totalPendingWithCarryOver > grandIncome
+                ? <span className="text-xs text-negative">{fmt(totalPendingWithCarryOver - grandIncome)} over income</span>
                 : undefined,
           },
           ...(!isProjected ? [{
             label: "Cash/UPI Bal",
             value: fmt(Math.max(0, inHandNow)),
             valueClass: "text-positive",
+            onClick: () => setShowCashDrilldown(true),
+            hint: openingBalance !== 0
+              ? <span className="text-xs text-muted-foreground">{openingBalance > 0 ? "+" : "-"}{fmt(Math.abs(openingBalance))} carried over</span>
+              : undefined,
           }] : []),
         ]}
       />
@@ -1007,6 +1177,51 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       <div className="lg:col-span-2 space-y-6">
       {tab === "payables" && (
       <div className="space-y-6">
+        {/* Carried Over — unpaid bills still sitting in earlier months.
+            Never copied into this month (see setupMonth) — paying one here
+            settles the real original entry, in its real original month,
+            dated to right now. */}
+        {carriedOver.length > 0 && (
+          <div className="space-y-2">
+            <p className="fin-label px-0.5">Carried Over From Earlier Months</p>
+            <div className="space-y-3">
+              {Object.entries(
+                carriedOver.reduce<Record<string, CarriedOverEntry[]>>((acc, item) => {
+                  const key = `${item.month.year}-${item.month.month}`;
+                  (acc[key] ??= []).push(item);
+                  return acc;
+                }, {})
+              ).map(([key, items]) => {
+                const [y, m] = key.split("-").map(Number);
+                return (
+                  <div key={key} className="space-y-1.5">
+                    <p className="text-xs text-muted-foreground px-0.5">{formatMonthYear(m, y)}</p>
+                    <div className="space-y-1.5">
+                      {items.map(item => (
+                        <EntryRow
+                          key={item.id}
+                          entry={{
+                            id: item.id, amount: item.amount, isPaid: false, paidOn: null,
+                            paidAmount: item.paidAmount, cashbackAmount: item.cashbackAmount, notes: null,
+                            template: {
+                              name: item.template.name, category: item.template.category,
+                              customCategory: item.template.customCategory, isFixed: true,
+                              dueDateDay: item.template.dueDateDay, statementDay: item.template.statementDay,
+                              loanInterestRate: null, loanRateType: null, loanOriginalPrincipal: null,
+                              loanStartDate: null, loanOutstandingOverride: null,
+                            },
+                          }}
+                          onUpdate={(_id, updates) => handleCarriedOverUpdate(item, updates)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Due Soon — nearest unpaid items across recurring + CC, so what
             needs action is glanceable without opening any category. */}
         {upcomingPayments.length > 0 && (
@@ -1415,6 +1630,165 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                 Add one-time income
               </button>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Pending drilldown */}
+      <Dialog open={showPendingDrilldown} onOpenChange={setShowPendingDrilldown}>
+        <DialogContent className="max-w-sm max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Pending: {formatMonthYear(currentMonth?.month ?? viewMonth, currentMonth?.year ?? viewYear)}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-1">
+            <div className="space-y-1.5">
+              <p className="fin-label">This month</p>
+              <div className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
+                <span>Recurring</span>
+                <span className="font-semibold">{fmt(recurringPendingTotal)}</span>
+              </div>
+              {ccBillBreakdown.filter(c => !c.pending).map(c => (
+                <div key={c.id} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
+                  <span>{c.name}</span>
+                  <span className="font-semibold">{fmt(c.amount)}</span>
+                </div>
+              ))}
+            </div>
+            {(carriedOver.length > 0 || ccBillBreakdown.some(c => c.pending)) && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <p className="fin-label">Carried over from earlier months</p>
+                  <span className="text-xs font-semibold">
+                    {fmt(carriedOverPending + ccBillBreakdown.filter(c => c.pending).reduce((s, c) => s + c.amount, 0))}
+                  </span>
+                </div>
+                {carriedOver.map(item => (
+                  <div key={item.id} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="truncate">{item.template.name}</p>
+                      <p className="text-xs text-muted-foreground">{formatMonthYear(item.month.month, item.month.year)}</p>
+                    </div>
+                    <span className="font-semibold shrink-0 ml-2">{fmt(item.amount - (item.cashbackAmount ?? 0) - (item.paidAmount ?? 0))}</span>
+                  </div>
+                ))}
+                {ccBillBreakdown.filter(c => c.pending).map(c => (
+                  <div key={c.id} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="truncate">{c.name}</p>
+                      <p className="text-xs text-muted-foreground">carried, statement not closed yet</p>
+                    </div>
+                    <span className="font-semibold shrink-0 ml-2">{fmt(c.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex items-center justify-between pt-2 border-t border-border">
+              <p className="text-sm font-semibold">Total pending</p>
+              <span className="text-sm font-bold text-negative">{fmt(totalPendingWithCarryOver)}</span>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* CC Bill drilldown */}
+      <Dialog open={showCCBillDrilldown} onOpenChange={setShowCCBillDrilldown}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>CC Bill: {formatMonthYear(currentMonth?.month ?? viewMonth, currentMonth?.year ?? viewYear)}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1.5 pt-1">
+            {/* Only cards actually due this cycle — carried-over debt from
+                a not-yet-closed card lives under Pending instead, same
+                principle as Expenditure below. */}
+            {ccBillBreakdown.filter(c => !c.pending).map(c => (
+              <div key={c.id} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
+                <span>{c.name}</span>
+                <span className="font-semibold shrink-0 ml-2">{fmt(c.amount)}</span>
+              </div>
+            ))}
+            <div className="flex items-center justify-between pt-2 border-t border-border">
+              <p className="text-sm font-semibold">Total</p>
+              <span className="text-sm font-bold">{fmt(dispCCBills)}</span>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Expenditure drilldown */}
+      <Dialog open={showExpenditureDrilldown} onOpenChange={setShowExpenditureDrilldown}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Expenditure: {formatMonthYear(currentMonth?.month ?? viewMonth, currentMonth?.year ?? viewYear)}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-1">
+            <p className="text-xs text-muted-foreground">Only this month&apos;s own bills — carried-over debt from earlier months lives under Pending instead, never counted twice.</p>
+
+            {/* Recurring is already fully itemized in the Payables tab —
+                a summary line here is enough, no need to repeat it. */}
+            <div className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
+              <span>Recurring (non-card)</span>
+              <span className="font-semibold">{fmt(dispRecurringNonCC)}</span>
+            </div>
+
+            {/* Credit cards and one-time spends aren't listed anywhere else
+                this compactly, so show the actual items, not just a total. */}
+            {ccBillBreakdown.filter(c => !c.pending).length > 0 && (
+              <div className="space-y-1.5">
+                <p className="fin-label">Credit cards</p>
+                {ccBillBreakdown.filter(c => !c.pending).map(c => (
+                  <div key={c.id} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
+                    <span>{c.name}</span>
+                    <span className="font-semibold">{fmt(c.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).length > 0 && (
+              <div className="space-y-1.5">
+                <p className="fin-label">One-time (this month)</p>
+                {adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).map(i => (
+                  <div key={i.id} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
+                    <span className="truncate">{i.name}</span>
+                    <span className="font-semibold shrink-0 ml-2">{fmt(i.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-2 border-t border-border">
+              <p className="text-sm font-semibold">Total</p>
+              <span className="text-sm font-bold">{fmt(dispCommitted + dispAdHoc)}</span>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cash/UPI Bal drilldown */}
+      <Dialog open={showCashDrilldown} onOpenChange={setShowCashDrilldown}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Cash/UPI Bal: {formatMonthYear(currentMonth?.month ?? viewMonth, currentMonth?.year ?? viewYear)}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1.5 pt-1">
+            <div className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
+              <span>Carried over from last month</span>
+              <span className={cn("font-semibold", openingBalance < 0 && "text-negative")}>
+                {openingBalance < 0 ? "-" : ""}{fmt(Math.abs(openingBalance))}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
+              <span>Earned this month</span>
+              <span className="font-semibold text-positive">+{fmt(grandIncome)}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
+              <span>Paid out this month</span>
+              <span className="font-semibold text-negative">-{fmt(totalPaid + adHocExpense)}</span>
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t border-border">
+              <p className="text-sm font-semibold">Cash/UPI balance now</p>
+              <span className="text-sm font-bold text-positive">{fmt(inHandNow)}</span>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
