@@ -40,7 +40,7 @@ export function computeTemplateEntryAmount(
   },
   baseAmount: number,
   prevCC?: PrevCCState,
-): { amount: number; billedAmount?: number } {
+): { amount: number; billedAmount?: number; carriedInAmount?: number } {
   if (t.chitFund) {
     const amount = t.chitFund.isLifted
       ? (t.chitFund.monthlyLiftedAmount ?? baseAmount)
@@ -52,7 +52,14 @@ export function computeTemplateEntryAmount(
     // floor at 0 rather than let it push the bill negative; any credit
     // beyond what this month's statement absorbs isn't tracked further.
     const amount = Math.max(0, (prevCC?.statement ?? 0) + (prevCC?.outstanding ?? 0));
-    return { amount, billedAmount: amount };
+    // Frozen at creation — only the genuinely unpaid carry from before
+    // (`outstanding`), NOT `statement`. `statement` is last cycle's new
+    // spend that already closed as ITS OWN bill and is fully reflected in
+    // `amount`/`billedAmount` — it isn't unpaid debt, so it shouldn't count
+    // as "carried over" until this cycle's own statement closes, same as
+    // any other new spend. Only real unpaid debt should show as owed
+    // before its own statement day.
+    return { amount, billedAmount: amount, carriedInAmount: Math.max(0, prevCC?.outstanding ?? 0) };
   }
   return { amount: baseAmount };
 }

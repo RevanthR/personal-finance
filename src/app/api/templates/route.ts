@@ -79,10 +79,10 @@ export async function POST(req: NextRequest) {
         });
         prevCC = computePrevCCState(prevEntry);
       }
-      const { amount, billedAmount } = computeTemplateEntryAmount(template, template.amount, prevCC);
+      const { amount, billedAmount, carriedInAmount } = computeTemplateEntryAmount(template, template.amount, prevCC);
       await db.monthlyEntry.upsert({
         where: { monthId_templateId: { monthId: curMonthRecord.id, templateId: template.id } },
-        create: { monthId: curMonthRecord.id, templateId: template.id, amount, ...(billedAmount !== undefined && { billedAmount }) },
+        create: { monthId: curMonthRecord.id, templateId: template.id, amount, ...(billedAmount !== undefined && { billedAmount }), ...(carriedInAmount !== undefined && { carriedInAmount }) },
         update: {},
       });
     }

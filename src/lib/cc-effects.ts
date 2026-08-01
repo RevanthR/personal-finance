@@ -62,7 +62,10 @@ export async function applyCCEffect(
   });
   if (!entry) {
     entry = await client.monthlyEntry.create({
-      data: { monthId, templateId: ccTemplateId, amount: 0, billedAmount: 0, isPaid: false, statementAmount: 0 },
+      // A brand-new entry created here (first charge landed before month
+      // setup ever ran for this card) has nothing carried in — 0, not null,
+      // so Pending treats it the same as any other freshly-opened card.
+      data: { monthId, templateId: ccTemplateId, amount: 0, billedAmount: 0, carriedInAmount: 0, isPaid: false, statementAmount: 0 },
     });
   }
 

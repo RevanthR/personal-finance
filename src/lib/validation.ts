@@ -54,6 +54,9 @@ export const EntryPatchSchema = z.object({
   statementAmount: z.number().finite().min(0).nullable().optional(),
   paidAmount:     z.number().finite().min(0).nullable().optional(),
   cashbackAmount: z.number().finite().min(0).nullable().optional(),
+  // CC only: settle some or all of the carried-forward debt (carriedInAmount)
+  // without waiting for this cycle's own statement to close.
+  payCarriedAmount: z.number().finite().positive().optional(),
 });
 
 export const AdHocPostSchema = z.object({

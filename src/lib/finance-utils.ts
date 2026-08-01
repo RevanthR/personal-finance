@@ -13,6 +13,7 @@ export interface EntryBase {
   cashbackAmount: number | null;
   statementAmount: number | null;
   billedAmount: number | null;
+  carriedInAmount?: number | null;
   template: {
     category: string;
     statementDay: number | null;
@@ -28,6 +29,10 @@ export interface ProgressMetrics {
   ccBillsThisMonth: number;
   recurringNonCC: number;
   ccNextMonth: number;
+  // Real prior-cycle CC debt still on a not-yet-closed card — in
+  // totalPending already, broken out so callers can show it separately
+  // from this month's own Expenditure/CC Bill figures.
+  carriedCCDebt: number;
 }
 
 /** Entry's net obligation after cashback. */
@@ -88,7 +93,18 @@ export function computeMonthIncome(
   incomeTemplates: IncomeTemplateForCalc[],
   month: number,
   year: number,
+  // Manually-entered Month.salaryIncome, used only when there's no income
+  // template to derive a live figure from — otherwise that manual number
+  // was silently discarded and a template-less month's income read as 0.
+  salaryIncomeFallback = 0,
 ): number {
+  if (incomeTemplates.length === 0) {
+    const nonOverrideAdhoc = adHocItems
+      .filter(i => i.type === "INCOME" && !i.notes?.startsWith("income_override:"))
+      .reduce((sum, i) => sum + i.amount, 0);
+    return salaryIncomeFallback + nonOverrideAdhoc;
+  }
+
   const overrides = new Map<string, number>();
   let nonOverrideAdhoc = 0;
   for (const item of adHocItems) {
@@ -118,13 +134,27 @@ export function computeMetrics(
   let pendingCount = 0;
   let ccBillsThisMonth = 0;
   let ccNextMonth = 0;
+  // Real, already-billed debt still sitting on a not-yet-closed card. This
+  // is genuinely owed, so it belongs in Pending — but it's last cycle's
+  // liability, not this month's own spending, so it must NOT flow into
+  // totalCommitted/ccBillsThisMonth (those feed Expenditure and the CC Bill
+  // tile, which should only ever reflect this month's own bills).
+  let carriedCCDebt = 0;
 
   for (const e of entries) {
     const pending = isBillPending(e, isCurrentMonth, todayDay);
+
+    if (pending) {
+      const carried = Math.max(0, (e.carriedInAmount ?? 0) - (e.cashbackAmount ?? 0));
+      if (carried > 0) {
+        carriedCCDebt += carried;
+        pendingCount++;
+      }
+      continue;
+    }
+
     const net = netAmount(e);
     const paid = effectivePaid(e);
-
-    if (pending) continue;
 
     totalCommitted += net;
     totalPaid += paid;
@@ -145,7 +175,10 @@ export function computeMetrics(
   return {
     totalCommitted,
     totalPaid,
-    totalPending: totalCommitted - totalPaid,
+    // Carried CC debt counts toward what you owe overall, just not toward
+    // this month's own committed spend (see carriedCCDebt above).
+    totalPending: totalCommitted - totalPaid + carriedCCDebt,
+    carriedCCDebt,
     paidPercent,
     pendingCount,
     ccBillsThisMonth,

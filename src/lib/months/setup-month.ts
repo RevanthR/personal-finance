@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { computeTemplateEndDate } from "@/lib/loan-utils";
 import { computeTemplateEntryAmount, computePrevCCState, type PrevCCState } from "@/lib/entry-amount";
 import { pendingAmountKicks } from "@/lib/utils";
+import { computeMonthIncome, computeMetrics } from "@/lib/finance-utils";
 import type { Month } from "@/generated/prisma/client";
 
 // Shared by POST /api/months (the user explicitly clicking "Start Month")
@@ -25,7 +26,7 @@ export async function setupMonth(userId: string, month: number, year: number, sa
       include: { chitFund: true },
     });
 
-    // Find previous month to carry CC statement amounts + unpaid balances forward
+    // Find previous month to carry CC statement amounts + cash balance forward
     const prevMonthNum = month === 1 ? 12 : month - 1;
     const prevYear = month === 1 ? year - 1 : year;
     const prevMonth = await db.month.findUnique({
@@ -35,9 +36,10 @@ export async function setupMonth(userId: string, month: number, year: number, sa
           select: {
             templateId: true, statementAmount: true,
             isPaid: true, amount: true, billedAmount: true, paidAmount: true, cashbackAmount: true,
-            template: { select: { category: true, name: true } },
+            template: { select: { category: true, name: true, statementDay: true } },
           },
         },
+        adHocItems: true,
       },
     });
     // templateId → last statement + any unpaid/overpaid carry, for CC templates
@@ -47,18 +49,23 @@ export async function setupMonth(userId: string, month: number, year: number, sa
         .map(e => [e.templateId, computePrevCCState(e)])
     );
 
-    // Carry-forward: unpaid/partially-paid entries from previous month
-    // Excluded: LOAN and CHIT_FUND (intentional — those are tracked differently)
-    const CARRY_FORWARD_EXCLUDE = new Set(["LOAN", "CHIT_FUND"]);
-    const nonCCCarryForwards: { name: string; amount: number; category: string }[] = [];
-    for (const e of prevMonth?.entries ?? []) {
-      const cat = e.template.category;
-      if (cat === "CREDIT_CARD") continue;
-      if (e.isPaid) continue;
-      if (CARRY_FORWARD_EXCLUDE.has(cat)) continue;
-      const outstanding = e.amount - (e.cashbackAmount ?? 0) - (e.paidAmount ?? 0);
-      if (outstanding <= 0) continue;
-      nonCCCarryForwards.push({ name: e.template.name, amount: outstanding, category: cat });
+    // Carry forward actual leftover cash: previous month's real net cash
+    // flow (income actually received minus what was actually paid out —
+    // unpaid bills correctly don't reduce this, since that money hasn't
+    // left hand yet) on top of whatever it itself carried in. Unpaid bills
+    // themselves are NOT copied into this month at all (see below) — they
+    // stay payable against their real original entry, in their own month,
+    // so paying one later correctly moves cash on the day it actually
+    // happens instead of being silently pre-counted as spent here.
+    let openingBalance = 0;
+    if (prevMonth) {
+      const incomeTemplates = templates.filter(t => t.templateType === "INCOME");
+      const prevIncome = computeMonthIncome(prevMonth.adHocItems, incomeTemplates, prevMonthNum, prevYear, prevMonth.salaryIncome);
+      const prevPaid = computeMetrics(prevMonth.entries, false, 0).totalPaid;
+      const prevAdHocExpense = prevMonth.adHocItems
+        .filter(i => i.type === "EXPENSE" && !i.ccTemplateId)
+        .reduce((s, i) => s + i.amount, 0);
+      openingBalance = prevMonth.openingBalance + (prevIncome - prevPaid - prevAdHocExpense);
     }
 
     // Every write below is one atomic unit — a mid-way failure (timeout,
@@ -113,34 +120,20 @@ export async function setupMonth(userId: string, month: number, year: number, sa
           });
         }
 
-        const { amount, billedAmount } = computeTemplateEntryAmount(t, baseAmount, prevCCState.get(t.id));
+        const { amount, billedAmount, carriedInAmount } = computeTemplateEntryAmount(t, baseAmount, prevCCState.get(t.id));
 
         await tx.monthlyEntry.upsert({
           where: { monthId_templateId: { monthId: monthRecord.id, templateId: t.id } },
-          create: { monthId: monthRecord.id, templateId: t.id, amount, ...(billedAmount !== undefined && { billedAmount }) },
+          create: { monthId: monthRecord.id, templateId: t.id, amount, ...(billedAmount !== undefined && { billedAmount }), ...(carriedInAmount !== undefined && { carriedInAmount }) },
           update: {},
         });
       }
 
-      // Create carry-forward AdHocItems for non-CC unpaid balances from previous month
-      for (const cf of nonCCCarryForwards) {
-        await tx.adHocItem.create({
-          data: {
-            monthId: monthRecord.id,
-            name: `↩ ${cf.name}`,
-            amount: cf.amount,
-            type: "EXPENSE",
-            category: cf.category as import("@/generated/prisma/client").Category,
-            date: new Date(year, month - 1, 1),
-            notes: "carry_forward",
-          },
-        });
-      }
-
-      await tx.month.update({ where: { id: monthRecord.id }, data: { isPopulated: true } });
+      await tx.month.update({ where: { id: monthRecord.id }, data: { isPopulated: true, openingBalance } });
     }, { timeout: 15000 });
 
     monthRecord.isPopulated = true;
+    monthRecord.openingBalance = openingBalance;
   }
 
   return monthRecord;

@@ -194,6 +194,9 @@ model Month {
   salaryIncome    Float          @default(0)
   freelanceIncome Float          @default(0)
   otherIncome     Float          @default(0)
+  // Actual cash left over from the previous month (income - what was
+  // actually paid out, not just committed), carried forward by setupMonth.
+  openingBalance  Float          @default(0)
   isPopulated     Boolean        @default(false)
   createdAt       DateTime       @default(now())
   entries         MonthlyEntry[]
@@ -218,6 +221,11 @@ model MonthlyEntry {
   notes           String?
   statementAmount Float?
   billedAmount    Float?           // CC only: obligation at month open; used for carry-forward instead of amount
+  // CC only: genuinely unpaid debt already billed in a prior, closed
+  // statement — NOT last cycle's own new charges (those aren't debt until
+  // their own statement closes). Always counts toward Pending even before
+  // THIS cycle's statement closes. Never touched after creation.
+  carriedInAmount Float?
   createdAt       DateTime         @default(now())
 
   @@unique([monthId, templateId])

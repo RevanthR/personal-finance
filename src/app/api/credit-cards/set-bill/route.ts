@@ -47,6 +47,9 @@ export async function POST(req: NextRequest) {
       templateId,
       amount: entryAmount,
       billedAmount: billedAmount ?? entryAmount,
+      // Manually declaring a bill here IS declaring what's owed — counts
+      // as carried-in debt from creation, same as the auto-computed path.
+      carriedInAmount: billedAmount ?? entryAmount,
       ...(isPaid !== undefined && { isPaid }),
     },
     update: {
