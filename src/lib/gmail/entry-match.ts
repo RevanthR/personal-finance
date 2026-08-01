@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { tokenOverlapScore } from "./text-similarity";
+import { getCurrentMonthYear } from "@/lib/utils";
 
 export type EntryMatch = {
   kind: "cc" | "recurring";
@@ -76,10 +77,13 @@ export async function findEntryMatches(userId: string, transactions: PendingTx[]
     include: {
       entries: {
         where: { isPaid: false },
-        include: { template: { select: { name: true } } },
+        include: { template: { select: { name: true, statementDay: true } } },
       },
     },
   });
+
+  const { month: todayMonth, year: todayYear } = getCurrentMonthYear();
+  const todayDay = new Date().getDate();
 
   const ccCards = await db.creditCard.findMany({
     where: { userId, template: { isActive: true } },
@@ -101,13 +105,25 @@ export async function findEntryMatches(userId: string, transactions: PendingTx[]
     // name — so a card-issuer name match only makes sense here when the
     // charge wasn't made using the card itself.
     if (t.paymentMethod !== "CREDIT_CARD") {
+      const isCurrentMonthReal = month.year === todayYear && month.month === todayMonth;
       let best: { entry: typeof candidates[number]; score: number } | null = null;
       let tied = false;
       for (const entry of candidates) {
         if (!ccTemplateIds.has(entry.templateId)) continue;
         const card = ccCards.find(c => c.templateId === entry.templateId);
         const cardText = `${entry.template.name} ${card?.bank ?? ""} ${card?.network ?? ""}`;
-        const outstanding = entry.amount - (entry.cashbackAmount ?? 0) - (entry.paidAmount ?? 0);
+        // While the statement hasn't closed yet, entry.amount is a blended
+        // running total (real prior-cycle debt + this cycle's new, still-
+        // unbilled spend) — a payment should be checked against just the
+        // carried debt, the only part that's actually owed right now, same
+        // distinction the dashboard's "pay overdue amount" already makes.
+        // Once the statement closes, the whole amount is one real bill again.
+        const billPending = isCurrentMonthReal
+          && entry.template.statementDay != null
+          && todayDay < entry.template.statementDay;
+        const outstanding = billPending
+          ? Math.max(0, (entry.carriedInAmount ?? 0) - (entry.cashbackAmount ?? 0))
+          : entry.amount - (entry.cashbackAmount ?? 0) - (entry.paidAmount ?? 0);
         // No amount ceiling here, unlike the recurring path below — a CC
         // bill payment can legitimately overpay (rounding up, paying ahead
         // of next month's charges), and the name/bank match against one of
@@ -125,15 +141,30 @@ export async function findEntryMatches(userId: string, transactions: PendingTx[]
       // silently paying down the wrong card's bill is real harm.
       if (best && tied) best = null;
       if (best) {
+        const billPending = isCurrentMonthReal
+          && best.entry.template.statementDay != null
+          && todayDay < best.entry.template.statementDay;
         usedEntryIds.add(best.entry.id);
-        result.set(t.id, {
-          kind: "cc",
-          entryId: best.entry.id,
-          templateId: best.entry.templateId,
-          templateName: best.entry.template.name,
-          owed: best.entry.amount - (best.entry.cashbackAmount ?? 0),
-          alreadyPaid: best.entry.paidAmount ?? 0,
-        });
+        result.set(t.id, billPending && (best.entry.carriedInAmount ?? 0) > 0
+          ? {
+              kind: "cc",
+              entryId: best.entry.id,
+              templateId: best.entry.templateId,
+              templateName: best.entry.template.name,
+              // carriedInAmount is already net of any earlier partial
+              // payments (payCarriedAmount reduces it directly), so there's
+              // no separate "already paid toward it" figure to subtract.
+              owed: Math.max(0, (best.entry.carriedInAmount ?? 0) - (best.entry.cashbackAmount ?? 0)),
+              alreadyPaid: 0,
+            }
+          : {
+              kind: "cc",
+              entryId: best.entry.id,
+              templateId: best.entry.templateId,
+              templateName: best.entry.template.name,
+              owed: best.entry.amount - (best.entry.cashbackAmount ?? 0),
+              alreadyPaid: best.entry.paidAmount ?? 0,
+            });
         continue;
       }
     }

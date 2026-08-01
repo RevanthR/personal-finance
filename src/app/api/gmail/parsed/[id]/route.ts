@@ -7,6 +7,7 @@ import { resolveCustomCategory } from "@/lib/custom-category";
 import { resolveSubCategory } from "@/lib/sub-category";
 import { rememberMerchantCategory } from "@/lib/merchant-memory";
 import { computePaymentUpdate } from "@/lib/entry-payment";
+import { getCurrentMonthYear } from "@/lib/utils";
 import type { Category } from "@/generated/prisma/client";
 
 // PATCH /api/gmail/parsed/[id] — approve (creates the real AdHocItem via
@@ -44,22 +45,56 @@ export async function PATCH(
 
     const entry = await db.monthlyEntry.findFirst({
       where: { id: body.entryId, month: { userId } },
-      select: { id: true, amount: true, cashbackAmount: true, paidAmount: true },
+      select: {
+        id: true, amount: true, billedAmount: true, carriedInAmount: true, cashbackAmount: true, paidAmount: true,
+        month: { select: { id: true, month: true, year: true } },
+        template: { select: { category: true, statementDay: true } },
+      },
     });
     if (!entry) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
 
     const settleAmount = body.amount ?? existing.amount;
-    const netAmount = entry.amount - (entry.cashbackAmount ?? 0);
-    // Accumulate onto whatever's already been paid this month — two
-    // partial payments toward the same bill (e.g. a part-payment now, the
-    // rest later) both need to count, not overwrite each other.
-    const newPaidAmount = (entry.paidAmount ?? 0) + settleAmount;
+
+    // Re-derive fresh (never trust a client-supplied flag for a financial
+    // branch) whether this is a still-open CC bill with real carried-over
+    // debt — same "amount is a blended running total, only carriedInAmount
+    // is actually owed right now" distinction as the dashboard's own "pay
+    // overdue amount" button (src/app/api/months/[monthId]/entries/route.ts,
+    // payCarriedAmount) and entry-match.ts's match-suggestion logic. Without
+    // this, a real payment toward last cycle's bill gets checked against the
+    // WHOLE running total (including this cycle's new, still-unbilled
+    // spend) and shows up as a much bigger "partial payment" than it is.
+    const { month: todayMonth, year: todayYear } = getCurrentMonthYear();
+    const billPending = entry.month.year === todayYear && entry.month.month === todayMonth
+      && entry.template.category === "CREDIT_CARD"
+      && entry.template.statementDay != null
+      && new Date().getDate() < entry.template.statementDay;
+    const carried = Math.max(0, entry.carriedInAmount ?? 0);
 
     const updatedEntry = await db.$transaction(async (tx) => {
-      const updatedEntry = await tx.monthlyEntry.update({
-        where: { id: entry.id },
-        data: computePaymentUpdate(netAmount, newPaidAmount),
-      });
+      let updatedEntry;
+      if (billPending && carried > 0) {
+        const pay = Math.min(settleAmount, carried);
+        updatedEntry = await tx.monthlyEntry.update({
+          where: { id: entry.id },
+          data: {
+            amount: Math.max(0, entry.amount - settleAmount),
+            ...(entry.billedAmount != null && { billedAmount: Math.max(0, entry.billedAmount - settleAmount) }),
+            carriedInAmount: carried - pay,
+          },
+        });
+        await tx.month.update({ where: { id: entry.month.id }, data: { openingBalance: { decrement: settleAmount } } });
+      } else {
+        const netAmount = entry.amount - (entry.cashbackAmount ?? 0);
+        // Accumulate onto whatever's already been paid this month — two
+        // partial payments toward the same bill (e.g. a part-payment now, the
+        // rest later) both need to count, not overwrite each other.
+        const newPaidAmount = (entry.paidAmount ?? 0) + settleAmount;
+        updatedEntry = await tx.monthlyEntry.update({
+          where: { id: entry.id },
+          data: computePaymentUpdate(netAmount, newPaidAmount),
+        });
+      }
       await tx.parsedTransaction.update({ where: { id }, data: { status: "APPROVED" } });
       return updatedEntry;
     });
