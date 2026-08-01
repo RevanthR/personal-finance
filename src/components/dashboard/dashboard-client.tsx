@@ -1453,11 +1453,19 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
 
       {/* Unified Income Dialog */}
       <Dialog open={!isProjected && showIncomeEdit} onOpenChange={v => { setShowIncomeEdit(v); if (!v) setShowAddIncome(false); }}>
-        <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        {/* Header/close button live outside the scroll area — putting
+            max-h+overflow-y-auto on DialogContent itself (the same fixed-
+            position element the close button is anchored to) scrolls the
+            close button away with the content instead of keeping it
+            reachable, and on mobile Safari a scrollable region nested
+            directly inside a position:fixed ancestor can also just fail to
+            respond to touch-drag at all — both read as "not responsive"
+            once this dialog's content is long enough to need scrolling. */}
+        <DialogContent className="max-w-sm max-h-[85vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="p-4 sm:p-6 pb-0 shrink-0">
             <DialogTitle>Income: {formatMonthYear(currentMonth?.month ?? viewMonth, currentMonth?.year ?? viewYear)}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 pt-1">
+          <div className="space-y-4 p-4 sm:p-6 pt-1 overflow-y-auto overscroll-contain">
             {/* Recurring income from templates */}
             <div className="rounded-xl bg-muted/30 border px-3 py-3 space-y-2">
               <div className="flex items-center justify-between">
@@ -1642,11 +1650,11 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
 
       {/* Pending drilldown */}
       <Dialog open={showPendingDrilldown} onOpenChange={setShowPendingDrilldown}>
-        <DialogContent className="max-w-sm max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-sm max-h-[85vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="p-4 sm:p-6 pb-0 shrink-0">
             <DialogTitle>Pending: {formatMonthYear(currentMonth?.month ?? viewMonth, currentMonth?.year ?? viewYear)}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 pt-1">
+          <div className="space-y-4 p-4 sm:p-6 pt-1 overflow-y-auto overscroll-contain">
             <div className="space-y-1.5">
               <p className="fin-label">This month</p>
               <div className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
