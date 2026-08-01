@@ -56,6 +56,8 @@ export type AnalyticsData = {
     totalRemaining: number | null;
     interestRate: number | null;
     rateType: string | null;
+    startsMonth: number | null;
+    startsYear: number | null;
     amortization: {
       outstandingPrincipal: number;
       interestThisMonth: number;
@@ -143,8 +145,11 @@ function CategorySection({ data, totalExpenses, fmt }: {
             <div className="flex items-center gap-2 py-2 px-3 rounded-lg hover:bg-muted transition-colors group">
               <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
               <span className="text-sm font-medium flex-1 min-w-0 truncate">{cat.name}</span>
-              <span className="text-xs text-muted-foreground shrink-0">{cat.pct}%</span>
-              <span className="text-sm font-semibold shrink-0 tabular-nums">{fmt(cat.total)}</span>
+              {/* Fixed width + tabular-nums: "40%" and "1%" take different
+                  widths otherwise, which shifts the amount column left/right
+                  per row instead of keeping every row's amount lined up. */}
+              <span className="text-xs text-muted-foreground shrink-0 w-8 text-right tabular-nums">{cat.pct}%</span>
+              <span className="text-sm font-semibold shrink-0 tabular-nums w-24 text-right">{fmt(cat.total)}</span>
               {cat.items.length > 0 && (
                 expanded === cat.key
                   ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
@@ -258,7 +263,12 @@ function ReliefTimeline({ data, fmt }: {
                   </span>
                 </div>
 
-                {a ? (
+                {l.startsMonth && l.startsYear ? (
+                  <p className="text-xs text-muted-foreground">
+                    <span className="px-1.5 py-0.5 rounded-full bg-accent text-accent-foreground font-medium mr-1">upcoming</span>
+                    Starts {MONTHS[l.startsMonth - 1]} {l.startsYear} · {fmt(l.monthlyAmount)}/mo
+                  </p>
+                ) : a ? (
                   <>
                     <div className="grid grid-cols-2 gap-2">
                       <div className="rounded-lg bg-muted px-3 py-2">

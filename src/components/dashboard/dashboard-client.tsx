@@ -5,7 +5,7 @@ import { flushSync } from "react-dom";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { formatCurrency, formatMonthYear, getCategoryDisplay, getCategoryColor, getCategoryIcon, MONTHS, pendingAmountKicks, ordinal, EXPENSE_CATEGORIES } from "@/lib/utils";
-import { netAmount as _net, effectivePaid as _effectivePaid, isBillPending as _isBillPending, computeMetrics, computeMonthIncome } from "@/lib/finance-utils";
+import { netAmount as _net, effectivePaid as _effectivePaid, isBillPending as _isBillPending, computeMetrics, computeMonthIncome, computeCashBalance } from "@/lib/finance-utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -494,8 +494,8 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   // snapshot) so that snapshot never gets silently overwritten by a later
   // payment. Still has to reduce the actual cash totals below.
   const carriedDebtPaid = currentMonth?.carriedDebtPaid ?? 0;
-  const balance   = openingBalance + grandIncome - totalCommitted - adHocExpense - carriedDebtPaid;
-  const inHandNow = openingBalance + grandIncome - totalPaid - adHocExpense - carriedDebtPaid;
+  const balance   = computeCashBalance({ openingBalance, income: grandIncome, expense: totalCommitted + adHocExpense, carriedDebtPaid });
+  const inHandNow = computeCashBalance({ openingBalance, income: grandIncome, expense: totalPaid + adHocExpense, carriedDebtPaid });
 
   // Still-unpaid bills from earlier months are real pending money — they
   // belong in the headline Pending total, not just tucked away in their own

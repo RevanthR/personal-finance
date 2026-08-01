@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { computeTemplateEndDate } from "@/lib/loan-utils";
+import { isTemplateActiveInMonth } from "@/lib/loan-utils";
 import { computeTemplateEntryAmount, computePrevCCState, type PrevCCState } from "@/lib/entry-amount";
 import { pendingAmountKicks } from "@/lib/utils";
 import { computeMonthIncome, computeMetrics } from "@/lib/finance-utils";
@@ -94,36 +94,11 @@ export async function setupMonth(userId: string, month: number, year: number, sa
         // Yearly templates only appear in their designated month
         if (t.frequency === "YEARLY" && t.dueMonth !== month) continue;
 
-        // Skip templates that have ended before this month. Loans and chit
-        // funds use a computed end date (amortization payoff / chit duration)
-        // instead of the manual field — same rule the Year View projection
-        // already applies — so a loan the math says is paid off stops
-        // generating real bills here too, not just in the projection.
-        if (t.category === "LOAN" || t.category === "CHIT_FUND") {
-          const computedEnd = computeTemplateEndDate(t);
-          if (computedEnd && (year > computedEnd.year || (year === computedEnd.year && month > computedEnd.month))) continue;
-        } else if (t.endsOnYear != null && t.endsOnMonth != null) {
-          if (year > t.endsOnYear || (year === t.endsOnYear && month > t.endsOnMonth)) continue;
-        }
-
-        // Skip chit fund entries for months before the chit started
-        if (t.chitFund?.startDate) {
-          const chitStart = new Date(t.chitFund.startDate);
-          const chitStartY = chitStart.getUTCFullYear();
-          const chitStartM = chitStart.getUTCMonth() + 1;
-          if (year < chitStartY || (year === chitStartY && month < chitStartM)) continue;
-        }
-
-        // Skip a loan's EMI before its own start date — same idea as the
-        // chit fund check above. Without this, a loan added with (or later
-        // edited to have) a future EMI start date still generated a bill
-        // for the current month.
-        if (t.category === "LOAN" && t.loanStartDate) {
-          const loanStart = new Date(t.loanStartDate);
-          const loanStartY = loanStart.getUTCFullYear();
-          const loanStartM = loanStart.getUTCMonth() + 1;
-          if (year < loanStartY || (year === loanStartY && month < loanStartM)) continue;
-        }
+        // End dates, computed loan/chit payoff, chit start, loan EMI start —
+        // one shared rule (src/lib/loan-utils.ts) instead of a re-derived
+        // copy here, so a fix to the rule never needs to be re-applied
+        // separately for real entry creation vs. the Year View's projections.
+        if (!isTemplateActiveInMonth(t, month, year)) continue;
 
         // Promote pending amount if its effective month has arrived
         let baseAmount = t.amount;

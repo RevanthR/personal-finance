@@ -6,17 +6,8 @@ import { setupMonth } from "@/lib/months/setup-month";
 import { redirect } from "next/navigation";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { getCurrentMonthYear } from "@/lib/utils";
+import { isTemplateActiveInMonth } from "@/lib/loan-utils";
 import DashboardLoading from "./loading";
-
-function isTemplateActiveInMonth(
-  t: { endsOnYear: number | null; endsOnMonth: number | null },
-  m: number, y: number
-) {
-  if (t.endsOnYear != null && t.endsOnMonth != null) {
-    if (y > t.endsOnYear || (y === t.endsOnYear && m > t.endsOnMonth)) return false;
-  }
-  return true;
-}
 
 function monthNav(m: number, y: number, todayM: number, todayY: number) {
   const isToday = m === todayM && y === todayY;

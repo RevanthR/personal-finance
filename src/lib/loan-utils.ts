@@ -51,6 +51,58 @@ export function computeTemplateEndDate(t: {
   return null;
 }
 
+// Single source of truth for "does this template still generate a bill in
+// month/year" — manual end dates, computed loan/chit end dates, a chit
+// fund's own start date, and a loan's own EMI start date all funnel
+// through here. This used to be reimplemented independently in
+// setup-month.ts (real entry creation), the Year View's month projections,
+// and the dashboard's future-month projection — three separate copies of
+// the same rule, which is exactly why a fix to one (e.g. the loan-start
+// check) didn't apply to the other two until they were consolidated here.
+export function isTemplateActiveInMonth(
+  t: {
+    category: string;
+    amount: number;
+    endsOnMonth: number | null;
+    endsOnYear: number | null;
+    loanInterestRate: number | null;
+    loanOriginalPrincipal: number | null;
+    loanStartDate: Date | string | null;
+    loanOutstandingOverride: number | null;
+    chitFund?: { startDate: Date | string; durationMonths: number } | null;
+  },
+  month: number,
+  year: number,
+): boolean {
+  // Manual end date — loans/chit funds use their own computed end date
+  // below instead, which is authoritative over this manual field for them.
+  if (t.endsOnYear != null && t.endsOnMonth != null && t.category !== "LOAN" && t.category !== "CHIT_FUND") {
+    if (year > t.endsOnYear) return false;
+    if (year === t.endsOnYear && month > t.endsOnMonth) return false;
+  }
+  // Computed end date for loans and chit funds (amortization payoff / chit duration)
+  const computedEnd = computeTemplateEndDate(t);
+  if (computedEnd) {
+    if (year > computedEnd.year) return false;
+    if (year === computedEnd.year && month > computedEnd.month) return false;
+  }
+  // Chit fund: don't include months before the chit's own start date
+  if (t.category === "CHIT_FUND" && t.chitFund?.startDate) {
+    const chitStart = new Date(t.chitFund.startDate);
+    const chitStartY = chitStart.getUTCFullYear();
+    const chitStartM = chitStart.getUTCMonth() + 1;
+    if (year < chitStartY || (year === chitStartY && month < chitStartM)) return false;
+  }
+  // Loan: don't include months before its own EMI start date
+  if (t.category === "LOAN" && t.loanStartDate) {
+    const loanStart = new Date(t.loanStartDate);
+    const loanStartY = loanStart.getUTCFullYear();
+    const loanStartM = loanStart.getUTCMonth() + 1;
+    if (year < loanStartY || (year === loanStartY && month < loanStartM)) return false;
+  }
+  return true;
+}
+
 export function computeChitCurrentMonth(startDateStr: string): number {
   const start = new Date(startDateStr);
   const now = new Date();

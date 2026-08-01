@@ -123,6 +123,55 @@ export function computeMonthIncome(
   return templateIncome + nonOverrideAdhoc;
 }
 
+/**
+ * What an entry currently contributes toward "this month's own
+ * expenditure" — zero for a credit card whose statement hasn't closed yet
+ * (its running amount is old carried debt, tracked separately by
+ * carriedDebtAmount below, plus new spend that isn't a real bill yet),
+ * otherwise its net amount. Single source of truth for this rule — the
+ * dashboard's Expenditure tile and the Year View's per-month Expenses
+ * figure both go through this instead of each having their own copy of it.
+ */
+export function effectiveEntryAmount(
+  e: EntryBase,
+  isCurrentMonth: boolean,
+  todayDay: number,
+): number {
+  if (isBillPending(e, isCurrentMonth, todayDay)) return 0;
+  return netAmount(e);
+}
+
+/**
+ * Real, already-billed debt still sitting on a not-yet-closed card —
+ * genuinely owed, but last cycle's liability, not this month's own
+ * spending (see effectiveEntryAmount above, which excludes it).
+ */
+export function carriedDebtAmount(
+  e: EntryBase,
+  isCurrentMonth: boolean,
+  todayDay: number,
+): number {
+  if (!isBillPending(e, isCurrentMonth, todayDay)) return 0;
+  return Math.max(0, (e.carriedInAmount ?? 0) - (e.cashbackAmount ?? 0));
+}
+
+/**
+ * Real cash on hand: what carried in, plus what came in, minus what went
+ * out, minus whatever was separately paid this month toward an older bill
+ * (carriedDebtPaid is tracked apart from openingBalance/expense so a later
+ * payment never has to retroactively rewrite either of those — see
+ * Month.carriedDebtPaid). Shared by the dashboard's own balance figures and
+ * the Year View's FY-level ending balance instead of each re-deriving it.
+ */
+export function computeCashBalance(params: {
+  openingBalance: number;
+  income: number;
+  expense: number;
+  carriedDebtPaid: number;
+}): number {
+  return params.openingBalance + params.income - params.expense - params.carriedDebtPaid;
+}
+
 /** All progress and CC metrics in one pass over entries. */
 export function computeMetrics(
   entries: EntryBase[],
@@ -145,7 +194,7 @@ export function computeMetrics(
     const pending = isBillPending(e, isCurrentMonth, todayDay);
 
     if (pending) {
-      const carried = Math.max(0, (e.carriedInAmount ?? 0) - (e.cashbackAmount ?? 0));
+      const carried = carriedDebtAmount(e, isCurrentMonth, todayDay);
       if (carried > 0) {
         carriedCCDebt += carried;
         pendingCount++;

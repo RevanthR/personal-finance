@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useState } from "react";
 import { formatCurrency, cn, MONTHS } from "@/lib/utils";
+import { computeCashBalance } from "@/lib/finance-utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
@@ -101,6 +102,7 @@ export function YearOverviewClient({
   months,
   fyKey,
   fyOpeningBalance = 0,
+  carriedDebtPaid = 0,
   pastFYSummaries = [],
   currentMonthInsights = null,
   analyticsData,
@@ -108,6 +110,7 @@ export function YearOverviewClient({
   months: MonthData[];
   fyKey: string;
   fyOpeningBalance?: number;
+  carriedDebtPaid?: number;
   pastFYSummaries?: PastFY[];
   currentMonthInsights?: InsightData;
   analyticsData?: AnalyticsData;
@@ -117,9 +120,16 @@ export function YearOverviewClient({
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const totalIncome   = months.reduce((s, m) => s + m.income, 0);
   const totalExpenses = months.reduce((s, m) => s + m.expenses, 0);
-  // Starting cash carried in from before this FY + the full year's net —
-  // a true ending-balance figure, not just this year's isolated net.
-  const yearEndBalance = fyOpeningBalance + totalIncome - totalExpenses;
+  // Starting cash carried in from before this FY + the full year's net,
+  // minus anything paid this month toward an older bill (carriedDebtPaid) —
+  // same shared formula the dashboard's own balance figures use, so this
+  // never silently disagrees about what a payment like that did to cash.
+  const yearEndBalance = computeCashBalance({
+    openingBalance: fyOpeningBalance,
+    income: totalIncome,
+    expense: totalExpenses,
+    carriedDebtPaid,
+  });
   const actualCount   = months.filter(m => m.isPopulated).length;
   const projCount     = 12 - actualCount;
 

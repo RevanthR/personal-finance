@@ -2,8 +2,8 @@ import { getSession } from "@/lib/get-session";
 import { getActiveTemplates } from "@/lib/cached-queries";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
-import { computeTemplateEndDate } from "@/lib/loan-utils";
-import { computeMonthIncome } from "@/lib/finance-utils";
+import { isTemplateActiveInMonth } from "@/lib/loan-utils";
+import { computeMonthIncome, effectiveEntryAmount, isBillPending, netAmount, effectivePaid, type EntryBase } from "@/lib/finance-utils";
 import { YearOverviewClient, type MonthData } from "@/components/months/year-overview-client";
 import { CATEGORY_LABELS, CATEGORY_COLORS, MONTHS, pendingAmountKicks } from "@/lib/utils";
 import type { AnalyticsData } from "@/components/months/stats-breakdown";
@@ -89,28 +89,20 @@ export default async function MonthsPage() {
   // (statementAmount reflects actual post-close charges, not the template default)
   const ccStatements = new Map<string, number>();
   const todayDay = now.getDate();
-  // CC entries whose statement hasn't closed yet — new spend this cycle
-  // isn't a real bill yet, but debt already carried in from a prior closed
-  // cycle is real and owed regardless of today's date. ccCarriedFloor is
-  // what still counts for a pending entry instead of excluding it outright.
-  const pendingCCBillIds = new Set<string>();
-  const ccCarriedFloor = new Map<string, number>();
   if (currentMonthFull?.isPopulated) {
     for (const e of currentMonthFull.entries) {
       if (e.template.category === "CREDIT_CARD" && e.statementAmount != null && e.statementAmount > 0) {
         ccStatements.set(e.templateId, e.statementAmount);
       }
-      if (e.template.category === "CREDIT_CARD" && e.template.statementDay != null && todayDay < e.template.statementDay) {
-        pendingCCBillIds.add(e.id);
-        ccCarriedFloor.set(e.id, Math.max(0, (e.carriedInAmount ?? 0) - (e.cashbackAmount ?? 0)));
-      }
     }
   }
-  // Net contribution of an entry toward an expense total: a pending CC
-  // entry (statement not closed) contributes just its frozen carried-in
-  // floor instead of its full (still-growing) amount.
-  function effectiveNetAmount(e: { id: string; amount: number; cashbackAmount: number | null }): number {
-    return pendingCCBillIds.has(e.id) ? (ccCarriedFloor.get(e.id) ?? 0) : e.amount - (e.cashbackAmount ?? 0);
+  // isCurrentMonth-gated wrapper around the shared finance-utils rule —
+  // every "what does this entry contribute right now" computation below
+  // goes through this instead of a locally reimplemented version, so this
+  // page can't quietly disagree with the dashboard's Expenditure/CC Bill
+  // tiles about what counts as this month's own spend vs. carried debt.
+  function entryExpense(e: EntryBase, isCurrentM: boolean): number {
+    return effectiveEntryAmount(e, isCurrentM, todayDay);
   }
 
   // templateType may be null for pre-existing rows (DB DEFAULT not backfilled by Prisma 7)
@@ -141,61 +133,19 @@ export default async function MonthsPage() {
     }
   }
 
-  // Pre-compute end dates for loans and chit funds from their start dates / amortization
-  const templateEndDates = new Map<string, { month: number; year: number }>();
-  for (const t of expenseTemplates) {
-    const end = computeTemplateEndDate(t);
-    if (end) templateEndDates.set(t.id, end);
-  }
-
-  // Returns false if a template has ended before the given projected month
-  function isTemplateActiveInMonth(
-    t: (typeof allTemplates)[number],
-    projMonth: number,
-    projYear: number,
-  ): boolean {
-    // Manual end date (non-loan, non-chit)
-    if (t.endsOnYear != null && t.endsOnMonth != null && t.category !== "LOAN" && t.category !== "CHIT_FUND") {
-      if (projYear > t.endsOnYear) return false;
-      if (projYear === t.endsOnYear && projMonth > t.endsOnMonth) return false;
-    }
-    // Computed end date for loans and chit funds
-    const computed = templateEndDates.get(t.id);
-    if (computed) {
-      if (projYear > computed.year) return false;
-      if (projYear === computed.year && projMonth > computed.month) return false;
-    }
-    // Chit fund: don't include months before the chit's start date
-    if (t.category === "CHIT_FUND" && t.chitFund?.startDate) {
-      const chitStart = new Date(String(t.chitFund.startDate));
-      const chitStartY = chitStart.getUTCFullYear();
-      const chitStartM = chitStart.getUTCMonth() + 1;
-      if (projYear < chitStartY || (projYear === chitStartY && projMonth < chitStartM)) return false;
-    }
-    // Loan: mirror the chit fund check above — don't project an EMI before
-    // its own start date (same gap as setup-month.ts's real-entry creation,
-    // just on the projected-months path here).
-    if (t.category === "LOAN" && t.loanStartDate) {
-      const loanStart = new Date(t.loanStartDate);
-      const loanStartY = loanStart.getUTCFullYear();
-      const loanStartM = loanStart.getUTCMonth() + 1;
-      if (projYear < loanStartY || (projYear === loanStartY && projMonth < loanStartM)) return false;
-    }
-    return true;
-  }
-
   // Current FY months (actual or projected)
   const currentFYMonths: MonthData[] = fyMonths.map(({ month, year }) => {
     const actual = allMonths.find(m => m.month === month && m.year === year && m.isPopulated);
     if (actual) {
+      const isCurrentM = month === todayMonth && year === todayYear;
       const income = computeMonthIncome(actual.adHocItems, incomeTemplates, month, year, actual.salaryIncome);
-      const expenses = actual.entries.reduce((s, e) => s + effectiveNetAmount(e), 0)
+      const expenses = actual.entries.reduce((s, e) => s + entryExpense(e, isCurrentM), 0)
         + actual.adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0);
-      const ccEntries = actual.entries.filter(e => e.template.category === "CREDIT_CARD" && effectiveNetAmount(e) > 0);
-      const ccTotal = ccEntries.reduce((s, e) => s + effectiveNetAmount(e), 0);
+      const ccEntries = actual.entries.filter(e => e.template.category === "CREDIT_CARD" && entryExpense(e, isCurrentM) > 0);
+      const ccTotal = ccEntries.reduce((s, e) => s + entryExpense(e, isCurrentM), 0);
       const ccByCardMap = new Map<string, { name: string; amount: number }>();
       for (const e of ccEntries) {
-        const amt = effectiveNetAmount(e);
+        const amt = entryExpense(e, isCurrentM);
         const existing = ccByCardMap.get(e.templateId);
         if (existing) existing.amount += amt;
         else ccByCardMap.set(e.templateId, { name: e.template.name, amount: amt });
@@ -279,7 +229,7 @@ export default async function MonthsPage() {
     if (mFYStart === fyStart) continue; // skip current FY
     if (!pastFYMap[mFY]) pastFYMap[mFY] = { income: 0, expenses: 0, count: 0 };
     const income = computeMonthIncome(m.adHocItems, incomeTemplates, m.month, m.year, m.salaryIncome);
-    const expenses = m.entries.reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
+    const expenses = m.entries.reduce((s, e) => s + netAmount(e), 0)
       + m.adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0);
     pastFYMap[mFY].income += income;
     pastFYMap[mFY].expenses += expenses;
@@ -303,14 +253,15 @@ export default async function MonthsPage() {
   if (currentMonthFull?.isPopulated) {
     const cm = currentMonthFull;
     const cmIncome = computeMonthIncome(cm.adHocItems, incomeTemplates, cm.month, cm.year, cm.salaryIncome);
-    const cmExpenses = cm.entries.reduce((s, e) => s + effectiveNetAmount(e), 0)
+    const cmExpenses = cm.entries.reduce((s, e) => s + entryExpense(e, true), 0)
       + cm.adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0);
 
-    // Category breakdown — entries grouped by template.category (pending CC
-    // bills contribute their carried floor, not their full still-growing amount)
+    // Category breakdown — entries grouped by template.category (a pending
+    // CC bill contributes nothing here, same as the Expenditure tile,
+    // until its statement closes)
     const catMap = new Map<string, number>();
     for (const e of cm.entries) {
-      const amt = effectiveNetAmount(e);
+      const amt = entryExpense(e, true);
       if (amt === 0) continue;
       const cat = e.template.customCategory ?? e.template.category;
       catMap.set(cat, (catMap.get(cat) ?? 0) + amt);
@@ -345,10 +296,10 @@ export default async function MonthsPage() {
 
     // Upcoming unpaid entries with due dates (exclude pending CC bills)
     const upcomingPayments = cm.entries
-      .filter(e => !e.isPaid && e.template.dueDateDay != null && !pendingCCBillIds.has(e.id))
+      .filter(e => !e.isPaid && e.template.dueDateDay != null && !isBillPending(e, true, todayDay))
       .map(e => ({
         name: e.template.name,
-        amount: e.amount - (e.cashbackAmount ?? 0) - (e.paidAmount ?? 0),
+        amount: netAmount(e) - effectivePaid(e),
         dueDay: e.template.dueDateDay!,
         overdue: e.template.dueDateDay! < todayDay,
       }))
@@ -379,8 +330,8 @@ export default async function MonthsPage() {
   for (const m of fyActual) {
     const isCurrentM = m.month === todayMonth && m.year === todayYear;
     for (const e of m.entries) {
-      if (isCurrentM && pendingCCBillIds.has(e.id) && (ccCarriedFloor.get(e.id) ?? 0) === 0) continue;
-      const netAmt = isCurrentM ? effectiveNetAmount(e) : e.amount - (e.cashbackAmount ?? 0);
+      if (isCurrentM && isBillPending(e, true, todayDay)) continue;
+      const netAmt = entryExpense(e, isCurrentM);
       const t = e.template;
       const ex = templateMap.get(e.templateId);
       if (ex) { ex.total += netAmt; ex.months++; }
@@ -448,7 +399,7 @@ export default async function MonthsPage() {
     const isCurrentM = m.month === todayMonth && m.year === todayYear;
     const income = computeMonthIncome(m.adHocItems, incomeTemplates, m.month, m.year, m.salaryIncome);
     const expenses = m.entries
-      .reduce((s, e) => s + (isCurrentM ? effectiveNetAmount(e) : e.amount - (e.cashbackAmount ?? 0)), 0)
+      .reduce((s, e) => s + entryExpense(e, isCurrentM), 0)
       + m.adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0);
     return {
       label: MONTHS[m.month - 1],
@@ -466,27 +417,32 @@ export default async function MonthsPage() {
   // Loan freedom
   const now2 = new Date();
   const todayM2 = now2.getUTCMonth() + 1, todayY2 = now2.getUTCFullYear();
+  function loanStartsAfter(t: { loanStartDate: Date | string | null }, month: number, year: number): boolean {
+    if (!t.loanStartDate) return false;
+    const start = new Date(t.loanStartDate);
+    return year < start.getUTCFullYear() || (year === start.getUTCFullYear() && month < start.getUTCMonth() + 1);
+  }
   const loans = allTemplates
     .filter(t => {
       if (t.category !== "LOAN" || t.templateType === "INCOME" || !t.isActive || t.foreClosedOn) return false;
-      // A loan that hasn't started yet shouldn't show up here yet either —
-      // without this, the amortization math below clamps "months elapsed"
-      // to 0 and reports it as if payments had already begun.
-      if (t.loanStartDate) {
-        const start = new Date(t.loanStartDate);
-        if (todayY2 < start.getUTCFullYear() || (todayY2 === start.getUTCFullYear() && todayM2 < start.getUTCMonth() + 1)) return false;
-      }
-      return true;
+      // A loan already paid off by the amortization math is excluded (same
+      // shared eligibility rule as everywhere else); one that hasn't
+      // started yet is kept, shown separately below as "upcoming" instead
+      // of with live amortization figures that wouldn't mean anything yet.
+      return loanStartsAfter(t, todayM2, todayY2) || isTemplateActiveInMonth(t, todayM2, todayY2);
     })
     .map(t => {
+      const notStartedYet = loanStartsAfter(t, todayM2, todayY2);
       let remainingMonths: number | null = null, totalRemaining: number | null = null;
       if (t.endsOnMonth && t.endsOnYear) {
         remainingMonths = Math.max(0, (t.endsOnYear - todayY2) * 12 + (t.endsOnMonth - todayM2));
         totalRemaining = remainingMonths * t.amount;
       }
-      // Compute amortization if loan details are present
+      // Compute amortization if loan details are present — skipped entirely
+      // for a not-yet-started loan, since "months elapsed" would otherwise
+      // clamp to 0 and report figures as if payments had already begun.
       let amortization: { outstandingPrincipal: number; interestThisMonth: number; principalThisMonth: number; totalInterestRemaining: number; monthsRemaining: number; isOverride: boolean } | null = null;
-      if (t.loanInterestRate != null) {
+      if (!notStartedYet && t.loanInterestRate != null) {
         const r = t.loanInterestRate / 12 / 100;
         let outstanding = t.loanOutstandingOverride ?? 0;
         const isOverride = t.loanOutstandingOverride != null && t.loanOutstandingOverride > 0;
@@ -520,6 +476,7 @@ export default async function MonthsPage() {
         remainingMonths = amortization.monthsRemaining;
         totalRemaining = amortization.monthsRemaining * t.amount;
       }
+      const startDate = t.loanStartDate ? new Date(t.loanStartDate) : null;
       return {
         name: t.name, monthlyAmount: t.amount,
         endsMonth: finalEndsMonth, endsYear: finalEndsYear,
@@ -527,6 +484,8 @@ export default async function MonthsPage() {
         interestRate: t.loanInterestRate ?? null,
         rateType: t.loanRateType ?? null,
         amortization,
+        startsMonth: notStartedYet && startDate ? startDate.getUTCMonth() + 1 : null,
+        startsYear: notStartedYet && startDate ? startDate.getUTCFullYear() : null,
       };
     });
 
@@ -614,7 +573,7 @@ export default async function MonthsPage() {
     const isCurrentM = m.month === todayMonth && m.year === todayYear;
     const income = computeMonthIncome(m.adHocItems, incomeTemplates, m.month, m.year, m.salaryIncome);
     const expenses = m.entries
-      .reduce((s, e) => s + (isCurrentM ? effectiveNetAmount(e) : e.amount - (e.cashbackAmount ?? 0)), 0)
+      .reduce((s, e) => s + entryExpense(e, isCurrentM), 0)
       + m.adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0);
     return { label: `${MONTHS[m.month - 1]} ${m.year}`, income, expenses, balance: income - expenses, savingsRate: income > 0 ? Math.round(((income - expenses) / income) * 100) : 0 };
   });
@@ -631,7 +590,7 @@ export default async function MonthsPage() {
   for (const m of prevFYMonths) {
     for (const e of m.entries) {
       const key = e.template.customCategory ?? e.template.category;
-      prevCatMap.set(key, (prevCatMap.get(key) ?? 0) + e.amount - (e.cashbackAmount ?? 0));
+      prevCatMap.set(key, (prevCatMap.get(key) ?? 0) + netAmount(e));
     }
     for (const a of m.adHocItems) {
       if (a.type === "EXPENSE" && !a.ccTemplateId) {
@@ -669,12 +628,19 @@ export default async function MonthsPage() {
   // so it doesn't silently disagree with the dashboard's own balance.
   const aprilMonth = allMonths.find(m => m.month === 4 && m.year === fyStart);
   const fyOpeningBalance = aprilMonth?.openingBalance ?? 0;
+  // Real cash paid this month toward an older bill (see Month.carriedDebtPaid)
+  // — only ever non-zero on the current real month, but has to be subtracted
+  // here too, same as the dashboard's own balance figures, or a payment like
+  // paying off last cycle's carried CC debt would silently vanish from the
+  // FY-level ending balance despite genuinely leaving cash on hand.
+  const carriedDebtPaidThisFY = currentMonthFull?.carriedDebtPaid ?? 0;
 
   return (
     <YearOverviewClient
       months={JSON.parse(JSON.stringify(currentFYMonths))}
       fyKey={fyKey}
       fyOpeningBalance={fyOpeningBalance}
+      carriedDebtPaid={carriedDebtPaidThisFY}
       pastFYSummaries={pastFYSummaries}
       currentMonthInsights={JSON.parse(JSON.stringify(currentMonthInsights))}
       analyticsData={JSON.parse(JSON.stringify(analyticsData))}
