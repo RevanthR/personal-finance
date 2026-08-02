@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { tokenOverlapScore } from "./text-similarity";
+import { effectivePaid } from "@/lib/finance-utils";
 
 export type ExistingMatch = { id: string; name: string; amount: number; date: string };
 
@@ -104,7 +105,7 @@ export async function findExistingMatches(
     const paidEntries = await db.monthlyEntry.findMany({
       where: { isPaid: true, month: { userId, OR: monthPairs.map(p => ({ year: p.year, month: p.month })) } },
       select: {
-        id: true, amount: true, cashbackAmount: true, paidAmount: true, paidOn: true,
+        id: true, amount: true, cashbackAmount: true, paidAmount: true, paidOn: true, isPaid: true,
         template: { select: { name: true } },
         month: { select: { month: true, year: true } },
       },
@@ -121,8 +122,7 @@ export async function findExistingMatches(
       for (const e of paidEntries) {
         if (usedEntryIds.has(e.id)) continue;
         if (e.month.month !== t.date.getMonth() + 1 || e.month.year !== t.date.getFullYear()) continue;
-        const netAmt = e.amount - (e.cashbackAmount ?? 0);
-        const paid = e.paidAmount != null && e.paidAmount >= netAmt ? e.paidAmount : netAmt;
+        const paid = effectivePaid(e);
         // Amount is the load-bearing signal here (merchant text on an
         // EMI/NEFT alert is often the sender's own name, not the bill's),
         // so it's required outright rather than treated as optional.
@@ -134,8 +134,7 @@ export async function findExistingMatches(
       if (best && tied) best = null;
       if (best) {
         usedEntryIds.add(best.entry.id);
-        const netAmt = best.entry.amount - (best.entry.cashbackAmount ?? 0);
-        const paid = best.entry.paidAmount != null && best.entry.paidAmount >= netAmt ? best.entry.paidAmount : netAmt;
+        const paid = effectivePaid(best.entry);
         result.set(t.id, {
           id: best.entry.id,
           name: best.entry.template.name,

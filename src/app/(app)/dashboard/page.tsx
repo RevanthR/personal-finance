@@ -5,8 +5,9 @@ import { db } from "@/lib/db";
 import { setupMonth } from "@/lib/months/setup-month";
 import { redirect } from "next/navigation";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
-import { getCurrentMonthYear } from "@/lib/utils";
+import { getCurrentMonthYear, prevMonthYear, nextMonthYear } from "@/lib/utils";
 import { isTemplateActiveInMonth } from "@/lib/loan-utils";
+import { chitMonthlyAmount } from "@/lib/entry-amount";
 import DashboardLoading from "./loading";
 
 function monthNav(m: number, y: number, todayM: number, todayY: number) {
@@ -29,10 +30,8 @@ export default async function DashboardPage({
   const targetMonth = params.month ? Math.min(12, Math.max(1, parseInt(params.month))) : todayMonth;
   const targetYear  = params.year  ? Math.max(2020, parseInt(params.year))            : todayYear;
 
-  const prevM = targetMonth === 1  ? 12 : targetMonth - 1;
-  const prevY = targetMonth === 1  ? targetYear - 1 : targetYear;
-  const nextM = targetMonth === 12 ? 1  : targetMonth + 1;
-  const nextY = targetMonth === 12 ? targetYear + 1 : targetYear;
+  const { month: prevM, year: prevY } = prevMonthYear(targetMonth, targetYear);
+  const { month: nextM, year: nextY } = nextMonthYear(targetMonth, targetYear);
   const prevUrl = monthNav(prevM, prevY, todayMonth, todayYear);
   const nextUrl = monthNav(nextM, nextY, todayMonth, todayYear);
   const isFuture = targetYear > todayYear || (targetYear === todayYear && targetMonth > todayMonth);
@@ -143,7 +142,7 @@ async function DashboardData({
         amount: t.category === "CREDIT_CARD" && ccStatements.has(t.id)
           ? ccStatements.get(t.id)!
           : t.chitFund
-            ? (t.chitFund.isLifted ? (t.chitFund.monthlyLiftedAmount ?? t.amount) : t.chitFund.monthlyUnliftedAmount)
+            ? chitMonthlyAmount(t.chitFund, t.amount)
             : t.amount,
         category: t.category,
         customCategory: t.customCategory,
@@ -180,6 +179,7 @@ async function DashboardData({
   // month (paying something "as of now" only makes sense there, not while
   // browsing a past or projected month).
   const isRealCurrentMonth = targetMonth === todayMonth && targetYear === todayYear;
+  const { month: nextM, year: nextY } = nextMonthYear(targetMonth, targetYear);
 
   // ── Actual (past or current) month ────────────────────────────────────────
   const [currentMonth, recentMonths, ccTemplates, allTemplates, customCategories, subCategorySuggestions, carriedOverEntries, settledCarryOverEntries] = await Promise.all([
@@ -258,7 +258,7 @@ async function DashboardData({
         userId,
         settledOn: {
           gte: new Date(targetYear, targetMonth - 1, 1),
-          lt: new Date(targetMonth === 12 ? targetYear + 1 : targetYear, targetMonth === 12 ? 0 : targetMonth, 1),
+          lt: new Date(nextY, nextM - 1, 1),
         },
       },
       select: {

@@ -90,7 +90,6 @@ export async function PATCH(
 
   const paidBefore = effectivePaid({
     amount: entry.amount, isPaid: entry.isPaid, paidAmount: entry.paidAmount, cashbackAmount: entry.cashbackAmount,
-    statementAmount: null, billedAmount: null, template: { category: "", statementDay: null },
   });
 
   const { month: todayMonth, year: todayYear } = getCurrentMonthYear();
@@ -128,8 +127,7 @@ export async function PATCH(
     if (isCarriedOverBill) {
       const paidAfter = effectivePaid({
         amount: updatedEntry.amount, isPaid: updatedEntry.isPaid, paidAmount: updatedEntry.paidAmount,
-        cashbackAmount: updatedEntry.cashbackAmount, statementAmount: null, billedAmount: null,
-        template: { category: "", statementDay: null },
+        cashbackAmount: updatedEntry.cashbackAmount,
       });
       const delta = paidAfter - paidBefore;
       if (delta !== 0) {

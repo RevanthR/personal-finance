@@ -8,6 +8,7 @@ import { validate, TemplatePostSchema } from "@/lib/validation";
 import { resolveCustomCategory } from "@/lib/custom-category";
 import { computeTemplateEntryAmount, computePrevCCState } from "@/lib/entry-amount";
 import { isZeroCCBalance } from "@/lib/finance-utils";
+import { prevMonthYear } from "@/lib/utils";
 
 export async function GET() {
   const session = await auth();
@@ -72,8 +73,7 @@ export async function POST(req: NextRequest) {
     if (curMonthRecord) {
       let prevCC: ReturnType<typeof computePrevCCState> | undefined;
       if (template.category === "CREDIT_CARD") {
-        const prevMonthNum = curMonth === 1 ? 12 : curMonth - 1;
-        const prevYear = curMonth === 1 ? curYear - 1 : curYear;
+        const { month: prevMonthNum, year: prevYear } = prevMonthYear(curMonth, curYear);
         const prevEntry = await db.monthlyEntry.findFirst({
           where: { templateId: template.id, month: { userId: session.user.id, month: prevMonthNum, year: prevYear } },
           select: { statementAmount: true, isPaid: true, amount: true, billedAmount: true, paidAmount: true, cashbackAmount: true },

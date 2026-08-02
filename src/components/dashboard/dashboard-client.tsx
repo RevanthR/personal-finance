@@ -5,7 +5,7 @@ import { flushSync } from "react-dom";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { formatCurrency, formatMonthYear, getCategoryDisplay, getCategoryColor, getCategoryIcon, MONTHS, pendingAmountKicks, ordinal, EXPENSE_CATEGORIES } from "@/lib/utils";
-import { netAmount as _net, effectivePaid as _effectivePaid, isBillPending as _isBillPending, computeMetrics, computeMonthIncome, computeCashBalance } from "@/lib/finance-utils";
+import { netAmount as _net, effectivePaid as _effectivePaid, isBillPending as _isBillPending, isPreCloseDate, computeMetrics, computeMonthIncome, computeCashBalance } from "@/lib/finance-utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -512,7 +512,10 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   // belong in the headline Pending total, not just tucked away in their own
   // Payables section where they'd look like they don't count.
   const carriedOverPending = useMemo(
-    () => carriedOver.reduce((s, e) => s + (e.amount - (e.cashbackAmount ?? 0) - (e.paidAmount ?? 0)), 0),
+    // carriedOver is always isPaid: false at the source query, so the raw
+    // `- paidAmount` here is equivalent to effectivePaid but doesn't need
+    // CarriedOverEntry to carry an isPaid field it otherwise has no use for.
+    () => carriedOver.reduce((s, e) => s + (_net(e) - (e.paidAmount ?? 0)), 0),
     [carriedOver]
   );
   const totalPendingWithCarryOver = totalPending + carriedOverPending;
@@ -653,11 +656,9 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     const monthExpenses = (m: typeof recentMonths[0]) => {
       const isCurrent = m.month === todayMonth && m.year === todayYear;
       return m.entries.reduce((a, e) => {
-        if (isCurrent) {
-          const stDay = ccStatementDayById.get(e.templateId);
-          if (stDay != null && todayDay < stDay) return a;
-        }
-        return a + e.amount - (e.cashbackAmount ?? 0);
+        const stDay = ccStatementDayById.get(e.templateId);
+        if (stDay !== undefined && _isBillPending({ template: { category: "CREDIT_CARD", statementDay: stDay } }, isCurrent, todayDay)) return a;
+        return a + _net(e);
       }, 0)
       + m.adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((a, i) => a + i.amount, 0);
     };
@@ -685,7 +686,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       .sort((a, b) => b.year - a.year || b.month - a.month)[0];
     if (!prev) return { prevMonthName: null, expensesDelta: null };
     const prevExp = prev.entries
-      .reduce((s, e) => s + e.amount - (e.cashbackAmount ?? 0), 0)
+      .reduce((s, e) => s + _net(e), 0)
       + prev.adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0);
     return {
       prevMonthName: MONTHS[prev.month - 1],
@@ -1403,7 +1404,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                   const statementDay = entry.template.statementDay;
                   const hasPostCloseSpend = adHocItems.some(t =>
                     t.type === "EXPENSE" && t.ccTemplateId === entry.templateId &&
-                    (statementDay == null || new Date(t.date).getDate() > statementDay)
+                    !isPreCloseDate(new Date(t.date), statementDay)
                   );
                   return (
                     <Fragment key={entry.id}>
@@ -1709,7 +1710,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                       <p className="truncate">{item.template.name}</p>
                       <p className="text-xs text-muted-foreground">{formatMonthYear(item.month.month, item.month.year)}</p>
                     </div>
-                    <span className="font-semibold shrink-0 ml-2">{fmt(item.amount - (item.cashbackAmount ?? 0) - (item.paidAmount ?? 0))}</span>
+                    <span className="font-semibold shrink-0 ml-2">{fmt(_net(item) - (item.paidAmount ?? 0))}</span>
                   </div>
                 ))}
                 {ccBillBreakdown.filter(c => c.pending).map(c => (

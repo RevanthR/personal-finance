@@ -3,9 +3,10 @@ import { getActiveTemplates } from "@/lib/cached-queries";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { isTemplateActiveInMonth } from "@/lib/loan-utils";
+import { chitMonthlyAmount } from "@/lib/entry-amount";
 import { computeMonthIncome, effectiveEntryAmount, isBillPending, netAmount, effectivePaid, type EntryBase } from "@/lib/finance-utils";
 import { YearOverviewClient, type MonthData } from "@/components/months/year-overview-client";
-import { CATEGORY_LABELS, CATEGORY_COLORS, MONTHS, pendingAmountKicks } from "@/lib/utils";
+import { CATEGORY_LABELS, CATEGORY_COLORS, MONTHS, pendingAmountKicks, getCurrentMonthYear, prevMonthYear, nextMonthYear } from "@/lib/utils";
 import type { AnalyticsData } from "@/components/months/stats-breakdown";
 
 // Category breakdown of one month's income — mirrors computeMonthIncome's
@@ -52,12 +53,9 @@ export default async function MonthsPage() {
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
 
-  const now = new Date();
-  const todayMonth = now.getMonth() + 1;
-  const todayYear = now.getFullYear();
+  const { month: todayMonth, year: todayYear } = getCurrentMonthYear();
   const { fyStart, fyKey } = getFY(todayMonth, todayYear);
-  const nextM = todayMonth === 12 ? 1  : todayMonth + 1;
-  const nextY = todayMonth === 12 ? todayYear + 1 : todayYear;
+  const { month: nextM, year: nextY } = nextMonthYear(todayMonth, todayYear);
 
   // All 12 months of the current FY: Apr(fyStart)→Mar(fyStart+1)
   const fyMonths = [
@@ -88,7 +86,7 @@ export default async function MonthsPage() {
   // CC statement amounts from current month — used to make the next-month projection more accurate
   // (statementAmount reflects actual post-close charges, not the template default)
   const ccStatements = new Map<string, number>();
-  const todayDay = now.getDate();
+  const todayDay = new Date().getDate();
   if (currentMonthFull?.isPopulated) {
     for (const e of currentMonthFull.entries) {
       if (e.template.category === "CREDIT_CARD" && e.statementAmount != null && e.statementAmount > 0) {
@@ -173,9 +171,7 @@ export default async function MonthsPage() {
     const projExpenses = activeThisMonth.reduce((s, t) => {
       let amount = t.amount;
       if (t.chitFund) {
-        amount = t.chitFund.isLifted
-          ? (t.chitFund.monthlyLiftedAmount ?? t.amount)
-          : t.chitFund.monthlyUnliftedAmount;
+        amount = chitMonthlyAmount(t.chitFund, t.amount);
       } else if (t.category === "CREDIT_CARD" && isImmediateNext && ccStatements.has(t.id)) {
         amount = ccStatements.get(t.id)!;
       }
@@ -203,8 +199,7 @@ export default async function MonthsPage() {
     const projIncome = getProjectedIncome(month, year) + receivableIncome + existingAdHocIncome;
 
     // Templates that were active last month but not this month
-    const prevM = month === 1 ? 12 : month - 1;
-    const prevY = month === 1 ? year - 1 : year;
+    const { month: prevM, year: prevY } = prevMonthYear(month, year);
     const endingTemplateNames = expenseTemplates
       .filter(t => t.frequency === "MONTHLY")
       .filter(t => isTemplateActiveInMonth(t, prevM, prevY) && !isTemplateActiveInMonth(t, month, year))
@@ -507,7 +502,7 @@ export default async function MonthsPage() {
         endsMonth = end.getUTCMonth() + 1;
         endsYear = end.getUTCFullYear();
       }
-      const monthlyAmount = cf.isLifted ? (cf.monthlyLiftedAmount ?? t.amount) : cf.monthlyUnliftedAmount;
+      const monthlyAmount = chitMonthlyAmount(cf, t.amount);
       const remainingMonths = Math.max(0, (endsYear - todayY2) * 12 + (endsMonth - todayM2));
       return {
         name: t.name,

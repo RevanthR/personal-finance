@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { tokenOverlapScore } from "./text-similarity";
 import { getCurrentMonthYear } from "@/lib/utils";
+import { isBillPending, netAmount, effectivePaid, carriedDebtAmount } from "@/lib/finance-utils";
 
 export type EntryMatch = {
   kind: "cc" | "recurring";
@@ -77,7 +78,7 @@ export async function findEntryMatches(userId: string, transactions: PendingTx[]
     include: {
       entries: {
         where: { isPaid: false },
-        include: { template: { select: { name: true, statementDay: true } } },
+        include: { template: { select: { name: true, statementDay: true, category: true } } },
       },
     },
   });
@@ -118,12 +119,10 @@ export async function findEntryMatches(userId: string, transactions: PendingTx[]
         // carried debt, the only part that's actually owed right now, same
         // distinction the dashboard's "pay overdue amount" already makes.
         // Once the statement closes, the whole amount is one real bill again.
-        const billPending = isCurrentMonthReal
-          && entry.template.statementDay != null
-          && todayDay < entry.template.statementDay;
+        const billPending = isBillPending(entry, isCurrentMonthReal, todayDay);
         const outstanding = billPending
-          ? Math.max(0, (entry.carriedInAmount ?? 0) - (entry.cashbackAmount ?? 0))
-          : entry.amount - (entry.cashbackAmount ?? 0) - (entry.paidAmount ?? 0);
+          ? carriedDebtAmount(entry, isCurrentMonthReal, todayDay)
+          : netAmount(entry) - effectivePaid(entry);
         // No amount ceiling here, unlike the recurring path below — a CC
         // bill payment can legitimately overpay (rounding up, paying ahead
         // of next month's charges), and the name/bank match against one of
@@ -141,9 +140,7 @@ export async function findEntryMatches(userId: string, transactions: PendingTx[]
       // silently paying down the wrong card's bill is real harm.
       if (best && tied) best = null;
       if (best) {
-        const billPending = isCurrentMonthReal
-          && best.entry.template.statementDay != null
-          && todayDay < best.entry.template.statementDay;
+        const billPending = isBillPending(best.entry, isCurrentMonthReal, todayDay);
         usedEntryIds.add(best.entry.id);
         result.set(t.id, billPending && (best.entry.carriedInAmount ?? 0) > 0
           ? {
@@ -154,7 +151,7 @@ export async function findEntryMatches(userId: string, transactions: PendingTx[]
               // carriedInAmount is already net of any earlier partial
               // payments (payCarriedAmount reduces it directly), so there's
               // no separate "already paid toward it" figure to subtract.
-              owed: Math.max(0, (best.entry.carriedInAmount ?? 0) - (best.entry.cashbackAmount ?? 0)),
+              owed: carriedDebtAmount(best.entry, isCurrentMonthReal, todayDay),
               alreadyPaid: 0,
             }
           : {
@@ -162,8 +159,8 @@ export async function findEntryMatches(userId: string, transactions: PendingTx[]
               entryId: best.entry.id,
               templateId: best.entry.templateId,
               templateName: best.entry.template.name,
-              owed: best.entry.amount - (best.entry.cashbackAmount ?? 0),
-              alreadyPaid: best.entry.paidAmount ?? 0,
+              owed: netAmount(best.entry),
+              alreadyPaid: effectivePaid(best.entry),
             });
         continue;
       }
@@ -173,7 +170,7 @@ export async function findEntryMatches(userId: string, transactions: PendingTx[]
     let tied = false;
     for (const entry of candidates) {
       if (ccTemplateIds.has(entry.templateId)) continue; // handled above
-      const outstanding = entry.amount - (entry.cashbackAmount ?? 0) - (entry.paidAmount ?? 0);
+      const outstanding = netAmount(entry) - effectivePaid(entry);
       if (outstanding <= 0 || t.amount > outstanding + AMOUNT_EPSILON) continue;
       const nameScore = nameSimilarity(searchText, entry.template.name);
       const isFullAmountMatch = Math.abs(t.amount - outstanding) <= AMOUNT_EPSILON;
@@ -190,8 +187,8 @@ export async function findEntryMatches(userId: string, transactions: PendingTx[]
         entryId: best.entry.id,
         templateId: best.entry.templateId,
         templateName: best.entry.template.name,
-        owed: best.entry.amount - (best.entry.cashbackAmount ?? 0),
-        alreadyPaid: best.entry.paidAmount ?? 0,
+        owed: netAmount(best.entry),
+        alreadyPaid: effectivePaid(best.entry),
       });
     }
   }

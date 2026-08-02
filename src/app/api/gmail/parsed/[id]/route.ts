@@ -7,6 +7,7 @@ import { resolveCustomCategory } from "@/lib/custom-category";
 import { resolveSubCategory } from "@/lib/sub-category";
 import { rememberMerchantCategory } from "@/lib/merchant-memory";
 import { computePaymentUpdate } from "@/lib/entry-payment";
+import { isBillPending } from "@/lib/finance-utils";
 import { getCurrentMonthYear } from "@/lib/utils";
 import type { Category } from "@/generated/prisma/client";
 
@@ -65,10 +66,8 @@ export async function PATCH(
     // WHOLE running total (including this cycle's new, still-unbilled
     // spend) and shows up as a much bigger "partial payment" than it is.
     const { month: todayMonth, year: todayYear } = getCurrentMonthYear();
-    const billPending = entry.month.year === todayYear && entry.month.month === todayMonth
-      && entry.template.category === "CREDIT_CARD"
-      && entry.template.statementDay != null
-      && new Date().getDate() < entry.template.statementDay;
+    const isCurrentMonthReal = entry.month.year === todayYear && entry.month.month === todayMonth;
+    const billPending = isBillPending(entry, isCurrentMonthReal, new Date().getDate());
     const carried = Math.max(0, entry.carriedInAmount ?? 0);
 
     const updatedEntry = await db.$transaction(async (tx) => {

@@ -5,6 +5,7 @@ import { revalidateTag, revalidatePath } from "next/cache";
 import { templateCacheTag } from "@/lib/cached-queries";
 import { z } from "zod";
 import { validate, zMoney, zDay, zMonth, zYear } from "@/lib/validation";
+import { nextMonthYear } from "@/lib/utils";
 
 const ChitPatchSchema = z.object({
   isLifted:             z.boolean().optional(),
@@ -108,8 +109,7 @@ export async function PATCH(
       await tx.chitFund.update({ where: { id: chitId }, data: { liftIncomeItemId: item.id } });
     });
     if (body.monthlyLiftedAmount) {
-      const nextMonth = liftMonth === 12 ? 1 : liftMonth + 1;
-      const nextYear  = liftMonth === 12 ? liftYear + 1 : liftYear;
+      const { month: nextMonth, year: nextYear } = nextMonthYear(liftMonth, liftYear);
       await db.lineItemTemplate.update({
         where: { id: chit.templateId },
         data: { pendingAmount: body.monthlyLiftedAmount, pendingFromMonth: nextMonth, pendingFromYear: nextYear },

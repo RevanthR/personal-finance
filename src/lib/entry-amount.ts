@@ -32,6 +32,19 @@ export function computePrevCCState(e: {
   return { statement, outstanding: outstanding > 0 ? outstanding : 0 };
 }
 
+// A lifted chit's monthly contribution can differ from its unlifted one
+// (falling back to the template's own amount if never explicitly set) —
+// this one-line rule was independently re-typed in both Year View and the
+// dashboard's future-month projection (months/page.tsx, dashboard/page.tsx)
+// on top of this, the real entry-creation copy, so a future change to it
+// only reached one of the three.
+export function chitMonthlyAmount(
+  chitFund: { isLifted: boolean; monthlyLiftedAmount: number | null; monthlyUnliftedAmount: number },
+  fallbackAmount: number,
+): number {
+  return chitFund.isLifted ? (chitFund.monthlyLiftedAmount ?? fallbackAmount) : chitFund.monthlyUnliftedAmount;
+}
+
 export function computeTemplateEntryAmount(
   t: {
     category: string;
@@ -42,10 +55,7 @@ export function computeTemplateEntryAmount(
   prevCC?: PrevCCState,
 ): { amount: number; billedAmount?: number; carriedInAmount?: number } {
   if (t.chitFund) {
-    const amount = t.chitFund.isLifted
-      ? (t.chitFund.monthlyLiftedAmount ?? baseAmount)
-      : t.chitFund.monthlyUnliftedAmount;
-    return { amount };
+    return { amount: chitMonthlyAmount(t.chitFund, baseAmount) };
   }
   if (t.category === "CREDIT_CARD") {
     // A negative outstanding here is a carried-forward overpayment credit —

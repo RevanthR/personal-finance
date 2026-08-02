@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect, notFound } from "next/navigation";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
+import { getCurrentMonthYear, nextMonthYear } from "@/lib/utils";
 
 export default async function MonthDetailPage({
   params,
@@ -25,6 +26,8 @@ export default async function MonthDetailPage({
   });
 
   if (!currentMonth) notFound();
+
+  const { month: nextM, year: nextY } = nextMonthYear(currentMonth.month, currentMonth.year);
 
   const [recentMonths, ccTemplates, allTemplates, customCategories, subCategorySuggestions, settledCarryOverEntries] = await Promise.all([
     db.month.findMany({
@@ -64,7 +67,7 @@ export default async function MonthDetailPage({
         userId: session.user.id,
         settledOn: {
           gte: new Date(currentMonth.year, currentMonth.month - 1, 1),
-          lt: new Date(currentMonth.month === 12 ? currentMonth.year + 1 : currentMonth.year, currentMonth.month === 12 ? 0 : currentMonth.month, 1),
+          lt: new Date(nextY, nextM - 1, 1),
         },
       },
       select: {
@@ -86,9 +89,7 @@ export default async function MonthDetailPage({
       pendingFromYear: t.pendingFromYear,
     }));
 
-  const now = new Date();
-  const todayMonth = now.getMonth() + 1;
-  const todayYear  = now.getFullYear();
+  const { month: todayMonth, year: todayYear } = getCurrentMonthYear();
 
   return (
     <DashboardClient

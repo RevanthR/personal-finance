@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { isTemplateActiveInMonth } from "@/lib/loan-utils";
 import { computeTemplateEntryAmount, computePrevCCState, type PrevCCState } from "@/lib/entry-amount";
-import { pendingAmountKicks } from "@/lib/utils";
+import { pendingAmountKicks, prevMonthYear } from "@/lib/utils";
 import { computeMonthIncome, computeMetrics, isZeroCCBalance } from "@/lib/finance-utils";
 import type { Month } from "@/generated/prisma/client";
 
@@ -27,8 +27,7 @@ export async function setupMonth(userId: string, month: number, year: number, sa
     });
 
     // Find previous month to carry CC statement amounts + cash balance forward
-    const prevMonthNum = month === 1 ? 12 : month - 1;
-    const prevYear = month === 1 ? year - 1 : year;
+    const { month: prevMonthNum, year: prevYear } = prevMonthYear(month, year);
     const prevMonth = await db.month.findUnique({
       where: { userId_month_year: { userId, month: prevMonthNum, year: prevYear } },
       include: {

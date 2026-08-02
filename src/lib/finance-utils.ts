@@ -35,8 +35,15 @@ export interface ProgressMetrics {
   carriedCCDebt: number;
 }
 
-/** Entry's net obligation after cashback. */
-export function netAmount(e: EntryBase): number {
+/**
+ * Entry's net obligation after cashback. Takes just the two fields it
+ * needs (not the full EntryBase) so callers with a narrower query shape —
+ * gmail matching/dedupe, which don't select statementAmount/billedAmount —
+ * can call the real formula instead of re-deriving `amount - cashback` by
+ * hand, which is exactly how this and effectivePaid below ended up
+ * reimplemented independently in gmail/entry-match.ts and gmail/dedupe.ts.
+ */
+export function netAmount(e: { amount: number; cashbackAmount: number | null }): number {
   return e.amount - (e.cashbackAmount ?? 0);
 }
 
@@ -45,7 +52,7 @@ export function netAmount(e: EntryBase): number {
  * When isPaid, paidAmount is only trusted if it's >= entry amount (overpayment);
  * a stale partial paidAmount smaller than the full amount is ignored.
  */
-export function effectivePaid(e: EntryBase): number {
+export function effectivePaid(e: { amount: number; cashbackAmount: number | null; isPaid: boolean; paidAmount: number | null }): number {
   if (e.isPaid) {
     const n = netAmount(e);
     const stored = e.paidAmount ?? n;
@@ -54,9 +61,14 @@ export function effectivePaid(e: EntryBase): number {
   return e.paidAmount ?? 0;
 }
 
-/** True when the CC statement hasn't closed yet this month — bill not yet a liability. */
+/**
+ * True when the CC statement hasn't closed yet this month — bill not yet a
+ * liability. Only needs the template's category/statementDay, not a full
+ * EntryBase, so gmail matching (which queries a narrower shape) can call
+ * this instead of re-deriving the same day/statementDay boundary itself.
+ */
 export function isBillPending(
-  e: EntryBase,
+  e: { template: { category: string; statementDay: number | null } },
   isCurrentMonth: boolean,
   todayDay: number,
 ): boolean {

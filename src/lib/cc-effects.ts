@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client";
 import { isZeroCCBalance, isPreCloseDate } from "@/lib/finance-utils";
+import { prevMonthYear } from "@/lib/utils";
 
 export type EntryFields = { id: string; amount: number; statementAmount: number | null; billedAmount: number | null };
 
@@ -103,8 +104,7 @@ export async function settleCarriedDebtBackward(
   let m = month;
   let y = year;
   for (let hops = 0; hops < 12 && remaining > 0.5; hops++) {
-    m = m === 1 ? 12 : m - 1;
-    y = m === 12 ? y - 1 : y;
+    ({ month: m, year: y } = prevMonthYear(m, y));
     const prevEntry = await client.monthlyEntry.findFirst({
       where: { templateId, isPaid: false, month: { userId, month: m, year: y } },
       select: { id: true, amount: true, cashbackAmount: true, paidAmount: true, carriedInAmount: true },
