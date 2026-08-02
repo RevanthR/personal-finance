@@ -15,7 +15,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Plus, Pencil, ChevronDown, Trash2, ChevronLeft, ChevronRight, Check, Calendar, Loader2,
+  Plus, Pencil, ChevronDown, Trash2, ChevronLeft, ChevronRight, Check, Calendar, Loader2, RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { EntryRow } from "./entry-row";
@@ -1532,15 +1532,15 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                         ) : (
                           <div className="flex items-center justify-between py-1">
                             <span className="text-sm">{t.name}</span>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-2">
                               {override && (
                                 <button
                                   type="button"
                                   onClick={() => handleIncomeOverrideReset(t.id)}
-                                  className="text-xs text-muted-foreground active:text-negative p-1 -mr-1"
+                                  className="p-1.5 rounded text-muted-foreground active:bg-muted active:text-negative transition-colors"
                                   title="Reset to template amount"
                                 >
-                                  ↺
+                                  <RotateCcw className="w-3.5 h-3.5" />
                                 </button>
                               )}
                               <button
