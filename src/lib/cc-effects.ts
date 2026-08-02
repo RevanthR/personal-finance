@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client";
 import { isZeroCCBalance, isPreCloseDate } from "@/lib/finance-utils";
-import { prevMonthYear } from "@/lib/utils";
+import { prevMonthYear, getCurrentMonthYear } from "@/lib/utils";
 
 export type EntryFields = { id: string; amount: number; statementAmount: number | null; billedAmount: number | null };
 
@@ -137,6 +137,49 @@ export async function settleCarriedDebtBackward(
 
     remaining -= applied;
     if (!nowFullyPaid || !prevEntry.carriedInAmount || prevEntry.carriedInAmount <= 0) break;
+  }
+}
+
+// A non-CC bill settled with a card instead of cash — real money the card
+// now owes, dated today (when the payment actually happened), same as any
+// other manual charge. billPaymentsAttributed tracks that this portion
+// isn't genuine card spend, so Expenditure/category totals don't count it
+// twice (once under the bill's own category, once under the card).
+export async function applyBillPaymentToCard(
+  client: DbClient,
+  userId: string,
+  cardTemplateId: string,
+  amount: number,
+): Promise<void> {
+  const { month, year } = getCurrentMonthYear();
+  const monthRow = await client.month.findFirst({ where: { userId, month, year } });
+  if (!monthRow) return;
+  const updated = await applyCCEffect(client, userId, monthRow.id, cardTemplateId, new Date(), amount);
+  if (updated) {
+    await client.monthlyEntry.update({
+      where: { id: updated.id },
+      data: { billPaymentsAttributed: { increment: amount } },
+    });
+  }
+}
+
+// Undo the above — un-marking a bill as "paid via card" removes the charge
+// from that card the same way deleting the charge itself would.
+export async function reverseBillPaymentFromCard(
+  client: DbClient,
+  userId: string,
+  cardTemplateId: string,
+  amount: number,
+): Promise<void> {
+  const { month, year } = getCurrentMonthYear();
+  const monthRow = await client.month.findFirst({ where: { userId, month, year } });
+  if (!monthRow) return;
+  const updated = await reverseCCEffect(client, userId, monthRow.id, cardTemplateId, new Date(), amount);
+  if (updated) {
+    await client.monthlyEntry.update({
+      where: { id: updated.id },
+      data: { billPaymentsAttributed: { decrement: amount } },
+    });
   }
 }
 

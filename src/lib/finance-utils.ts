@@ -14,6 +14,17 @@ export interface EntryBase {
   statementAmount: number | null;
   billedAmount: number | null;
   carriedInAmount?: number | null;
+  // CC only: how much of this card's own amount is really another bill
+  // routed through it (see paidViaCardTemplateId below) — excluded from
+  // committed/paid totals (already counted once, under that other bill's
+  // own category) but not from cash totals (paying off THIS card still
+  // takes that much real cash).
+  billPaymentsAttributed?: number | null;
+  // Non-CC only: set when this bill was settled via a credit card instead
+  // of cash/bank — excludes it from cash totals (the cash effect is
+  // deferred to whenever that card's own bill gets paid off) without
+  // touching its committed/paid status (the bill itself is still settled).
+  paidViaCardTemplateId?: string | null;
   template: {
     category: string;
     statementDay: number | null;
@@ -33,6 +44,14 @@ export interface ProgressMetrics {
   // totalPending already, broken out so callers can show it separately
   // from this month's own Expenditure/CC Bill figures.
   carriedCCDebt: number;
+  // Cash-flow view, distinct from totalCommitted/totalPaid above: a bill
+  // paid via a card contributes fully to totalCommitted/totalPaid (it's
+  // settled, nothing left to chase) but NOT to these — no actual cash
+  // moves until that card's own bill gets paid off, at which point the
+  // card's entry (now carrying that amount) counts here instead. Real
+  // balance/cash-in-hand figures should use these, not totalCommitted/totalPaid.
+  cashCommitted: number;
+  cashPaid: number;
 }
 
 /**
@@ -164,6 +183,33 @@ export function effectiveEntryAmount(
   todayDay: number,
 ): number {
   if (isBillPending(e, isCurrentMonth, todayDay)) return 0;
+  const net = netAmount(e);
+  // A card's own amount can include another bill's payment routed through
+  // it — that money is already counted once, under the other bill's own
+  // category, so it's excluded here to avoid double-counting Expenditure.
+  return e.template.category === "CREDIT_CARD"
+    ? Math.max(0, net - (e.billPaymentsAttributed ?? 0))
+    : net;
+}
+
+/**
+ * Real cash contribution of this entry this month — a different view of
+ * the same entries as effectiveEntryAmount above, for actual cash-in-hand
+ * figures (the dashboard's Cash/UPI balance, the Year View's ending
+ * balance) rather than committed-spend ones (Expenditure, category
+ * breakdown). A bill settled via a card contributes 0 here — no cash
+ * moves until that card's own bill gets paid off, at which point the
+ * card's own entry (never itself paidViaCard) counts in full below,
+ * attributed portion included. See computeMetrics's cashCommitted/cashPaid
+ * for the same split applied in aggregate.
+ */
+export function cashEntryAmount(
+  e: EntryBase,
+  isCurrentMonth: boolean,
+  todayDay: number,
+): number {
+  if (isBillPending(e, isCurrentMonth, todayDay)) return 0;
+  if (e.paidViaCardTemplateId) return 0;
   return netAmount(e);
 }
 
@@ -230,6 +276,10 @@ export function computeMetrics(
   // totalCommitted/ccBillsThisMonth (those feed Expenditure and the CC Bill
   // tile, which should only ever reflect this month's own bills).
   let carriedCCDebt = 0;
+  // See ProgressMetrics.cashCommitted/cashPaid — real cash-flow view,
+  // separate from the committed/paid (bill-settlement) view above.
+  let cashCommitted = 0;
+  let cashPaid = 0;
 
   for (const e of entries) {
     const pending = isBillPending(e, isCurrentMonth, todayDay);
@@ -243,14 +293,36 @@ export function computeMetrics(
       continue;
     }
 
-    const net = netAmount(e);
-    const paid = effectivePaid(e);
+    const rawNet = netAmount(e);
+    const rawPaid = effectivePaid(e);
+    const attributed = e.billPaymentsAttributed ?? 0;
+    const isCC = e.template.category === "CREDIT_CARD";
+
+    // Committed/paid (bill-settlement view): a card's own bill excludes
+    // whatever portion of it is really another bill routed through it —
+    // that money is already counted once, under that other bill's own
+    // category. A partial card payment is treated as settling the card's
+    // own genuine spend first, so this view never shows more paid than committed.
+    const net  = isCC ? Math.max(0, rawNet - attributed) : rawNet;
+    const paid = isCC
+      ? (e.isPaid ? net : Math.max(0, rawPaid - attributed))
+      : rawPaid;
 
     totalCommitted += net;
     totalPaid += paid;
     if (!e.isPaid) pendingCount++;
 
-    if (e.template.category === "CREDIT_CARD") {
+    // Cash view: a bill settled via a card never moves cash this month —
+    // that happens later, when the card itself gets paid off (at which
+    // point the card's own rawNet/rawPaid — attributed portion included —
+    // correctly counts as cash below, since paidViaCardTemplateId is never
+    // set on the card's own entry).
+    if (!e.paidViaCardTemplateId) {
+      cashCommitted += rawNet;
+      cashPaid += rawPaid;
+    }
+
+    if (isCC) {
       ccBillsThisMonth += net;
       const rolling = !e.isPaid ? Math.max(0, (e.billedAmount ?? e.amount) - e.amount) : 0;
       ccNextMonth += (e.statementAmount ?? 0) + rolling;
@@ -274,5 +346,7 @@ export function computeMetrics(
     ccBillsThisMonth,
     recurringNonCC,
     ccNextMonth,
+    cashCommitted,
+    cashPaid,
   };
 }

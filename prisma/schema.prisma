@@ -180,6 +180,7 @@ model LineItemTemplate {
   loanOutstandingOverride Float?
   createdAt        DateTime       @default(now())
   entries          MonthlyEntry[]
+  paidViaCardFor   MonthlyEntry[] @relation("PaidViaCard")
   chitFund         ChitFund?
   creditCard       CreditCard?
   adHocCharges     AdHocItem[]
@@ -239,6 +240,20 @@ model MonthlyEntry {
   // THIS cycle's statement closes. Never touched after creation.
   carriedInAmount Float?
   createdAt       DateTime         @default(now())
+  // Non-CC only: which card actually settled this bill, if not cash/bank —
+  // paying rent/insurance/an EMI with a credit card instead of cash. When
+  // set, this entry's own cash contribution is deferred to whenever that
+  // card's bill itself gets paid off (see billPaymentsAttributed below and
+  // finance-utils.ts's cashCommitted/cashPaid).
+  paidViaCardTemplateId String?
+  paidViaCard           LineItemTemplate? @relation("PaidViaCard", fields: [paidViaCardTemplateId], references: [id], onDelete: SetNull)
+  // CC only: how much of THIS card's own amount is really someone else's
+  // bill routed through it (via paidViaCardTemplateId above), not genuine
+  // card spend — excluded from Expenditure/category-breakdown totals (that
+  // money is already counted once, under whichever bill actually spent it)
+  // but still real money this card owes, so it stays in amount/billedAmount
+  // and in cash-flow totals once the card itself gets paid off.
+  billPaymentsAttributed Float @default(0)
 
   @@unique([monthId, templateId])
 }

@@ -70,6 +70,12 @@ export type MonthData = {
   year: number;
   income: number;
   expenses: number;
+  // Cash view for the ending-balance calc below — distinct from `expenses`
+  // (committed spend, used for the "saved/deficit" per-month figure and
+  // the Expenses tile), since a bill settled via a card doesn't move cash
+  // until that card's own bill is paid off. See finance-utils.ts's
+  // cashEntryAmount.
+  cashExpenses: number;
   ccTotal: number;
   ccByCard: { templateId: string; name: string; amount: number }[];
   balance: number;
@@ -124,10 +130,11 @@ export function YearOverviewClient({
   // minus anything paid this month toward an older bill (carriedDebtPaid) —
   // same shared formula the dashboard's own balance figures use, so this
   // never silently disagrees about what a payment like that did to cash.
+  const totalCashExpenses = months.reduce((s, m) => s + m.cashExpenses, 0);
   const yearEndBalance = computeCashBalance({
     openingBalance: fyOpeningBalance,
     income: totalIncome,
-    expense: totalExpenses,
+    expense: totalCashExpenses,
     carriedDebtPaid,
   });
   const actualCount   = months.filter(m => m.isPopulated).length;

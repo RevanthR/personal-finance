@@ -132,6 +132,7 @@ type RecentMonthSummary = {
 type EntryWithTemplate = {
   id: string; amount: number; isPaid: boolean; paidOn: string | null; paidAmount: number | null; cashbackAmount: number | null; notes: string | null; templateId: string;
   statementAmount: number | null; billedAmount: number | null; carriedInAmount?: number | null;
+  paidViaCardTemplateId?: string | null; billPaymentsAttributed?: number | null;
   template: { id: string; name: string; category: string; customCategory: string | null; isFixed: boolean; dueDateDay: number | null; statementDay: number | null; loanInterestRate: number | null; loanRateType: string | null; loanOriginalPrincipal: number | null; loanStartDate: string | null; loanOutstandingOverride: number | null };
 };
 
@@ -496,7 +497,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   );
   const {
     totalCommitted, totalPaid, totalPending, paidPercent, pendingCount,
-    ccBillsThisMonth, recurringNonCC, ccNextMonth,
+    ccBillsThisMonth, recurringNonCC, ccNextMonth, cashCommitted, cashPaid,
   } = metrics;
 
   const openingBalance = currentMonth?.openingBalance ?? 0;
@@ -505,8 +506,11 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   // snapshot) so that snapshot never gets silently overwritten by a later
   // payment. Still has to reduce the actual cash totals below.
   const carriedDebtPaid = currentMonth?.carriedDebtPaid ?? 0;
-  const balance   = computeCashBalance({ openingBalance, income: grandIncome, expense: totalCommitted + adHocExpense, carriedDebtPaid });
-  const inHandNow = computeCashBalance({ openingBalance, income: grandIncome, expense: totalPaid + adHocExpense, carriedDebtPaid });
+  // cashCommitted/cashPaid (not totalCommitted/totalPaid) — a bill settled
+  // via a card is fully "committed"/"paid" for Expenditure/Pending purposes,
+  // but no actual cash moves for it until that card's own bill gets paid off.
+  const balance   = computeCashBalance({ openingBalance, income: grandIncome, expense: cashCommitted + adHocExpense, carriedDebtPaid });
+  const inHandNow = computeCashBalance({ openingBalance, income: grandIncome, expense: cashPaid + adHocExpense, carriedDebtPaid });
 
   // Still-unpaid bills from earlier months are real pending money — they
   // belong in the headline Pending total, not just tucked away in their own
@@ -793,7 +797,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     if (existing) await handleAdHocDelete(existing.id);
   }
 
-  async function handleEntryUpdate(entryId: string, updates: { isPaid?: boolean; amount?: number; notes?: string; paidAmount?: number; cashbackAmount?: number; payCarriedAmount?: number }) {
+  async function handleEntryUpdate(entryId: string, updates: { isPaid?: boolean; amount?: number; notes?: string; paidAmount?: number; cashbackAmount?: number; payCarriedAmount?: number; paidViaCardTemplateId?: string | null }) {
     if (!currentMonth) return;
     const res = await fetch(`/api/months/${currentMonth.id}/entries`, {
       method: "PATCH",
@@ -828,7 +832,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   // The server does the authoritative carriedDebtPaid increment in the same
   // transaction; the effectivePaid delta below just mirrors that locally so
   // the tile updates without waiting on a refetch.
-  async function handleCarriedOverUpdate(item: CarriedOverEntry, updates: { isPaid?: boolean; paidAmount?: number; cashbackAmount?: number }) {
+  async function handleCarriedOverUpdate(item: CarriedOverEntry, updates: { isPaid?: boolean; paidAmount?: number; cashbackAmount?: number; paidViaCardTemplateId?: string | null }) {
     const res = await fetch(`/api/months/${item.monthId}/entries`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -844,7 +848,9 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     });
     const paidBefore = _effectivePaid(entryBase(item.paidAmount, false));
     const paidAfter = _effectivePaid(entryBase(updated.paidAmount, updated.isPaid));
-    const delta = paidAfter - paidBefore;
+    // Paid via a card — no cash moved, so carriedDebtPaid shouldn't reflect
+    // it (matches the server, which skips the same bump for the same reason).
+    const delta = updates.paidViaCardTemplateId ? 0 : paidAfter - paidBefore;
 
     setCurrentMonth(prev => prev ? { ...prev, carriedDebtPaid: prev.carriedDebtPaid + delta } : prev);
     setCarriedOver(prev => updated.isPaid
@@ -1232,6 +1238,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                             },
                           }}
                           onUpdate={(_id, updates) => handleCarriedOverUpdate(item, updates)}
+                          ccTemplates={ccTemplates}
                         />
                       ))}
                     </div>
@@ -1348,7 +1355,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                       <ProjectedEntryRow key={idx} entry={item.data} />
                     ))}
                     {entryItems.map(item => (
-                      <EntryRow key={item.data.id} entry={item.data} onUpdate={handleEntryUpdate} />
+                      <EntryRow key={item.data.id} entry={item.data} onUpdate={handleEntryUpdate} ccTemplates={ccTemplates} />
                     ))}
                   </div>
                 )}

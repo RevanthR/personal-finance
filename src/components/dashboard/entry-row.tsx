@@ -32,9 +32,11 @@ interface EntryRowProps {
   // elsewhere (e.g. a CC card's collapsed header), so both surfaces stay in
   // sync. When omitted, this row owns its own tick state (standalone use).
   tick?: PaymentTick;
+  // Active cards this bill could be settled with instead of cash.
+  ccTemplates?: { id: string; name: string }[];
 }
 
-export function EntryRow({ entry, onUpdate, isBillPending = false, tick: externalTick }: EntryRowProps) {
+export function EntryRow({ entry, onUpdate, isBillPending = false, tick: externalTick, ccTemplates = [] }: EntryRowProps) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const [editingAmount, setEditingAmount] = useState(false);
@@ -45,9 +47,10 @@ export function EntryRow({ entry, onUpdate, isBillPending = false, tick: externa
   const tick = externalTick ?? internalTick;
   const isControlled = externalTick != null;
   const {
-    isPaid, paidAmount, cashback, isCC, netBill, isPartial, outstanding, isLoan, loanAmort,
+    isPaid, paidAmount, cashback, paidViaCard, isCC, netBill, isPartial, outstanding, isLoan, loanAmort,
     handleTickClick, loanPaidSnapshot, setLoanPaidSnapshot,
   } = tick;
+  const paidViaCardName = paidViaCard ? ccTemplates.find(c => c.id === paidViaCard)?.name : null;
 
   const color = getCategoryColor(entry.template.category, entry.template.customCategory);
 
@@ -123,6 +126,9 @@ export function EntryRow({ entry, onUpdate, isBillPending = false, tick: externa
               {isPaid && entry.paidOn && (
                 <span className="text-positive">{format(new Date(entry.paidOn), "dd MMM")}</span>
               )}
+              {isPaid && paidViaCardName && (
+                <span className="text-muted-foreground/70">via {paidViaCardName}</span>
+              )}
               {isLoan && entry.template.loanInterestRate && (
                 <span className="text-muted-foreground/70">{entry.template.loanInterestRate}%</span>
               )}
@@ -180,7 +186,7 @@ export function EntryRow({ entry, onUpdate, isBillPending = false, tick: externa
       {/* Payment dialog — only when this row owns its own tick state.
           When shared (e.g. inside a CC card), the parent renders it once. */}
       {!isControlled && (
-        <PaymentDialog tick={tick} entryName={entry.template.name} amount={entry.amount} fmt={fmt} />
+        <PaymentDialog tick={tick} entryName={entry.template.name} amount={entry.amount} fmt={fmt} ccTemplates={ccTemplates} />
       )}
 
       {/* Loan payment success popup */}

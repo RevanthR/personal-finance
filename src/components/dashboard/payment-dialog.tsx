@@ -14,13 +14,17 @@ interface PaymentDialogProps {
   entryName: string;
   amount: number;
   fmt: (v: number) => string;
+  // Active cards this bill could be settled with instead of cash — full
+  // payment only (see paidViaCardVal in use-payment-tick.ts).
+  ccTemplates?: { id: string; name: string }[];
 }
 
-export function PaymentDialog({ tick, entryName, amount, fmt }: PaymentDialogProps) {
+export function PaymentDialog({ tick, entryName, amount, fmt, ccTemplates = [] }: PaymentDialogProps) {
   const {
     isCC, isPartial, paidAmount, outstanding,
     showDialog, setShowDialog, payMode, setPayMode, partialVal, setPartialVal,
-    cashbackVal, setCashbackVal, parsedCashback, partialRef, handlePayFull, handleSavePartial,
+    cashbackVal, setCashbackVal, paidViaCardVal, setPaidViaCardVal,
+    parsedCashback, partialRef, handlePayFull, handleSavePartial,
   } = tick;
 
   return (
@@ -87,9 +91,41 @@ export function PaymentDialog({ tick, entryName, amount, fmt }: PaymentDialogPro
           </div>
 
           {payMode === "full" ? (
-            <Button className="w-full" onClick={handlePayFull}>
-              Mark paid · {fmt(isPartial ? Math.max(0, amount - parsedCashback() - paidAmount!) : amount - parsedCashback())}
-            </Button>
+            <div className="space-y-3">
+              {!isCC && ccTemplates.length > 0 && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Paid via</Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setPaidViaCardVal("")}
+                      className={cn(
+                        "px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors",
+                        paidViaCardVal === "" ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-muted-foreground"
+                      )}
+                    >
+                      Cash/Bank
+                    </button>
+                    {ccTemplates.map(c => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => setPaidViaCardVal(c.id)}
+                        className={cn(
+                          "px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors",
+                          paidViaCardVal === c.id ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-muted-foreground"
+                        )}
+                      >
+                        {c.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <Button className="w-full" onClick={handlePayFull}>
+                Mark paid · {fmt(isPartial ? Math.max(0, amount - parsedCashback() - paidAmount!) : amount - parsedCashback())}
+              </Button>
+            </div>
           ) : (
             <div className="space-y-2">
               <div>

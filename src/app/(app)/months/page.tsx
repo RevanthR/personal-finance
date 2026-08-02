@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { isTemplateActiveInMonth } from "@/lib/loan-utils";
 import { chitMonthlyAmount } from "@/lib/entry-amount";
-import { computeMonthIncome, effectiveEntryAmount, isBillPending, netAmount, effectivePaid, type EntryBase } from "@/lib/finance-utils";
+import { computeMonthIncome, effectiveEntryAmount, cashEntryAmount, isBillPending, netAmount, effectivePaid, type EntryBase } from "@/lib/finance-utils";
 import { YearOverviewClient, type MonthData } from "@/components/months/year-overview-client";
 import { CATEGORY_LABELS, CATEGORY_COLORS, MONTHS, pendingAmountKicks, getCurrentMonthYear, prevMonthYear, nextMonthYear } from "@/lib/utils";
 import type { AnalyticsData } from "@/components/months/stats-breakdown";
@@ -102,6 +102,9 @@ export default async function MonthsPage() {
   function entryExpense(e: EntryBase, isCurrentM: boolean): number {
     return effectiveEntryAmount(e, isCurrentM, todayDay);
   }
+  function entryCash(e: EntryBase, isCurrentM: boolean): number {
+    return cashEntryAmount(e, isCurrentM, todayDay);
+  }
 
   // templateType may be null for pre-existing rows (DB DEFAULT not backfilled by Prisma 7)
   // Use !== "INCOME" so null rows are treated as EXPENSE
@@ -139,6 +142,12 @@ export default async function MonthsPage() {
       const income = computeMonthIncome(actual.adHocItems, incomeTemplates, month, year, actual.salaryIncome);
       const expenses = actual.entries.reduce((s, e) => s + entryExpense(e, isCurrentM), 0)
         + actual.adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0);
+      // Cash view for the year's ending balance only — a bill settled via
+      // a card contributes 0 here (no cash moves until that card's own
+      // bill is paid off), unlike `expenses` above which still counts it
+      // as committed spend. See finance-utils.ts's cashEntryAmount.
+      const cashExpenses = actual.entries.reduce((s, e) => s + entryCash(e, isCurrentM), 0)
+        + actual.adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0);
       const ccEntries = actual.entries.filter(e => e.template.category === "CREDIT_CARD" && entryExpense(e, isCurrentM) > 0);
       const ccTotal = ccEntries.reduce((s, e) => s + entryExpense(e, isCurrentM), 0);
       const ccByCardMap = new Map<string, { name: string; amount: number }>();
@@ -150,7 +159,7 @@ export default async function MonthsPage() {
       }
       const ccByCard = [...ccByCardMap.entries()].map(([templateId, v]) => ({ templateId, ...v }));
       return {
-        id: actual.id, month, year, income, expenses, ccTotal, ccByCard,
+        id: actual.id, month, year, income, expenses, cashExpenses, ccTotal, ccByCard,
         balance: income - expenses,
         paid: actual.entries.filter(e => e.isPaid).length,
         total: actual.entries.length,
@@ -207,7 +216,7 @@ export default async function MonthsPage() {
 
     return {
       id: null, month, year,
-      income: projIncome, expenses: projExpenses, ccTotal: projCCTotal, ccByCard: projCCByCard,
+      income: projIncome, expenses: projExpenses, cashExpenses: projExpenses, ccTotal: projCCTotal, ccByCard: projCCByCard,
       balance: projIncome - projExpenses,
       paid: null, total: null,
       isPopulated: false,

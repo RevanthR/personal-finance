@@ -12,6 +12,8 @@ export interface PaymentTickEntry {
   isPaid: boolean;
   paidAmount: number | null;
   cashbackAmount: number | null;
+  // Non-CC only: which card settled this bill, if not cash/bank.
+  paidViaCardTemplateId?: string | null;
   template: {
     category: string;
     loanInterestRate: number | null;
@@ -22,7 +24,7 @@ export interface PaymentTickEntry {
   };
 }
 
-export type PaymentTickUpdate = (id: string, updates: { isPaid?: boolean; amount?: number; notes?: string; paidAmount?: number; cashbackAmount?: number }) => Promise<void>;
+export type PaymentTickUpdate = (id: string, updates: { isPaid?: boolean; amount?: number; notes?: string; paidAmount?: number; cashbackAmount?: number; paidViaCardTemplateId?: string | null }) => Promise<void>;
 
 export interface LoanPaidSnapshot {
   emi: number;
@@ -43,11 +45,16 @@ export function usePaymentTick(entry: PaymentTickEntry, onUpdate: PaymentTickUpd
   const [optimisticPaid, setOptimisticPaid] = useState(entry.isPaid);
   const [optimisticPaidAmount, setOptimisticPaidAmount] = useState(entry.paidAmount);
   const [optimisticCashback, setOptimisticCashback] = useState(entry.cashbackAmount);
+  const [optimisticPaidViaCard, setOptimisticPaidViaCard] = useState(entry.paidViaCardTemplateId ?? null);
 
   const [showDialog, setShowDialog] = useState(false);
   const [payMode, setPayMode] = useState<"full" | "partial">("full");
   const [partialVal, setPartialVal] = useState("");
   const [cashbackVal, setCashbackVal] = useState("");
+  // "" = cash/bank (default); otherwise a card template id. Full-pay only —
+  // splitting one payment across two liabilities (partial + card) isn't
+  // supported yet.
+  const [paidViaCardVal, setPaidViaCardVal] = useState("");
   const partialRef = useRef<HTMLInputElement>(null);
 
   const [loanPaidSnapshot, setLoanPaidSnapshot] = useState<LoanPaidSnapshot | null>(null);
@@ -55,6 +62,7 @@ export function usePaymentTick(entry: PaymentTickEntry, onUpdate: PaymentTickUpd
   const isPaid = optimisticPaid;
   const paidAmount = optimisticPaidAmount;
   const cashback = optimisticCashback ?? 0;
+  const paidViaCard = optimisticPaidViaCard;
   const isCC = entry.template.category === "CREDIT_CARD";
   const netBill = entry.amount - cashback;
   const isPartial = !isPaid && paidAmount != null && paidAmount > 0;
@@ -74,6 +82,7 @@ export function usePaymentTick(entry: PaymentTickEntry, onUpdate: PaymentTickUpd
     if (isPaid) {
       setOptimisticPaid(false);
       setOptimisticPaidAmount(null);
+      setOptimisticPaidViaCard(null);
       onUpdate(entry.id, { isPaid: false });
       return;
     }
@@ -97,6 +106,7 @@ export function usePaymentTick(entry: PaymentTickEntry, onUpdate: PaymentTickUpd
     setPayMode("full");
     setPartialVal(paidAmount != null ? String(outstanding) : "");
     setCashbackVal(cashback > 0 ? String(cashback) : "");
+    setPaidViaCardVal("");
     setShowDialog(true);
   }
 
@@ -110,8 +120,13 @@ export function usePaymentTick(entry: PaymentTickEntry, onUpdate: PaymentTickUpd
     setOptimisticPaid(true);
     setOptimisticPaidAmount(null);
     setOptimisticCashback(cb > 0 ? cb : null);
+    setOptimisticPaidViaCard(!isCC && paidViaCardVal ? paidViaCardVal : null);
     setShowDialog(false);
-    await onUpdate(entry.id, { isPaid: true, ...(isCC && { cashbackAmount: cb }) });
+    await onUpdate(entry.id, {
+      isPaid: true,
+      ...(isCC && { cashbackAmount: cb }),
+      ...(!isCC && paidViaCardVal && { paidViaCardTemplateId: paidViaCardVal }),
+    });
   }
 
   async function handleSavePartial() {
@@ -135,8 +150,9 @@ export function usePaymentTick(entry: PaymentTickEntry, onUpdate: PaymentTickUpd
   }
 
   return {
-    isPaid, paidAmount, cashback, isCC, netBill, isPartial, outstanding, canPartial, isLoan, loanAmort,
-    showDialog, setShowDialog, payMode, setPayMode, partialVal, setPartialVal, cashbackVal, setCashbackVal, partialRef,
+    isPaid, paidAmount, cashback, paidViaCard, isCC, netBill, isPartial, outstanding, canPartial, isLoan, loanAmort,
+    showDialog, setShowDialog, payMode, setPayMode, partialVal, setPartialVal, cashbackVal, setCashbackVal,
+    paidViaCardVal, setPaidViaCardVal, partialRef,
     handleTickClick, parsedCashback, handlePayFull, handleSavePartial,
     loanPaidSnapshot, setLoanPaidSnapshot,
   };
