@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client";
-import { isZeroCCBalance } from "@/lib/finance-utils";
+import { isZeroCCBalance, isPreCloseDate } from "@/lib/finance-utils";
 
 export type EntryFields = { id: string; amount: number; statementAmount: number | null; billedAmount: number | null };
 
@@ -30,10 +30,7 @@ async function recomputeStatementAmount(
   // the post-close total instead of adding to it — floored at 0 since a
   // credit larger than post-close spend can't make "owed so far" negative.
   const postCloseTotal = cardItems
-    .filter(i => {
-      const day = new Date(i.date).getDate();
-      return statementDay === null || day > statementDay;
-    })
+    .filter(i => statementDay === null || !isPreCloseDate(new Date(i.date), statementDay))
     .reduce((sum, i) => sum + (i.isCredit ? -i.amount : i.amount), 0);
 
   return client.monthlyEntry.update({
@@ -71,7 +68,7 @@ export async function applyCCEffect(
   }
 
   const statementDay = template.statementDay ?? null;
-  const isPreClose = statementDay !== null && date.getDate() <= statementDay;
+  const isPreClose = isPreCloseDate(date, statementDay);
 
   if (isPreClose) {
     return client.monthlyEntry.update({
@@ -166,7 +163,7 @@ export async function reverseCCEffect(
   if (!entry) return null;
 
   const statementDay = entry.template.statementDay ?? null;
-  const isPreClose = statementDay !== null && date.getDate() <= statementDay;
+  const isPreClose = isPreCloseDate(date, statementDay);
 
   if (isPreClose) {
     const newAmount = Math.max(0, entry.amount - amount);

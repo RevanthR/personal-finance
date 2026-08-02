@@ -68,6 +68,20 @@ export function isBillPending(
   );
 }
 
+/**
+ * True when a charge dated `date` belongs to the cycle that's still open
+ * (or just closed) rather than the one after it. The statement GENERATES
+ * on statementDay, so a charge dated exactly on that day has already
+ * missed the cut — it belongs to the next cycle, not this one. Only a
+ * charge dated strictly before statementDay counts as part of the bill
+ * closing now. Single source of truth for both directions of this rule:
+ * which spend lands in this cycle's `amount` vs next cycle's
+ * `statementAmount` (cc-effects.ts).
+ */
+export function isPreCloseDate(date: Date, statementDay: number | null): boolean {
+  return statementDay !== null && date.getDate() < statementDay;
+}
+
 export interface IncomeTemplateForCalc {
   id: string;
   amount: number;
