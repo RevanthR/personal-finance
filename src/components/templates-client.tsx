@@ -764,9 +764,9 @@ function TemplateDialog({
           region nested straight inside position:fixed can fail to respond
           to touch-drag at all. Both read as the dialog "not responding". */}
       <DialogContent className="max-w-sm max-h-[85vh] flex flex-col p-0 gap-0">
-        <DialogHeader className="p-4 sm:p-6 pb-0 shrink-0"><DialogTitle>{title}</DialogTitle></DialogHeader>
+        <DialogHeader className="p-4 pb-2 shrink-0"><DialogTitle>{title}</DialogTitle></DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-        <div className="space-y-4 overflow-y-auto overscroll-contain p-4 sm:p-6 pt-1">
+        <div className="space-y-3 overflow-y-auto overscroll-contain p-4 pt-0">
 
           {/* Income vs Expense toggle — new templates only */}
           {!isEditing && (
@@ -1113,7 +1113,7 @@ function TemplateDialog({
           )}
 
         </div>
-          <DialogFooter className="p-4 sm:p-6 pt-3 shrink-0 border-t border-border">
+          <DialogFooter className="p-4 pt-3 shrink-0 border-t border-border">
             <Button type="submit" disabled={loading || !isValid} className="w-full">
               {loading ? "Saving..." : "Save"}
             </Button>

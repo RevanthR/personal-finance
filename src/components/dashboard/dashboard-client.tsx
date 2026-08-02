@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef, useTransition, Fragment, type CSSProperties } from "react";
+import { useState, useMemo, useEffect, useRef, useTransition, type CSSProperties } from "react";
 import { flushSync } from "react-dom";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
@@ -609,17 +609,6 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
 
     return { grouped: ordered, ccEntries };
   }, [entries, isProjected, projEntries]);
-
-  // When every recurring category is fully paid but there's still a real
-  // CC bill outstanding, the whole Recurring Payments section — not just
-  // individual categories within it — should sink below Pending Card
-  // Payments, so the thing that still needs action leads the tab.
-  const recurringFullySettled = !isProjected && Object.values(grouped).length > 0 && Object.values(grouped).every(items => {
-    const entryItems = items.filter(i => i.kind === "entry");
-    return entryItems.length > 0 && entryItems.every(i => i.data.isPaid);
-  });
-  const ccHasPending = ccEntries.some(item => item.kind === "entry" && !item.data.isPaid);
-  const payablesSectionsSwapped = recurringFullySettled && ccHasPending;
 
   // Drilldown breakdowns — same figures the top-line tiles already sum,
   // just itemized so a click answers "where did this number come from"
@@ -1281,23 +1270,14 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
           </div>
         )}
 
-        {/* Recurring Payments and Pending Card Payments swap order when
-            recurring is fully settled but a real CC bill is still
-            outstanding — see payablesSectionsSwapped above. */}
+        {/* Recurring Payments and Pending Card Payments only ever show
+            what's still unsettled; anything fully paid — a whole category
+            or a whole card — sinks into one combined Paid section at the
+            very bottom instead of lingering between two groups that still
+            need action (e.g. a paid-off Loan category sitting above
+            still-pending CC bills). */}
         {(() => {
-        const recurringSection = (
-        <div className="space-y-2.5" key="recurring">
-            <p className="fin-label px-0.5">Recurring Payments</p>
-            {(() => {
-            const groupedEntries = Object.entries(grouped);
-            // grouped is already sorted unsettled-first (see the isSettled sort
-            // above) — find where the fully-paid run starts so it can be set
-            // off with its own divider instead of just blending into the list.
-            const firstPaidIdx = groupedEntries.findIndex(([, items]) => {
-              const entryItems = items.filter(i => i.kind === "entry");
-              return !isProjected && entryItems.length > 0 && entryItems.every(i => i.data.isPaid);
-            });
-            return groupedEntries.map(([groupKey, items], groupIdx) => {
+        const renderCategoryCard = (groupKey: string, items: GroupedItem[]) => {
             const firstEntry   = items.find(i => i.kind === "entry");
             const firstProj    = items.find(i => i.kind === "projected");
             const sampleCat = firstEntry?.kind === "entry"
@@ -1319,15 +1299,8 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             const paidPct = catTotal > 0 ? Math.min(100, Math.round((catPaid / catTotal) * 100)) : 0;
 
             return (
-              <Fragment key={groupKey}>
-                {/* Shown as soon as a settled run starts, even if that's
-                    every category (index 0) — previously gated on
-                    "firstPaidIdx > 0" which meant a fully-paid month never
-                    got this label at all. */}
-                {groupIdx === firstPaidIdx && (
-                  <p className="fin-label px-0.5 pt-2">Paid</p>
-                )}
                 <div
+                  key={groupKey}
                   className={cn(
                     "rounded-xl border overflow-hidden transition-colors",
                     allPaid ? "border-border/60 bg-muted/20" : "border-border bg-card"
@@ -1380,55 +1353,68 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                   </div>
                 )}
                 </div>
-              </Fragment>
             );
-            });
-          })()}
+        };
+
+        const renderCCItem = (item: GroupedItem) => {
+          if (item.kind === "projected") return <ProjectedEntryRow key={item.data.name} entry={item.data} />;
+          const entry = item.data;
+          const statementDay = entry.template.statementDay;
+          const hasPostCloseSpend = adHocItems.some(t =>
+            t.type === "EXPENSE" && t.ccTemplateId === entry.templateId &&
+            !isPreCloseDate(new Date(t.date), statementDay)
+          );
+          return (
+            <CCCardBlock
+              key={entry.id}
+              entry={entry}
+              hasPostCloseSpend={hasPostCloseSpend}
+              nextMonthName={nextMonthName}
+              isBillPending={isBillPending(entry, isCurrentMonth, todayDay)}
+              onUpdate={handleEntryUpdate}
+              onClearStatement={handleClearStatement}
+              collapsed={isCCCardCollapsed(entry.id)}
+              onToggle={() => toggleCCCard(entry.id)}
+            />
+          );
+        };
+
+        // grouped/ccEntries are already sorted unsettled-first — just split
+        // on that boundary instead of re-deriving isSettled from scratch.
+        const groupedEntries = Object.entries(grouped);
+        const isGroupSettled = ([, items]: [string, GroupedItem[]]) => {
+          const entryItems = items.filter(i => i.kind === "entry");
+          return !isProjected && entryItems.length > 0 && entryItems.every(i => i.data.isPaid);
+        };
+        const unsettledGroups = groupedEntries.filter(g => !isGroupSettled(g));
+        const settledGroups   = groupedEntries.filter(isGroupSettled);
+
+        const unsettledCC = ccEntries.filter(item => item.kind === "projected" || !item.data.isPaid);
+        const settledCC   = ccEntries.filter(item => item.kind === "entry" && item.data.isPaid);
+
+        const recurringSection = unsettledGroups.length > 0 && (
+          <div className="space-y-2.5" key="recurring">
+            <p className="fin-label px-0.5">Recurring Payments</p>
+            {unsettledGroups.map(([groupKey, items]) => renderCategoryCard(groupKey, items))}
           </div>
         );
 
-        const ccSection = ccEntries.length > 0 && (
-            <div className="space-y-2.5" key="cc">
-              <p className="fin-label px-0.5">Pending Card Payments</p>
-              {(() => {
-                // ccEntries is already sorted pending-first (see sortEntries
-                // above) — same "Paid" divider treatment as Recurring
-                // Payments, so settled cards visibly set themselves apart
-                // instead of just blending in at the sorted tail.
-                const firstPaidIdx = !isProjected
-                  ? ccEntries.findIndex(item => item.kind === "entry" && item.data.isPaid)
-                  : -1;
-                return ccEntries.map((item, idx) => {
-                  if (item.kind === "projected") return <ProjectedEntryRow key={item.data.name} entry={item.data} />;
-                  const entry = item.data;
-                  const statementDay = entry.template.statementDay;
-                  const hasPostCloseSpend = adHocItems.some(t =>
-                    t.type === "EXPENSE" && t.ccTemplateId === entry.templateId &&
-                    !isPreCloseDate(new Date(t.date), statementDay)
-                  );
-                  return (
-                    <Fragment key={entry.id}>
-                      {idx === firstPaidIdx && (
-                        <p className="fin-label px-0.5 pt-2">Paid</p>
-                      )}
-                      <CCCardBlock
-                        entry={entry}
-                        hasPostCloseSpend={hasPostCloseSpend}
-                        nextMonthName={nextMonthName}
-                        isBillPending={isBillPending(entry, isCurrentMonth, todayDay)}
-                        onUpdate={handleEntryUpdate}
-                        onClearStatement={handleClearStatement}
-                        collapsed={isCCCardCollapsed(entry.id)}
-                        onToggle={() => toggleCCCard(entry.id)}
-                      />
-                    </Fragment>
-                  );
-                });
-              })()}
-            </div>
+        const ccSection = unsettledCC.length > 0 && (
+          <div className="space-y-2.5" key="cc">
+            <p className="fin-label px-0.5">Pending Card Payments</p>
+            {unsettledCC.map(renderCCItem)}
+          </div>
         );
 
-        return payablesSectionsSwapped ? <>{ccSection}{recurringSection}</> : <>{recurringSection}{ccSection}</>;
+        const paidSection = (settledGroups.length > 0 || settledCC.length > 0) && (
+          <div className="space-y-2.5" key="paid">
+            <p className="fin-label px-0.5">Paid</p>
+            {settledGroups.map(([groupKey, items]) => renderCategoryCard(groupKey, items))}
+            {settledCC.map(renderCCItem)}
+          </div>
+        );
+
+        return <>{recurringSection}{ccSection}{paidSection}</>;
         })()}
       </div>
       )}
@@ -1487,12 +1473,12 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             respond to touch-drag at all — both read as "not responsive"
             once this dialog's content is long enough to need scrolling. */}
         <DialogContent className="max-w-sm max-h-[85vh] flex flex-col p-0 gap-0">
-          <DialogHeader className="p-4 sm:p-6 pb-0 shrink-0">
+          <DialogHeader className="p-4 pb-2 shrink-0">
             <DialogTitle>Income: {formatMonthYear(currentMonth?.month ?? viewMonth, currentMonth?.year ?? viewYear)}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 p-4 sm:p-6 pt-1 overflow-y-auto overscroll-contain">
+          <div className="space-y-3 p-4 pt-0 overflow-y-auto overscroll-contain">
             {/* Recurring income from templates */}
-            <div className="rounded-xl bg-muted/30 border px-3 py-3 space-y-2">
+            <div className="rounded-xl bg-muted/30 border px-3 py-2.5 space-y-1.5">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Recurring</p>
                 <span className="text-xs font-semibold text-positive">{fmt(templateIncome)}</span>
@@ -1676,10 +1662,10 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       {/* Pending drilldown */}
       <Dialog open={showPendingDrilldown} onOpenChange={setShowPendingDrilldown}>
         <DialogContent className="max-w-sm max-h-[85vh] flex flex-col p-0 gap-0">
-          <DialogHeader className="p-4 sm:p-6 pb-0 shrink-0">
+          <DialogHeader className="p-4 pb-2 shrink-0">
             <DialogTitle>Pending: {formatMonthYear(currentMonth?.month ?? viewMonth, currentMonth?.year ?? viewYear)}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 p-4 sm:p-6 pt-1 overflow-y-auto overscroll-contain">
+          <div className="space-y-3 p-4 pt-0 overflow-y-auto overscroll-contain">
             <div className="space-y-1.5">
               <p className="fin-label">This month</p>
               <div className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
@@ -1759,10 +1745,10 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       {/* Payables drilldown */}
       <Dialog open={showExpenditureDrilldown} onOpenChange={setShowExpenditureDrilldown}>
         <DialogContent className="max-w-sm max-h-[85vh] flex flex-col p-0 gap-0">
-          <DialogHeader className="p-4 sm:p-6 pb-0 shrink-0">
+          <DialogHeader className="p-4 pb-2 shrink-0">
             <DialogTitle>Payables: {formatMonthYear(currentMonth?.month ?? viewMonth, currentMonth?.year ?? viewYear)}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 p-4 sm:p-6 pt-1 overflow-y-auto overscroll-contain">
+          <div className="space-y-3 p-4 pt-0 overflow-y-auto overscroll-contain">
             <p className="text-xs text-muted-foreground">This month&apos;s own bills, plus any older debt actually paid off this month.</p>
 
             {/* Recurring is already fully itemized in the Payables tab —
