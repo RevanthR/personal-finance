@@ -4,7 +4,7 @@ import { extractTransaction, extractTransactionsBatch, MODEL, type ExtractedTran
 import { logGeminiCall } from "./gemini-usage";
 import { matchCard } from "./card-match";
 import { getInrRate } from "./fx-rate";
-import { sendPushToUser } from "@/lib/push";
+import { sendPushToUser, closePushForUser, GMAIL_SYNC_PUSH_TAG } from "@/lib/push";
 import { hasAmountSignal } from "./amount-signal";
 import { tryKnownTemplate } from "./known-templates";
 import { listCandidatesViaHistory, listCandidatesViaSearch, extractSenderEmail } from "./candidates";
@@ -463,16 +463,23 @@ export async function syncGmailForUser(userId: string, onProgress?: ProgressCall
   // emails (seen firsthand: one charge, three alert emails), which would
   // otherwise fire a burst of near-identical notifications.
   if (newlySynced.length > 0) {
+    // Same tag every time — reviewing some (but not all) of a batch from
+    // one device sends an updated count that replaces this in place on
+    // every OTHER device too, instead of leaving a stale count sitting
+    // there (see gmail/parsed/[id]/route.ts, which re-sends on this tag
+    // after every review action).
     const payload = newlySynced.length === 1
       ? {
           title: "New transaction detected",
           body: `₹${newlySynced[0].amount.toLocaleString("en-IN")} at ${newlySynced[0].merchant ?? newlySynced[0].bank}`,
           url: "/imports",
+          tag: GMAIL_SYNC_PUSH_TAG,
         }
       : {
           title: "New transactions synced",
           body: `${newlySynced.length} new transactions synced`,
           url: "/imports",
+          tag: GMAIL_SYNC_PUSH_TAG,
         };
     try {
       await sendPushToUser(userId, payload);
@@ -482,4 +489,29 @@ export async function syncGmailForUser(userId: string, onProgress?: ProgressCall
   }
 
   return { synced, skipped, failed };
+}
+
+// Called after every individual review action (approve/settle/reject —
+// see api/gmail/parsed/[id]/route.ts) so the gmail-sync notification stays
+// truthful across every device the user has, not just the one they
+// reviewed from. Same tag as the original sync notification: an updated
+// count REPLACES it in place; hitting zero CLOSES it instead of leaving a
+// stale "3 new transactions" banner sitting on a phone the review never
+// touched.
+export async function notifyReviewProgress(userId: string): Promise<void> {
+  try {
+    const remaining = await db.parsedTransaction.count({ where: { userId, status: "PENDING" } });
+    if (remaining === 0) {
+      await closePushForUser(userId, GMAIL_SYNC_PUSH_TAG);
+    } else {
+      await sendPushToUser(userId, {
+        title: remaining === 1 ? "1 transaction still needs review" : `${remaining} transactions still need review`,
+        body: "Tap to review",
+        url: "/imports",
+        tag: GMAIL_SYNC_PUSH_TAG,
+      });
+    }
+  } catch (err) {
+    console.error(`[gmail-sync] review-progress push failed for user ${userId}:`, err instanceof Error ? err.message : err);
+  }
 }

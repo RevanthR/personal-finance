@@ -74,9 +74,28 @@ async function networkFirst(cacheName, request) {
 // Push notifications
 self.addEventListener("push", (event) => {
   const data = event.data?.json() ?? {};
+
+  // A "close" push carries no visible notification of its own — it's sent
+  // when the thing an earlier notification was about (review a synced
+  // transaction, pay a due bill) got handled from a DIFFERENT device, so
+  // this device's still-showing notification needs to go away too. Same
+  // `tag` as whatever it's closing (see PushPayload in src/lib/push.ts).
+  if (data.type === "close" && data.tag) {
+    event.waitUntil(
+      self.registration.getNotifications({ tag: data.tag }).then((notifications) => {
+        for (const n of notifications) n.close();
+      })
+    );
+    return;
+  }
+
   event.waitUntil(
     self.registration.showNotification(data.title ?? "Artha", {
       body: data.body ?? "You have a pending payment",
+      // Same tag as a previous notification replaces it in place (on THIS
+      // device) instead of stacking a second, now-stale one — e.g. a
+      // gmail-sync count that changed after reviewing some of the batch.
+      ...(data.tag && { tag: data.tag }),
       data: { url: data.url ?? "/dashboard" },
       actions: [{ action: "open", title: "View" }],
     })

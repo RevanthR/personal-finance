@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import webpush from "web-push";
-import { initVapid } from "@/lib/push";
+import { initVapid, PAYMENT_REMINDER_PUSH_TAG } from "@/lib/push";
 import { actualDueDate } from "@/lib/finance-utils";
 import { prevMonthYear } from "@/lib/utils";
 
@@ -89,6 +89,9 @@ export async function GET(req: NextRequest) {
         ? `Due on the ${dueDay}th, mark it paid once done`
         : `${names.slice(0, 2).join(", ")}${names.length > 2 ? ` +${names.length - 2} more` : ""}, due on the ${dueDay}th`,
       url: "/dashboard",
+      // Marking any of today's due bills paid (src/app/api/months/[monthId]/
+      // entries/route.ts) closes this on every device — same tag.
+      tag: PAYMENT_REMINDER_PUSH_TAG,
     });
 
     for (const sub of userSubs) {

@@ -6,6 +6,7 @@ import { computePaymentUpdate } from "@/lib/entry-payment";
 import { effectivePaid } from "@/lib/finance-utils";
 import { getCurrentMonthYear } from "@/lib/utils";
 import { settleCarriedDebtBackward, applyBillPaymentToCard, reverseBillPaymentFromCard } from "@/lib/cc-effects";
+import { closePushForUser, PAYMENT_REMINDER_PUSH_TAG } from "@/lib/push";
 
 // PATCH /api/months/[monthId]/entries — update a single entry (mark paid, change amount)
 export async function PATCH(
@@ -191,6 +192,14 @@ export async function PATCH(
 
     return updatedEntry;
   });
+
+  // Marking anything paid clears the "payment due" reminder on every
+  // device, not just this one — it's a single per-user banner (possibly
+  // covering several bills), so paying any one of them means it's done its
+  // job rather than trying to track exactly which entry it was about.
+  if (updated.isPaid && !entry.isPaid) {
+    await closePushForUser(session.user.id, PAYMENT_REMINDER_PUSH_TAG).catch(() => {});
+  }
 
   return NextResponse.json(updated);
 }

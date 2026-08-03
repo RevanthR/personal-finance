@@ -9,6 +9,8 @@ import { rememberMerchantCategory } from "@/lib/merchant-memory";
 import { computePaymentUpdate } from "@/lib/entry-payment";
 import { isBillPending } from "@/lib/finance-utils";
 import { getCurrentMonthYear } from "@/lib/utils";
+import { notifyReviewProgress } from "@/lib/gmail/sync";
+import { closePushForUser, PAYMENT_REMINDER_PUSH_TAG } from "@/lib/push";
 import type { Category } from "@/generated/prisma/client";
 
 // PATCH /api/gmail/parsed/[id] — approve (creates the real AdHocItem via
@@ -38,6 +40,7 @@ export async function PATCH(
 
   if (body.action === "reject") {
     const item = await db.parsedTransaction.update({ where: { id }, data: { status: "REJECTED" } });
+    await notifyReviewProgress(userId);
     return NextResponse.json({ item });
   }
 
@@ -47,7 +50,7 @@ export async function PATCH(
     const entry = await db.monthlyEntry.findFirst({
       where: { id: body.entryId, month: { userId } },
       select: {
-        id: true, templateId: true, amount: true, billedAmount: true, carriedInAmount: true, cashbackAmount: true, paidAmount: true,
+        id: true, templateId: true, amount: true, billedAmount: true, carriedInAmount: true, cashbackAmount: true, paidAmount: true, isPaid: true,
         month: { select: { id: true, month: true, year: true } },
         template: { select: { category: true, statementDay: true } },
       },
@@ -103,6 +106,13 @@ export async function PATCH(
       return updatedEntry;
     });
 
+    await notifyReviewProgress(userId);
+    // Same reasoning as the manual pay dialog — settling a bill via a
+    // matched Gmail transaction is still "you paid something", so the
+    // payment-due reminder banner is just as stale on every device.
+    if (updatedEntry.isPaid && !entry.isPaid) {
+      await closePushForUser(userId, PAYMENT_REMINDER_PUSH_TAG).catch(() => {});
+    }
     return NextResponse.json({ item: null, updatedEntry });
   }
 
@@ -183,6 +193,7 @@ export async function PATCH(
         await tx.parsedTransaction.update({ where: { id }, data: { status: "APPROVED" } });
         return { item, updatedEntry };
       });
+      await notifyReviewProgress(userId);
       return NextResponse.json({ item, updatedEntry });
     }
 
@@ -213,6 +224,7 @@ export async function PATCH(
       return { item, updatedEntry };
     });
     await rememberMerchantCategory(userId, finalName, { category: resolvedCategory, customCategoryId: customCat?.id ?? null, subCategory });
+    await notifyReviewProgress(userId);
 
     return NextResponse.json({ item, updatedEntry });
   }
@@ -234,6 +246,7 @@ export async function PATCH(
       await tx.parsedTransaction.update({ where: { id }, data: { status: "APPROVED" } });
       return item;
     });
+    await notifyReviewProgress(userId);
     return NextResponse.json({ item, updatedEntry: null });
   }
 
@@ -262,6 +275,7 @@ export async function PATCH(
     return item;
   });
   await rememberMerchantCategory(userId, finalName, { category: resolvedCategory, customCategoryId: customCat?.id ?? null, subCategory });
+  await notifyReviewProgress(userId);
 
   return NextResponse.json({ item, updatedEntry: null });
 }
