@@ -502,7 +502,7 @@ export async function notifyReviewProgress(userId: string): Promise<void> {
   try {
     const remaining = await db.parsedTransaction.count({ where: { userId, status: "PENDING" } });
     if (remaining === 0) {
-      await closePushForUser(userId, GMAIL_SYNC_PUSH_TAG);
+      await closePushForUser(userId, GMAIL_SYNC_PUSH_TAG, "/imports");
     } else {
       await sendPushToUser(userId, {
         title: remaining === 1 ? "1 transaction still needs review" : `${remaining} transactions still need review`,

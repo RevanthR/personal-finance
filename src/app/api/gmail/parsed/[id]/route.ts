@@ -111,7 +111,7 @@ export async function PATCH(
     // matched Gmail transaction is still "you paid something", so the
     // payment-due reminder banner is just as stale on every device.
     if (updatedEntry.isPaid && !entry.isPaid) {
-      await closePushForUser(userId, PAYMENT_REMINDER_PUSH_TAG).catch(() => {});
+      await closePushForUser(userId, PAYMENT_REMINDER_PUSH_TAG, "/dashboard").catch(() => {});
     }
     return NextResponse.json({ item: null, updatedEntry });
   }

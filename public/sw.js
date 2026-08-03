@@ -78,12 +78,16 @@ self.addEventListener("push", (event) => {
   // A "close" push carries no visible notification of its own — it's sent
   // when the thing an earlier notification was about (review a synced
   // transaction, pay a due bill) got handled from a DIFFERENT device, so
-  // this device's still-showing notification needs to go away too. Same
-  // `tag` as whatever it's closing (see PushPayload in src/lib/push.ts).
-  if (data.type === "close" && data.tag) {
+  // this device's still-showing notification needs to go away too. Matches
+  // by `tag` (see PushPayload in src/lib/push.ts) OR by the notification's
+  // own target url — a notification shown before this tagging existed has
+  // no tag to match, but still carries the same url, so it's still reachable.
+  if (data.type === "close" && (data.tag || data.url)) {
     event.waitUntil(
-      self.registration.getNotifications({ tag: data.tag }).then((notifications) => {
-        for (const n of notifications) n.close();
+      self.registration.getNotifications().then((notifications) => {
+        for (const n of notifications) {
+          if ((data.tag && n.tag === data.tag) || (data.url && n.data?.url === data.url)) n.close();
+        }
       })
     );
     return;

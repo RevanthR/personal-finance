@@ -17,12 +17,14 @@ export function initVapid() {
 // A "notify" payload shows a banner — `tag` (optional) makes a later
 // notification with the same tag replace this one in place on whichever
 // device receives it, instead of stacking a second, stale copy. A "close"
-// payload shows nothing; the service worker just closes any existing
-// notification with that tag — used when the thing a notification was
-// about got handled on a different device (see public/sw.js).
+// payload shows nothing; the service worker closes any existing
+// notification matching `tag` OR `url` — used when the thing a
+// notification was about got handled on a different device (see
+// public/sw.js). `url` matters as a fallback because a notification shown
+// before tagging existed has no tag to match, only its original url.
 export type PushPayload =
   | { type?: "notify"; title: string; body: string; url?: string; tag?: string }
-  | { type: "close"; tag: string };
+  | { type: "close"; tag?: string; url?: string };
 
 // Sends one payload to every device a user has push-subscribed on, cleaning
 // up subscriptions that have expired or been revoked. Best-effort: a
@@ -49,7 +51,9 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
 
 // Dismiss a notification across every device the user has, not just
 // whichever one they're acting on — e.g. reviewing a synced transaction on
-// the laptop shouldn't leave the same banner sitting on the phone.
-export async function closePushForUser(userId: string, tag: string): Promise<number> {
-  return sendPushToUser(userId, { type: "close", tag });
+// the laptop shouldn't leave the same banner sitting on the phone. Pass
+// `url` too when closing a tag that's only just started being set (catches
+// anything already showing from before the tag existed).
+export async function closePushForUser(userId: string, tag: string, url?: string): Promise<number> {
+  return sendPushToUser(userId, { type: "close", tag, url });
 }

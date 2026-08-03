@@ -198,7 +198,7 @@ export async function PATCH(
   // covering several bills), so paying any one of them means it's done its
   // job rather than trying to track exactly which entry it was about.
   if (updated.isPaid && !entry.isPaid) {
-    await closePushForUser(session.user.id, PAYMENT_REMINDER_PUSH_TAG).catch(() => {});
+    await closePushForUser(session.user.id, PAYMENT_REMINDER_PUSH_TAG, "/dashboard").catch(() => {});
   }
 
   return NextResponse.json(updated);
