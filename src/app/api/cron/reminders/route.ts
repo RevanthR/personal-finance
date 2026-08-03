@@ -2,6 +2,8 @@ import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import webpush from "web-push";
 import { initVapid } from "@/lib/push";
+import { actualDueDate } from "@/lib/finance-utils";
+import { prevMonthYear } from "@/lib/utils";
 
 // GET /api/cron/reminders — called daily by Vercel Cron
 export async function GET(req: NextRequest) {
@@ -14,28 +16,43 @@ export async function GET(req: NextRequest) {
   initVapid();
 
   const now = new Date();
-  const todayDay = now.getDate();
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
-  const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
-  const rawTarget = todayDay + 3;
+  const target = new Date(now);
+  target.setDate(target.getDate() + 3);
+  const targetDay = target.getDate();
+  const targetMonth = target.getMonth() + 1;
+  const targetYear = target.getFullYear();
 
-  // If rawTarget overflows (e.g. July 30 + 3 = 33), the due date is in the next month.
-  // We still match against entries in the CURRENT month since the entry belongs here;
-  // only the due date itself falls in the next month (common for CC bills).
-  const targetDay = rawTarget > daysInMonth ? rawTarget - daysInMonth : rawTarget;
+  // A Payment Due Date is just a day-of-month number with no month
+  // attached — when it's earlier than the Bill Generation Date, it
+  // actually falls in the month AFTER whichever month the entry itself
+  // belongs to (bill generates the 15th, due the 5th — that's next
+  // month's 5th). So the entry that's really due in 3 days could belong to
+  // THIS month or LAST month, depending on where in the month today is —
+  // scan both and let actualDueDate (the same rule the dashboard's own
+  // card display and the overdue flag use) decide which ones actually
+  // match the target date exactly.
+  const { month: prevMonth, year: prevYear } = prevMonthYear(currentMonth, currentYear);
 
-  // Find all unpaid entries due in 3 days across all users who have push subscriptions
-  const entries = await db.monthlyEntry.findMany({
+  const candidates = await db.monthlyEntry.findMany({
     where: {
       isPaid: false,
-      month: { month: currentMonth, year: currentYear },
-      template: { dueDateDay: targetDay },
+      template: { dueDateDay: { not: null } },
+      OR: [
+        { month: { month: currentMonth, year: currentYear } },
+        { month: { month: prevMonth, year: prevYear } },
+      ],
     },
     include: {
-      template: { select: { name: true, dueDateDay: true } },
-      month: { select: { userId: true } },
+      template: { select: { name: true, dueDateDay: true, statementDay: true } },
+      month: { select: { userId: true, month: true, year: true } },
     },
+  });
+
+  const entries = candidates.filter(e => {
+    const due = actualDueDate(e.month.month, e.month.year, e.template.statementDay, e.template.dueDateDay!);
+    return due.year === targetYear && due.month === targetMonth && due.day === targetDay;
   });
 
   if (entries.length === 0) return NextResponse.json({ sent: 0, skipped: "no due entries" });

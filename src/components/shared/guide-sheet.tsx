@@ -36,7 +36,7 @@ const sections = [
     lines: [
       "Set up recurring items that auto-fill every month: salary, EMIs, rent, credit card bills, chit contributions.",
       "Add your income sources first so the app can calculate your monthly leftover correctly.",
-      "Set a due date on any item so the Dashboard can flag it when it is overdue.",
+      "Set a Payment Due Date on any item so the Dashboard can flag it when it is overdue.",
       "Yearly items like insurance only appear in the month they are due.",
       'Tap "Foreclose" on a loan once it is fully paid. It will stop showing up in future months.',
     ],

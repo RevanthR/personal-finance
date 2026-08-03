@@ -5,7 +5,7 @@ import { flushSync } from "react-dom";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { formatCurrency, formatMonthYear, getCategoryDisplay, getCategoryColor, getCategoryIcon, MONTHS, pendingAmountKicks, ordinal, EXPENSE_CATEGORIES } from "@/lib/utils";
-import { netAmount as _net, effectivePaid as _effectivePaid, isBillPending as _isBillPending, isPreCloseDate, computeMetrics, computeMonthIncome, computeCashBalance } from "@/lib/finance-utils";
+import { netAmount as _net, effectivePaid as _effectivePaid, isBillPending as _isBillPending, isPreCloseDate, isPastDueDate, isDueDateNextMonth, computeMetrics, computeMonthIncome, computeCashBalance } from "@/lib/finance-utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -196,7 +196,7 @@ function CCCardBlock({
   const statementDay = entry.template.statementDay;
   const nextBillTotal = entry.statementAmount ?? 0;
   const billedTotal = entry.billedAmount ?? entry.amount;
-  const isDueNextMonth = statementDay != null && entry.template.dueDateDay != null && entry.template.dueDateDay < statementDay;
+  const isDueNextMonth = isDueDateNextMonth(statementDay, entry.template.dueDateDay);
   const ccColor = getCategoryColor(entry.template.category, entry.template.customCategory);
   const ccIcon  = getCategoryIcon(entry.template.category, entry.template.customCategory);
   // Single shared tick instance — used by both the collapsed header's tick
@@ -295,7 +295,7 @@ function CCCardBlock({
         {(statementDay || rightStatus) && (
           <div className="flex items-center justify-between mt-1 pl-11">
             <span className="text-xs text-muted-foreground">
-              {statementDay ? `closes ${ordinal(statementDay)}` : ""}
+              {statementDay ? `generates ${ordinal(statementDay)}` : ""}
             </span>
             {rightStatus && (
               <span className={cn("text-xs", rightStatus.warn ? "text-warning" : "text-muted-foreground")}>
@@ -714,14 +714,17 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     const isCurrentMonth = currentMonth?.month === todayMonth && currentMonth?.year === todayYear;
     if (!isCurrentMonth) return [];
     const today = new Date().getDate();
+    // Payment Due Date can wrap into next month relative to this entry's
+    // own month (Bill Generation Date > Payment Due Date) — see
+    // isPastDueDate in finance-utils.ts.
     return entries
       .filter(e => !e.isPaid && e.template.dueDateDay != null && !isBillPending(e, isCurrentMonth, today))
       .map(e => ({
         id: e.id,
         name: e.template.name,
-        amount: net(e) - (e.paidAmount ?? 0),
+        amount: net(e) - _effectivePaid(e),
         dueDay: e.template.dueDateDay!,
-        overdue: e.template.dueDateDay! < today,
+        overdue: isPastDueDate(todayMonth, todayYear, e.template.statementDay, e.template.dueDateDay!, todayMonth, todayYear, today),
         category: e.template.category,
         customCategory: e.template.customCategory,
       }))

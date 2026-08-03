@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { isTemplateActiveInMonth } from "@/lib/loan-utils";
 import { chitMonthlyAmount } from "@/lib/entry-amount";
-import { computeMonthIncome, effectiveEntryAmount, cashEntryAmount, isBillPending, netAmount, effectivePaid, type EntryBase } from "@/lib/finance-utils";
+import { computeMonthIncome, effectiveEntryAmount, cashEntryAmount, isBillPending, isPastDueDate, netAmount, effectivePaid, type EntryBase } from "@/lib/finance-utils";
 import { YearOverviewClient, type MonthData } from "@/components/months/year-overview-client";
 import { CATEGORY_LABELS, CATEGORY_COLORS, MONTHS, pendingAmountKicks, getCurrentMonthYear, prevMonthYear, nextMonthYear } from "@/lib/utils";
 import type { AnalyticsData } from "@/components/months/stats-breakdown";
@@ -298,14 +298,19 @@ export default async function MonthsPage() {
       .sort((a, b) => b[1] - a[1])
       .map(([name, amount]) => ({ name, amount }));
 
-    // Upcoming unpaid entries with due dates (exclude pending CC bills)
+    // Upcoming unpaid entries with due dates (exclude pending CC bills).
+    // Payment Due Date can wrap into next month relative to this entry's
+    // own month (Bill Generation Date > Payment Due Date — see
+    // isPastDueDate) — a card that generates the 15th and is due the 5th
+    // isn't overdue for the whole back half of this month, only after that
+    // 5th actually arrives, next month.
     const upcomingPayments = cm.entries
       .filter(e => !e.isPaid && e.template.dueDateDay != null && !isBillPending(e, true, todayDay))
       .map(e => ({
         name: e.template.name,
         amount: netAmount(e) - effectivePaid(e),
         dueDay: e.template.dueDateDay!,
-        overdue: e.template.dueDateDay! < todayDay,
+        overdue: isPastDueDate(cm.month, cm.year, e.template.statementDay, e.template.dueDateDay!, todayMonth, todayYear, todayDay),
       }))
       .sort((a, b) => a.dueDay - b.dueDay)
       .slice(0, 6);

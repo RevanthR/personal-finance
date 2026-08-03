@@ -487,7 +487,7 @@ export function TemplatesClient({
                                     : `${fmt(t.amount)}/${t.frequency === "YEARLY" ? "year" : "month"}`}
                               {!isClosed && t.category === "CREDIT_CARD" && (t.statementDay || t.dueDateDay) && (
                                 <span className="ml-1.5 text-muted-foreground">
-                                  {t.statementDay ? `closes ${t.statementDay}th` : ""}
+                                  {t.statementDay ? `generates ${t.statementDay}th` : ""}
                                   {t.dueDateDay ? ` · due ${t.dueDateDay}th` : ""}
                                 </span>
                               )}
@@ -997,7 +997,7 @@ function TemplateDialog({
 
             {!isIncome && (
               <div>
-                <Label className="text-xs">Due date (day of month, optional)</Label>
+                <Label className="text-xs">Payment Due Date (day of month, optional)</Label>
                 <Input type="number" min="1" max="31" value={dueDateDay}
                   onChange={(e) => setDueDateDay(e.target.value)} placeholder="e.g. 21" className="mt-1" />
               </div>
@@ -1005,12 +1005,12 @@ function TemplateDialog({
 
             {isCC && (
               <div>
-                <Label className="text-xs">Billing cut-off day (optional)</Label>
+                <Label className="text-xs">Bill Generation Date (optional)</Label>
                 <Input type="number" min="1" max="31" value={statementDay}
                   onChange={(e) => setStatementDay(e.target.value)} placeholder="e.g. 15" className="mt-1" />
                 {statementDay && (
                   <p className="text-xs text-muted-foreground mt-1">
-                    Charges on/before {statementDay}th go into this month&apos;s bill; charges after go into next month&apos;s.
+                    Bill generates on the {statementDay}th — charges before this land in this bill, charges after go into next month&apos;s.
                   </p>
                 )}
               </div>

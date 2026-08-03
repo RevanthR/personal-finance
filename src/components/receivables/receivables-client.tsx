@@ -163,11 +163,11 @@ function AddCardDialog({ open, onOpenChange, onAdd }: {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs">Statement closes (day)</Label>
+              <Label className="text-xs">Bill Generation Date</Label>
               <Input type="number" min={1} max={31} value={stmtDay} onChange={e => setStmtDay(e.target.value)} placeholder="15" className="mt-1" />
             </div>
             <div>
-              <Label className="text-xs">Payment due (day)</Label>
+              <Label className="text-xs">Payment Due Date</Label>
               <Input type="number" min={1} max={31} value={dueDay} onChange={e => setDueDay(e.target.value)} placeholder="5" className="mt-1" />
             </div>
           </div>
@@ -254,11 +254,11 @@ function EditCardDialog({ open, onOpenChange, card, onSave }: {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs">Statement closes (day)</Label>
+              <Label className="text-xs">Bill Generation Date</Label>
               <Input type="number" min={1} max={31} value={stmtDay} onChange={e => setStmtDay(e.target.value)} placeholder="15" className="mt-1" />
             </div>
             <div>
-              <Label className="text-xs">Payment due (day)</Label>
+              <Label className="text-xs">Payment Due Date</Label>
               <Input type="number" min={1} max={31} value={dueDay} onChange={e => setDueDay(e.target.value)} placeholder="5" className="mt-1" />
             </div>
           </div>
@@ -317,7 +317,7 @@ function CCCardTile({ card, fmt, onEntryUpdate, onDelete, onMetaUpdate }: {
 
   const dueLabel = card.template.statementDay || card.template.dueDateDay
     ? [
-        card.template.statementDay && `Closes ${card.template.statementDay}th`,
+        card.template.statementDay && `Generates ${card.template.statementDay}th`,
         card.template.dueDateDay && `Due ${card.template.dueDateDay}th`,
       ].filter(Boolean).join(" · ")
     : "-";

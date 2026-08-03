@@ -129,7 +129,7 @@ export function AddChitDialog({ open, onOpenChange, onAdd }: AddChitDialogProps)
           </div>
 
           <div>
-            <Label className="text-xs">Due date (day of month)</Label>
+            <Label className="text-xs">Payment Due Date (day of month)</Label>
             <Input type="number" value={dueDateDay} onChange={e => setDueDateDay(e.target.value)} placeholder="e.g. 15" className="mt-1" />
           </div>
 

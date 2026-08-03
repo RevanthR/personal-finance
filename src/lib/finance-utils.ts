@@ -4,7 +4,7 @@
  * No React imports — safe to use in any context.
  */
 
-import { pendingAmountKicks } from "./utils";
+import { pendingAmountKicks, nextMonthYear } from "./utils";
 
 export interface EntryBase {
   amount: number;
@@ -111,6 +111,60 @@ export function isBillPending(
  */
 export function isPreCloseDate(date: Date, statementDay: number | null): boolean {
   return statementDay !== null && date.getDate() < statementDay;
+}
+
+/**
+ * True when a Payment Due Date structurally falls in the month AFTER the
+ * Bill Generation Date's own month — a card that generates the 15th and
+ * is due the 5th is due NEXT month's 5th, not this month's (which would
+ * already be long past by the time the bill even closes). The one rule
+ * both functions below build on, and the only thing the dashboard's own
+ * card display needs (it already knows which month it's showing) — the
+ * fuller actualDueDate/isPastDueDate below exist for callers that only
+ * have a bare day number and need the real month/year worked out too.
+ */
+export function isDueDateNextMonth(
+  billGenerationDay: number | null,
+  paymentDueDay: number | null,
+): boolean {
+  return billGenerationDay != null && paymentDueDay != null && paymentDueDay < billGenerationDay;
+}
+
+/**
+ * The real calendar month/year a bill's Payment Due Date falls in, given
+ * the month its own entry belongs to. Single source of truth for this —
+ * previously the overdue flag (months/page.tsx, dashboard-client.tsx) and
+ * the reminder cron compared the raw day number against today with no
+ * month awareness at all, so a wrapping due date (Bill Generation Date >
+ * Payment Due Date, e.g. generates 15th/due 5th) read as overdue for most
+ * of the month and could reminder-notify for the wrong month's bill entirely.
+ */
+export function actualDueDate(
+  entryMonth: number,
+  entryYear: number,
+  billGenerationDay: number | null,
+  paymentDueDay: number,
+): { month: number; year: number; day: number } {
+  const { month, year } = isDueDateNextMonth(billGenerationDay, paymentDueDay)
+    ? nextMonthYear(entryMonth, entryYear)
+    : { month: entryMonth, year: entryYear };
+  return { month, year, day: paymentDueDay };
+}
+
+/** True when today is strictly after this bill's real (month-aware) Payment Due Date. */
+export function isPastDueDate(
+  entryMonth: number,
+  entryYear: number,
+  billGenerationDay: number | null,
+  paymentDueDay: number,
+  todayMonth: number,
+  todayYear: number,
+  todayDay: number,
+): boolean {
+  const due = actualDueDate(entryMonth, entryYear, billGenerationDay, paymentDueDay);
+  if (todayYear !== due.year) return todayYear > due.year;
+  if (todayMonth !== due.month) return todayMonth > due.month;
+  return todayDay > due.day;
 }
 
 export interface IncomeTemplateForCalc {
