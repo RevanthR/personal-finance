@@ -26,6 +26,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { TabsUnderline } from "@/components/ui/tabs-underline";
 import { CategoryBadge } from "@/components/ui/category-badge";
 import { PaymentDialog } from "./payment-dialog";
+import { CardStatementDialog, type CardTransaction } from "./card-statement-dialog";
 import { usePaymentTick } from "@/hooks/use-payment-tick";
 import { DashboardTour } from "@/components/coach/dashboard-tour";
 import { GmailReconnectBanner, type GmailStatus } from "./gmail-reconnect-banner";
@@ -179,7 +180,7 @@ function isBillPending(e: EntryWithTemplate, isCurrent: boolean, day: number)   
 // transaction list, only whether next cycle already has spend against it
 // (hasPostCloseSpend) to guard the "Clear" action.
 function CCCardBlock({
-  entry, hasPostCloseSpend, nextMonthName, isBillPending, onUpdate, onClearStatement, collapsed, onToggle,
+  entry, hasPostCloseSpend, nextMonthName, isBillPending, onUpdate, onClearStatement, collapsed, onToggle, transactions,
 }: {
   entry: EntryWithTemplate;
   hasPostCloseSpend: boolean;
@@ -189,9 +190,11 @@ function CCCardBlock({
   onClearStatement: (entryId: string) => Promise<void>;
   collapsed: boolean;
   onToggle: () => void;
+  transactions: CardTransaction[];
 }) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
+  const [showStatement, setShowStatement] = useState(false);
   const [payingCarried, setPayingCarried] = useState(false);
   const statementDay = entry.template.statementDay;
   const nextBillTotal = entry.statementAmount ?? 0;
@@ -369,8 +372,28 @@ function CCCardBlock({
               </div>
             </div>
           )}
+
+          {/* Itemized transactions behind both numbers above — this
+              cycle's own bill vs. what's already landed for next cycle. */}
+          <div className="border-t border-border px-3 py-2">
+            <button
+              type="button"
+              onClick={() => setShowStatement(true)}
+              className="w-full text-xs font-medium text-primary text-center py-1"
+            >
+              View statement →
+            </button>
+          </div>
         </>
       )}
+
+      <CardStatementDialog
+        open={showStatement}
+        onOpenChange={setShowStatement}
+        cardName={entry.template.name}
+        statementDay={statementDay}
+        transactions={transactions}
+      />
 
       {/* Owned here (not by EntryRow) so it works from the collapsed tick too */}
       <PaymentDialog tick={tick} entryName={entry.template.name} amount={entry.amount} fmt={fmt} />
@@ -1374,6 +1397,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             t.type === "EXPENSE" && t.ccTemplateId === entry.templateId &&
             !isPreCloseDate(new Date(t.date), statementDay)
           );
+          const cardTransactions = adHocItems.filter(t => t.type === "EXPENSE" && t.ccTemplateId === entry.templateId);
           return (
             <CCCardBlock
               key={entry.id}
@@ -1385,6 +1409,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
               onClearStatement={handleClearStatement}
               collapsed={isCCCardCollapsed(entry.id)}
               onToggle={() => toggleCCCard(entry.id)}
+              transactions={cardTransactions}
             />
           );
         };
