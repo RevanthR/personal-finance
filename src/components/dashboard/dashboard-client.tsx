@@ -1877,11 +1877,14 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             )}
 
             {adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).length > 0 && (
-              <div className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
-                <span>One-time (this month)</span>
-                <span className="font-semibold">
-                  {fmt(adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0))}
-                </span>
+              <div className="space-y-1.5">
+                <p className="fin-label">One-time</p>
+                <div className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
+                  <span>This month</span>
+                  <span className="font-semibold">
+                    {fmt(adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0))}
+                  </span>
+                </div>
               </div>
             )}
 
