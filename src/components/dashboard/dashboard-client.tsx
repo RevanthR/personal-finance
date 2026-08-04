@@ -5,7 +5,7 @@ import { flushSync } from "react-dom";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { formatCurrency, formatMonthYear, getCategoryDisplay, getCategoryColor, getCategoryIcon, MONTHS, pendingAmountKicks, ordinal, EXPENSE_CATEGORIES } from "@/lib/utils";
-import { netAmount as _net, effectivePaid as _effectivePaid, isBillPending as _isBillPending, isPreCloseDate, isPastDueDate, isDueDateNextMonth, computeMetrics, computeMonthIncome, computeCashBalance } from "@/lib/finance-utils";
+import { netAmount as _net, effectivePaid as _effectivePaid, isBillPending as _isBillPending, isPreCloseDate, isPastDueDate, isDueDateNextMonth, mostRecentCloseDate, computeMetrics, computeMonthIncome, computeCashBalance } from "@/lib/finance-utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -127,7 +127,7 @@ type RecentMonthSummary = {
   salaryIncome: number; freelanceIncome: number; otherIncome: number;
   openingBalance: number;
   entries: { id: string; templateId: string; amount: number; cashbackAmount: number | null }[];
-  adHocItems: { id: string; type: string; amount: number; category: string | null; customCategory: string | null; customCategoryId: string | null; subCategory: string | null; notes: string | null; ccTemplateId: string | null; isCredit?: boolean; date: string }[];
+  adHocItems: { id: string; name: string; type: string; amount: number; category: string | null; customCategory: string | null; customCategoryId: string | null; subCategory: string | null; notes: string | null; ccTemplateId: string | null; isCredit?: boolean; date: string }[];
 };
 
 type EntryWithTemplate = {
@@ -198,6 +198,12 @@ function CCCardBlock({
   const [payingCarried, setPayingCarried] = useState(false);
   const statementDay = entry.template.statementDay;
   const nextBillTotal = entry.statementAmount ?? 0;
+  // The currently-accumulating cycle's real start date, not "next month" —
+  // for a card that generates early in the month (e.g. the 1st), spend
+  // building toward that bill is mostly dated THIS month, not next.
+  const cycleStartLabel = statementDay != null
+    ? `${ordinal(mostRecentCloseDate(statementDay).getDate())} ${format(mostRecentCloseDate(statementDay), "MMM")} – ongoing`
+    : null;
   const billedTotal = entry.billedAmount ?? entry.amount;
   const creditLimit = entry.template.creditLimit ?? null;
   const utilPct = creditLimit ? Math.round((billedTotal / creditLimit) * 100) : null;
@@ -389,7 +395,7 @@ function CCCardBlock({
             <div className="border-t border-border px-3 py-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-muted-foreground">
-                  Building for {nextMonthName}
+                  {cycleStartLabel}
                 </span>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-semibold tracking-tight">{fmt(nextBillTotal)}</span>
@@ -513,6 +519,34 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   // when the underlying data actually changed.
   const entries = useMemo(() => currentMonth?.entries ?? [], [currentMonth]);
   const adHocItems = useMemo(() => currentMonth?.adHocItems ?? [], [currentMonth]);
+
+  // A card's statement popup needs every charge that could still belong to
+  // its currently-outstanding bill or its accumulating one — for a card
+  // whose Bill Generation Date falls early in the month (e.g. the 1st),
+  // that bill's own charges are almost entirely dated in the PREVIOUS
+  // calendar month, not this one. recentMonths already carries adHocItems
+  // for the last 6 months; merge those with this month's live state
+  // (which wins on id collision, since it reflects any just-made edit
+  // recentMonths' cached snapshot wouldn't yet have) instead of only ever
+  // looking at the single month currently being viewed.
+  const ccTransactionsByCard = useMemo(() => {
+    const byId = new Map<string, AdHocItem>();
+    for (const m of recentMonths) {
+      for (const item of m.adHocItems) {
+        if (item.type === "EXPENSE" && item.ccTemplateId) byId.set(item.id, item);
+      }
+    }
+    for (const item of adHocItems) {
+      if (item.type === "EXPENSE" && item.ccTemplateId) byId.set(item.id, item);
+    }
+    const byCard = new Map<string, AdHocItem[]>();
+    for (const item of byId.values()) {
+      const list = byCard.get(item.ccTemplateId!) ?? [];
+      list.push(item);
+      byCard.set(item.ccTemplateId!, list);
+    }
+    return byCard;
+  }, [recentMonths, adHocItems]);
 
   const templateIncome = useMemo(() => {
     const overrides = new Map<string, number>();
@@ -929,7 +963,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     });
     setRecentMonths(prev => prev.map(m =>
       m.id === currentMonth!.id
-        ? { ...m, adHocItems: [{ id: newItem.id, type: newItem.type, amount: newItem.amount, category: newItem.category, customCategory: newItem.customCategory ?? null, customCategoryId: newItem.customCategoryId ?? null, subCategory: newItem.subCategory ?? null, notes: newItem.notes ?? null, ccTemplateId: newItem.ccTemplateId ?? null, date: newItem.date }, ...m.adHocItems] }
+        ? { ...m, adHocItems: [{ id: newItem.id, name: newItem.name, type: newItem.type, amount: newItem.amount, category: newItem.category, customCategory: newItem.customCategory ?? null, customCategoryId: newItem.customCategoryId ?? null, subCategory: newItem.subCategory ?? null, notes: newItem.notes ?? null, ccTemplateId: newItem.ccTemplateId ?? null, date: newItem.date }, ...m.adHocItems] }
         : m
     ));
     toast.success("Added");
@@ -1418,7 +1452,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             t.type === "EXPENSE" && t.ccTemplateId === entry.templateId &&
             !isPreCloseDate(new Date(t.date), statementDay)
           );
-          const cardTransactions = adHocItems.filter(t => t.type === "EXPENSE" && t.ccTemplateId === entry.templateId);
+          const cardTransactions = ccTransactionsByCard.get(entry.templateId) ?? [];
           return (
             <CCCardBlock
               key={entry.id}

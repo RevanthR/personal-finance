@@ -114,6 +114,22 @@ export function isPreCloseDate(date: Date, statementDay: number | null): boolean
 }
 
 /**
+ * The real calendar date of the most recent Bill Generation Date that's
+ * already happened (today counts) — also, by definition, the day the
+ * currently-open cycle started accumulating. Unlike isPreCloseDate (which
+ * only compares a day-of-month within one already-known month), this
+ * resolves an actual month/year, so it can tell "1st" in the card's own
+ * next-cycle label apart from "1st of which month" — and lets a caller
+ * with charges spanning more than one calendar month (e.g. a statement
+ * popup) split them by real chronological cycle membership instead of by
+ * which month each charge happens to be dated in.
+ */
+export function mostRecentCloseDate(statementDay: number, asOf: Date = new Date()): Date {
+  const y = asOf.getFullYear(), m = asOf.getMonth();
+  return asOf.getDate() >= statementDay ? new Date(y, m, statementDay) : new Date(y, m - 1, statementDay);
+}
+
+/**
  * True when a Payment Due Date structurally falls in the month AFTER the
  * Bill Generation Date's own month — a card that generates the 15th and
  * is due the 5th is due NEXT month's 5th, not this month's (which would
