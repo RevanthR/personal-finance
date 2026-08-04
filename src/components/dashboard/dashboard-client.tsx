@@ -350,16 +350,17 @@ function CCCardBlock({
             </div>
           )}
 
-          {/* Next cycle bill total — the purchases building it are browsable
-              in Daily/Regular Spends, tagged with this card's name. */}
+          {/* Next cycle bill total — "building" makes clear this is spend
+              already made that hasn't turned into its own bill yet, not an
+              action or a due date. */}
           {nextBillTotal > 0 && (
             <div className="border-t border-border px-3 py-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-warning tracking-wide">
-                  → {nextMonthName} bill
+                <span className="text-xs font-medium text-muted-foreground">
+                  Building for {nextMonthName}
                 </span>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-warning tracking-tight">{fmt(nextBillTotal)}</span>
+                  <span className="text-xs font-semibold tracking-tight">{fmt(nextBillTotal)}</span>
                   {!hasPostCloseSpend && (
                     <button
                       onClick={() => onClearStatement(entry.id)}
@@ -372,19 +373,23 @@ function CCCardBlock({
               </div>
             </div>
           )}
-
-          {/* Itemized transactions behind both numbers above — this
-              cycle's own bill vs. what's already landed for next cycle. */}
-          <div className="border-t border-border px-3 py-2">
-            <button
-              type="button"
-              onClick={() => setShowStatement(true)}
-              className="w-full text-xs font-medium text-primary text-center py-1"
-            >
-              View statement →
-            </button>
-          </div>
         </>
+      )}
+
+      {/* Itemized transactions behind this card's numbers — independent of
+          collapsed/expanded state (previously nested inside it, so a fully
+          paid card with nothing currently building had no way to expand at
+          all and never got a chance to show this). */}
+      {transactions.length > 0 && (
+        <div className="border-t border-border px-3 py-2">
+          <button
+            type="button"
+            onClick={() => setShowStatement(true)}
+            className="w-full text-xs font-medium text-primary text-center py-1"
+          >
+            View statement →
+          </button>
+        </div>
       )}
 
       <CardStatementDialog
