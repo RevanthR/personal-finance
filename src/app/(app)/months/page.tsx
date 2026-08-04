@@ -300,15 +300,26 @@ export default async function MonthsPage() {
       .sort((a, b) => b[1] - a[1])
       .map(([name, amount]) => ({ name, amount }));
 
-    // Which card carried the most spend this month
+    // Which card was actually swiped most this month — straight from the
+    // underlying transactions (same source as ccSubcatBreakdown above),
+    // not the statement-cycle amount/billedAmount split. entryExpense
+    // reports 0 for a card whose statement hasn't closed yet (correct for
+    // Expenditure, which shouldn't count an unclosed bill as committed
+    // spend), which made a heavily-used-but-not-yet-closed card show 0%
+    // usage while whichever card happened to already be closed looked like
+    // 100% — "usage" means real spend, not billing-cycle status.
+    const cardNameById = new Map(
+      cm.entries.filter(e => e.template.category === "CREDIT_CARD").map(e => [e.templateId, e.template.name])
+    );
     const cardMap = new Map<string, number>();
-    for (const e of cm.entries) {
-      if (e.template.category !== "CREDIT_CARD") continue;
-      const amt = entryExpense(e, true);
-      if (amt <= 0) continue;
-      cardMap.set(e.template.name, (cardMap.get(e.template.name) ?? 0) + amt);
+    for (const a of cm.adHocItems) {
+      if (a.type === "EXPENSE" && a.ccTemplateId) {
+        const name = cardNameById.get(a.ccTemplateId) ?? "Card";
+        cardMap.set(name, (cardMap.get(name) ?? 0) + (a.isCredit ? -a.amount : a.amount));
+      }
     }
     const cardUsage = [...cardMap.entries()]
+      .filter(([, amount]) => amount > 0)
       .sort((a, b) => b[1] - a[1])
       .map(([name, amount]) => ({ name, amount }));
 
