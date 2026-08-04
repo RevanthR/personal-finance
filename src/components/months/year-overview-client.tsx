@@ -34,14 +34,17 @@ function ordinal(n: number) {
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
-function RankedList({ items, total }: { items: { name: string; value: number; color?: string }[]; total: number }) {
+function RankedList({ items, total }: { items: { name: string; value: number; color?: string; pctOverride?: number }[]; total: number }) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const max = items[0]?.value ?? 1;
   return (
     <div className="space-y-2">
       {items.map(item => {
-        const pct = total > 0 ? Math.round((item.value / total) * 100) : 0;
+        // pctOverride (e.g. utilization against a card's own credit limit)
+        // takes priority over "share of this list's total" when present.
+        const pct = item.pctOverride ?? (total > 0 ? Math.round((item.value / total) * 100) : 0);
+        const barPct = item.pctOverride != null ? Math.min(100, item.pctOverride) : (item.value / max) * 100;
         return (
           <div key={item.name}>
             <div className="flex items-center justify-between mb-0.5">
@@ -55,7 +58,13 @@ function RankedList({ items, total }: { items: { name: string; value: number; co
               </div>
             </div>
             <div className="h-1 rounded-full bg-muted overflow-hidden">
-              <div className="h-full rounded-full bg-primary/60" style={{ width: `${(item.value / max) * 100}%` }} />
+              <div
+                className={cn(
+                  "h-full rounded-full",
+                  item.pctOverride != null && item.pctOverride >= 90 ? "bg-negative" : item.pctOverride != null && item.pctOverride >= 70 ? "bg-warning" : "bg-primary/60"
+                )}
+                style={{ width: `${barPct}%` }}
+              />
             </div>
           </div>
         );
@@ -98,7 +107,7 @@ type PastFY = {
 type InsightData = {
   categoryBreakdown: { key: string; name: string; value: number; color: string }[];
   ccSubcatBreakdown: { name: string; amount: number }[];
-  cardUsage: { name: string; amount: number }[];
+  cardUsage: { name: string; amount: number; creditLimit: number | null }[];
   savingsRate: number;
   totalIncome: number;
   totalExpenses: number;
@@ -378,7 +387,14 @@ export function YearOverviewClient({
                   <CardContent className="p-3">
                     <p className="text-xs font-semibold mb-2.5">Card usage</p>
                     <RankedList
-                      items={currentMonthInsights.cardUsage.map(i => ({ name: i.name, value: i.amount }))}
+                      items={currentMonthInsights.cardUsage.map(i => ({
+                        name: i.name,
+                        value: i.amount,
+                        // % of the card's own credit limit when one's set in
+                        // Vault, so this reads as "how maxed out is this
+                        // card" — not just "share of this month's CC spend".
+                        pctOverride: i.creditLimit ? Math.round((i.amount / i.creditLimit) * 100) : undefined,
+                      }))}
                       total={currentMonthInsights.cardUsage.reduce((s, i) => s + i.amount, 0)}
                     />
                   </CardContent>

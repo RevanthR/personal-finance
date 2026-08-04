@@ -248,7 +248,7 @@ export default async function MonthsPage() {
   type InsightData = {
     categoryBreakdown: { key: string; name: string; value: number; color: string }[];
     ccSubcatBreakdown: { name: string; amount: number }[];
-    cardUsage: { name: string; amount: number }[];
+    cardUsage: { name: string; amount: number; creditLimit: number | null }[];
     savingsRate: number;
     totalIncome: number;
     totalExpenses: number;
@@ -311,6 +311,9 @@ export default async function MonthsPage() {
     const cardNameById = new Map(
       cm.entries.filter(e => e.template.category === "CREDIT_CARD").map(e => [e.templateId, e.template.name])
     );
+    const cardLimitByName = new Map(
+      cm.entries.filter(e => e.template.category === "CREDIT_CARD").map(e => [e.template.name, e.template.creditLimit ?? null])
+    );
     const cardMap = new Map<string, number>();
     for (const a of cm.adHocItems) {
       if (a.type === "EXPENSE" && a.ccTemplateId) {
@@ -321,7 +324,7 @@ export default async function MonthsPage() {
     const cardUsage = [...cardMap.entries()]
       .filter(([, amount]) => amount > 0)
       .sort((a, b) => b[1] - a[1])
-      .map(([name, amount]) => ({ name, amount }));
+      .map(([name, amount]) => ({ name, amount, creditLimit: cardLimitByName.get(name) ?? null }));
 
     // Upcoming unpaid entries with due dates (exclude pending CC bills).
     // Payment Due Date can wrap into next month relative to this entry's
