@@ -51,8 +51,8 @@ export function CardStatementDialog({ open, onOpenChange, cardName, statementDay
             value={tab}
             onChange={setTab}
             options={[
-              { value: "current", label: "This month's bill", count: current.length },
-              { value: "upcoming", label: "Not yet generated", count: upcoming.length },
+              { value: "current", label: "Generated Bill", count: current.length },
+              { value: "upcoming", label: "Accumulating", count: upcoming.length },
             ]}
           />
         </div>

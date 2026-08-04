@@ -15,7 +15,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Plus, Pencil, ChevronDown, Trash2, ChevronLeft, ChevronRight, Check, Calendar, Loader2, RotateCcw,
+  Plus, Pencil, ChevronDown, Trash2, ChevronLeft, ChevronRight, Check, Calendar, Loader2, RotateCcw, Receipt,
 } from "lucide-react";
 import { toast } from "sonner";
 import { EntryRow } from "./entry-row";
@@ -285,6 +285,16 @@ function CCCardBlock({
           </button>
           <CategoryBadge icon={ccIcon} color={ccColor} size="sm" />
           <span className={cn("text-sm font-semibold truncate flex-1 min-w-0 text-left", tick.isPaid && "text-muted-foreground")}>{entry.template.name}</span>
+          {transactions.length > 0 && (
+            <button
+              type="button"
+              onClick={e => { e.stopPropagation(); setShowStatement(true); }}
+              title="View statement"
+              className="shrink-0 flex items-center justify-center w-7 h-7 -mx-1 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+            >
+              <Receipt className="w-3.5 h-3.5" />
+            </button>
+          )}
           <span className={cn("text-sm font-semibold tabular-nums shrink-0", tick.isPaid && "text-muted-foreground line-through")}>
             {tick.isPartial ? fmt(tick.outstanding) : tick.cashback > 0 && !tick.isPaid ? fmt(tick.netBill) : isBillPending ? fmt(carriedInAmount) : fmt(billedTotal)}
           </span>
@@ -374,22 +384,6 @@ function CCCardBlock({
             </div>
           )}
         </>
-      )}
-
-      {/* Itemized transactions behind this card's numbers — independent of
-          collapsed/expanded state (previously nested inside it, so a fully
-          paid card with nothing currently building had no way to expand at
-          all and never got a chance to show this). */}
-      {transactions.length > 0 && (
-        <div className="border-t border-border px-3 py-2">
-          <button
-            type="button"
-            onClick={() => setShowStatement(true)}
-            className="w-full text-xs font-medium text-primary text-center py-1"
-          >
-            View statement →
-          </button>
-        </div>
       )}
 
       <CardStatementDialog
