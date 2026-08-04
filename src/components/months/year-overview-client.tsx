@@ -98,6 +98,7 @@ type PastFY = {
 type InsightData = {
   categoryBreakdown: { key: string; name: string; value: number; color: string }[];
   ccSubcatBreakdown: { name: string; amount: number }[];
+  cardUsage: { name: string; amount: number }[];
   savingsRate: number;
   totalIncome: number;
   totalExpenses: number;
@@ -367,6 +368,18 @@ export function YearOverviewClient({
                     <RankedList
                       items={currentMonthInsights.ccSubcatBreakdown.map(i => ({ name: i.name, value: i.amount }))}
                       total={currentMonthInsights.ccSubcatBreakdown.reduce((s, i) => s + i.amount, 0)}
+                    />
+                  </CardContent>
+                </Card>
+              )}
+
+              {currentMonthInsights.cardUsage.length > 0 && (
+                <Card>
+                  <CardContent className="p-3">
+                    <p className="text-xs font-semibold mb-2.5">Card usage</p>
+                    <RankedList
+                      items={currentMonthInsights.cardUsage.map(i => ({ name: i.name, value: i.amount }))}
+                      total={currentMonthInsights.cardUsage.reduce((s, i) => s + i.amount, 0)}
                     />
                   </CardContent>
                 </Card>

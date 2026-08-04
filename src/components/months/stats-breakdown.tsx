@@ -115,6 +115,31 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{children}</p>;
 }
 
+// Flat ranked rows with a bar each — used for Card-wise Spend and Top
+// Merchants, both "who/what accounts for the most" questions where the
+// nested expand-to-see-items pattern CategorySection uses would be overkill
+// (there's no further level to drill into).
+function RankedBarList({ items, fmt }: { items: { name: string; total: number; sub?: string }[]; fmt: (v: number) => string }) {
+  if (!items.length) return <p className="text-sm text-muted-foreground">No data yet.</p>;
+  const max = items[0].total;
+  return (
+    <div className="space-y-2.5">
+      {items.map(item => (
+        <div key={item.name}>
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <div className="min-w-0">
+              <p className="text-sm font-medium truncate">{item.name}</p>
+              {item.sub && <p className="text-xs text-muted-foreground">{item.sub}</p>}
+            </div>
+            <span className="text-sm font-semibold tabular-nums shrink-0">{fmt(item.total)}</span>
+          </div>
+          <Bar value={item.total} max={max} color="#2563eb" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
     <div className="rounded-lg border bg-card p-3">
@@ -408,6 +433,11 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
   const recurringPct = data.fyExpenses > 0 ? pct(data.recurringTotal, data.fyExpenses) : 0;
   const essentialPct = pct(data.essentialTotal, data.fyExpenses);
   const lifestylePct = pct(data.lifestyleTotal, data.fyExpenses);
+  // Each card is already its own item under the Credit Card category (a
+  // card's bill is a template, same as any other recurring commitment) —
+  // just re-surfaced as its own ranked section instead of requiring a click
+  // to expand "Credit Card" in the category list to see it.
+  const cardWiseSpend = data.spendByCategory.find(c => c.key === "CREDIT_CARD")?.items ?? [];
 
   if (data.actualMonthCount === 0) {
     return (
@@ -561,6 +591,21 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
 
         {/* ── Right column: commitments ── */}
         <div className="space-y-4">
+
+          {/* Card-wise spend — which card carried the most this year */}
+          {cardWiseSpend.length > 0 && (
+            <div>
+              <SectionTitle>Card-wise spend</SectionTitle>
+              <Card>
+                <CardContent className="p-3 sm:p-4">
+                  <RankedBarList
+                    items={cardWiseSpend.map(c => ({ name: c.name, total: c.total, sub: `${c.months} month${c.months !== 1 ? "s" : ""} · avg ${fmt(Math.round(c.total / c.months))}/mo` }))}
+                    fmt={fmt}
+                  />
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
           {/* Relief timeline — when expenses will drop */}
           {(data.loans.length > 0 || data.chits.some(c => c.remainingMonths > 0)) && (

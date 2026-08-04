@@ -247,6 +247,7 @@ export default async function MonthsPage() {
   type InsightData = {
     categoryBreakdown: { key: string; name: string; value: number; color: string }[];
     ccSubcatBreakdown: { name: string; amount: number }[];
+    cardUsage: { name: string; amount: number }[];
     savingsRate: number;
     totalIncome: number;
     totalExpenses: number;
@@ -298,6 +299,18 @@ export default async function MonthsPage() {
       .sort((a, b) => b[1] - a[1])
       .map(([name, amount]) => ({ name, amount }));
 
+    // Which card carried the most spend this month
+    const cardMap = new Map<string, number>();
+    for (const e of cm.entries) {
+      if (e.template.category !== "CREDIT_CARD") continue;
+      const amt = entryExpense(e, true);
+      if (amt <= 0) continue;
+      cardMap.set(e.template.name, (cardMap.get(e.template.name) ?? 0) + amt);
+    }
+    const cardUsage = [...cardMap.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, amount]) => ({ name, amount }));
+
     // Upcoming unpaid entries with due dates (exclude pending CC bills).
     // Payment Due Date can wrap into next month relative to this entry's
     // own month (Bill Generation Date > Payment Due Date — see
@@ -318,6 +331,7 @@ export default async function MonthsPage() {
     currentMonthInsights = {
       categoryBreakdown,
       ccSubcatBreakdown,
+      cardUsage,
       savingsRate: cmIncome > 0 ? Math.round(((cmIncome - cmExpenses) / cmIncome) * 100) : 0,
       totalIncome: cmIncome,
       totalExpenses: cmExpenses,
