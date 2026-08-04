@@ -8,6 +8,7 @@ import { computeMonthIncome, effectiveEntryAmount, cashEntryAmount, isBillPendin
 import { YearOverviewClient, type MonthData } from "@/components/months/year-overview-client";
 import { CATEGORY_LABELS, CATEGORY_COLORS, MONTHS, pendingAmountKicks, getCurrentMonthYear, prevMonthYear, nextMonthYear } from "@/lib/utils";
 import type { AnalyticsData } from "@/components/months/stats-breakdown";
+import { clusterByName } from "@/lib/gmail/text-similarity";
 
 // Category breakdown of one month's income — mirrors computeMonthIncome's
 // override/pending-promotion logic (finance-utils.ts) per category instead
@@ -405,6 +406,16 @@ export default async function MonthsPage() {
       })),
     }));
 
+  // Top merchants — every one-off expense across the year (cash/UPI and
+  // card alike, not just the non-CC subset catMap above uses), fuzzy-
+  // grouped by name so "Swiggy"/"SWIGGY*BANGALORE"/"Swiggy Order #4471"
+  // land in one bucket instead of fragmenting into near-duplicates.
+  const merchantItems = fyActual.flatMap(m =>
+    m.adHocItems.filter(a => a.type === "EXPENSE" && !a.isCredit)
+  );
+  const topMerchants = clusterByName(merchantItems, a => a.name, a => a.amount)
+    .slice(0, 15);
+
   // Spending character — use catMap so adhoc is included and Essential+Lifestyle = fyExpenses
   const ESSENTIAL_CATS = new Set(["LOAN", "HOUSE_MAINTENANCE", "SAVINGS"]);
   let essentialTotal = 0, lifestyleTotal = 0;
@@ -636,7 +647,7 @@ export default async function MonthsPage() {
 
   const analyticsData: AnalyticsData = {
     fyExpenses, fyIncome: fyIncomeTotal, fyExpensesProjected, fyIncomeProjected, actualMonthCount: fyActual.length,
-    spendByCategory, recurringTotal, adHocExpenseTotal,
+    spendByCategory, topMerchants, recurringTotal, adHocExpenseTotal,
     essentialTotal, lifestyleTotal, committedOverhead,
     monthlyTrends, loans, chits, ccAnnualSubcats,
     bestMonth, worstMonth,

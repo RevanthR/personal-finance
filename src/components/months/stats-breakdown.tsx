@@ -31,6 +31,7 @@ export type AnalyticsData = {
     pct: number;
     items: { name: string; total: number; months: number }[];
   }[];
+  topMerchants: { name: string; total: number; count: number }[];
   recurringTotal: number;
   adHocExpenseTotal: number;
   essentialTotal: number;
@@ -600,6 +601,21 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
                 <CardContent className="p-3 sm:p-4">
                   <RankedBarList
                     items={cardWiseSpend.map(c => ({ name: c.name, total: c.total, sub: `${c.months} month${c.months !== 1 ? "s" : ""} · avg ${fmt(Math.round(c.total / c.months))}/mo` }))}
+                    fmt={fmt}
+                  />
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Top merchants — fuzzy-grouped by name across the year */}
+          {data.topMerchants.length > 0 && (
+            <div>
+              <SectionTitle>Top merchants</SectionTitle>
+              <Card>
+                <CardContent className="p-3 sm:p-4">
+                  <RankedBarList
+                    items={data.topMerchants.map(m => ({ name: m.name, total: m.total, sub: `${m.count} transaction${m.count !== 1 ? "s" : ""}` }))}
                     fmt={fmt}
                   />
                 </CardContent>
