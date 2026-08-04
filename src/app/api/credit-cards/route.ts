@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { validate, zName, zDay } from "@/lib/validation";
+import { validate, zName, zDay, zMoney } from "@/lib/validation";
 import { revalidatePath } from "next/cache";
 
 const CardPostSchema = z.object({
@@ -12,6 +12,7 @@ const CardPostSchema = z.object({
   last4:        z.string().trim().regex(/^\d{4}$/).optional(),
   statementDay: zDay.optional(),
   dueDateDay:   zDay.optional(),
+  creditLimit:  zMoney.optional(),
 });
 
 // GET — list all CC cards for the user (with current month's entry if it exists)
@@ -25,7 +26,7 @@ export async function GET(_req: NextRequest) {
       template: {
         select: {
           id: true, name: true, isActive: true,
-          statementDay: true, dueDateDay: true,
+          statementDay: true, dueDateDay: true, creditLimit: true,
         },
       },
     },
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
 
   const parsed = validate(CardPostSchema, await req.json());
   if (!parsed.ok) return parsed.response;
-  const { name, bank, network, last4, statementDay, dueDateDay } = parsed.data;
+  const { name, bank, network, last4, statementDay, dueDateDay, creditLimit } = parsed.data;
 
   const template = await db.lineItemTemplate.create({
     data: {
@@ -53,6 +54,7 @@ export async function POST(req: NextRequest) {
       isFixed:      false,
       statementDay: statementDay ?? null,
       dueDateDay:   dueDateDay   ?? null,
+      creditLimit:  creditLimit  ?? null,
     },
   });
 
@@ -66,7 +68,7 @@ export async function POST(req: NextRequest) {
     },
     include: {
       template: {
-        select: { id: true, name: true, isActive: true, statementDay: true, dueDateDay: true },
+        select: { id: true, name: true, isActive: true, statementDay: true, dueDateDay: true, creditLimit: true },
       },
     },
   });

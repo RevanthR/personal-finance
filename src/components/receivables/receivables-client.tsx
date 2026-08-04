@@ -35,7 +35,7 @@ type CCEntry = {
 
 type CCCard = {
   id: string; bank: string | null; network: string | null; last4: string | null;
-  template: { id: string; name: string; isActive: boolean; statementDay: number | null; dueDateDay: number | null };
+  template: { id: string; name: string; isActive: boolean; statementDay: number | null; dueDateDay: number | null; creditLimit: number | null };
   currentEntry: CCEntry | null;
 };
 
@@ -92,7 +92,7 @@ type RecvTab = "pending" | "received";
 function AddCardDialog({ open, onOpenChange, onAdd }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onAdd: (data: { name: string; bank?: string; network?: string; last4?: string; statementDay?: number; dueDateDay?: number }) => Promise<void>;
+  onAdd: (data: { name: string; bank?: string; network?: string; last4?: string; statementDay?: number; dueDateDay?: number; creditLimit?: number }) => Promise<void>;
 }) {
   const [name, setName]         = useState("");
   const [bank, setBank]         = useState("");
@@ -101,6 +101,7 @@ function AddCardDialog({ open, onOpenChange, onAdd }: {
   const [last4, setLast4]       = useState("");
   const [stmtDay, setStmtDay]   = useState("");
   const [dueDay, setDueDay]     = useState("");
+  const [limit, setLimit]       = useState("");
   const [saving, setSaving]     = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -116,8 +117,9 @@ function AddCardDialog({ open, onOpenChange, onAdd }: {
         ...(last4.trim()   && { last4: last4.trim() }),
         ...(stmtDay        && { statementDay: parseInt(stmtDay) }),
         ...(dueDay         && { dueDateDay:   parseInt(dueDay)  }),
+        ...(limit          && { creditLimit: parseFloat(limit) }),
       });
-      setName(""); setBank(""); setBankOther(""); setNetwork(""); setLast4(""); setStmtDay(""); setDueDay("");
+      setName(""); setBank(""); setBankOther(""); setNetwork(""); setLast4(""); setStmtDay(""); setDueDay(""); setLimit("");
     } finally { setSaving(false); }
   }
 
@@ -171,6 +173,10 @@ function AddCardDialog({ open, onOpenChange, onAdd }: {
               <Input type="number" min={1} max={31} value={dueDay} onChange={e => setDueDay(e.target.value)} placeholder="5" className="mt-1" />
             </div>
           </div>
+          <div>
+            <Label className="text-xs">Credit Limit (optional)</Label>
+            <Input type="number" min={0} value={limit} onChange={e => setLimit(e.target.value)} placeholder="e.g. 100000" className="mt-1" />
+          </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button type="submit" disabled={saving || !name.trim()}>{saving ? "Adding..." : "Add Card"}</Button>
@@ -191,7 +197,7 @@ function EditCardDialog({ open, onOpenChange, card, onSave }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   card: CCCard;
-  onSave: (data: { bank: string | null; network: string | null; last4: string | null; statementDay: number | null; dueDateDay: number | null }) => Promise<void>;
+  onSave: (data: { bank: string | null; network: string | null; last4: string | null; statementDay: number | null; dueDateDay: number | null; creditLimit: number | null }) => Promise<void>;
 }) {
   const isKnownBank = !!card.bank && (BANKS as readonly string[]).includes(card.bank);
   const [bank, setBank]         = useState(isKnownBank ? card.bank! : (card.bank ? "Other" : ""));
@@ -200,6 +206,7 @@ function EditCardDialog({ open, onOpenChange, card, onSave }: {
   const [last4, setLast4]       = useState(card.last4 ?? "");
   const [stmtDay, setStmtDay]   = useState(String(card.template.statementDay ?? ""));
   const [dueDay, setDueDay]     = useState(String(card.template.dueDateDay ?? ""));
+  const [limit, setLimit]       = useState(String(card.template.creditLimit ?? ""));
   const [saving, setSaving]     = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -213,6 +220,7 @@ function EditCardDialog({ open, onOpenChange, card, onSave }: {
         last4: last4.trim() || null,
         statementDay: stmtDay ? parseInt(stmtDay) : null,
         dueDateDay: dueDay ? parseInt(dueDay) : null,
+        creditLimit: limit ? parseFloat(limit) : null,
       });
       onOpenChange(false);
     } finally { setSaving(false); }
@@ -262,6 +270,10 @@ function EditCardDialog({ open, onOpenChange, card, onSave }: {
               <Input type="number" min={1} max={31} value={dueDay} onChange={e => setDueDay(e.target.value)} placeholder="5" className="mt-1" />
             </div>
           </div>
+          <div>
+            <Label className="text-xs">Credit Limit (optional)</Label>
+            <Input type="number" min={0} value={limit} onChange={e => setLimit(e.target.value)} placeholder="e.g. 100000" className="mt-1" />
+          </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
@@ -291,13 +303,16 @@ function CCCardTile({ card, fmt, onEntryUpdate, onDelete, onMetaUpdate }: {
   currentMonthLabel: string;
   onEntryUpdate: (cardTemplateId: string, updates: { amount?: number; billedAmount?: number; isPaid?: boolean }) => Promise<void>;
   onDelete: (cardId: string) => void;
-  onMetaUpdate: (cardId: string, updates: { statementDay?: number | null; dueDateDay?: number | null; bank?: string | null; network?: string | null; last4?: string | null }) => Promise<void>;
+  onMetaUpdate: (cardId: string, updates: { statementDay?: number | null; dueDateDay?: number | null; creditLimit?: number | null; bank?: string | null; network?: string | null; last4?: string | null }) => Promise<void>;
 }) {
   const entry   = card.currentEntry;
   const billed  = entry ? (entry.billedAmount ?? entry.amount) : null;
   const paying  = entry?.amount ?? 0;
   const rolling = billed != null ? Math.max(0, billed - paying) : 0;
   const accent  = card.network ? NETWORK_ACCENT[card.network] : null;
+  const utilPct = card.template.creditLimit && billed != null
+    ? Math.round((billed / card.template.creditLimit) * 100)
+    : null;
 
   const [settingBill, setSettingBill]     = useState(false);
   const [billInput, setBillInput]         = useState("");
@@ -397,6 +412,24 @@ function CCCardTile({ card, fmt, onEntryUpdate, onDelete, onMetaUpdate }: {
           </div>
         )}
 
+        {utilPct != null && (
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">Utilization</span>
+              <span className="font-medium">{fmt(billed!)} / {fmt(card.template.creditLimit!)}</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+              <div
+                className={cn(
+                  "h-full rounded-full transition-all",
+                  utilPct >= 90 ? "bg-negative" : utilPct >= 70 ? "bg-warning" : "bg-primary"
+                )}
+                style={{ width: `${Math.min(100, utilPct)}%` }}
+              />
+            </div>
+          </div>
+        )}
+
         {!settingBill && (
           <div className="flex gap-2">
             <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" onClick={() => setEditingCard(true)}>
@@ -459,7 +492,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
 
   // ── Card handlers ──────────────────────────────────────────────────────────
 
-  async function handleAddCard(data: { name: string; bank?: string; network?: string; last4?: string; statementDay?: number; dueDateDay?: number }) {
+  async function handleAddCard(data: { name: string; bank?: string; network?: string; last4?: string; statementDay?: number; dueDateDay?: number; creditLimit?: number }) {
     const res = await fetch("/api/credit-cards", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
     if (!res.ok) { toast.error("Failed to add card"); return; }
     const newCard = await res.json();
@@ -489,7 +522,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
     toast.success("Card removed");
   }
 
-  async function handleCardMetaUpdate(cardId: string, updates: { statementDay?: number | null; dueDateDay?: number | null; bank?: string | null; network?: string | null; last4?: string | null }) {
+  async function handleCardMetaUpdate(cardId: string, updates: { statementDay?: number | null; dueDateDay?: number | null; creditLimit?: number | null; bank?: string | null; network?: string | null; last4?: string | null }) {
     const res = await fetch(`/api/credit-cards/${cardId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -498,7 +531,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
     if (!res.ok) { toast.error("Failed to update card"); return; }
     const updated = await res.json();
     setCards(prev => prev.map(c => c.id === cardId
-      ? { ...c, bank: updated.bank, network: updated.network, last4: updated.last4, template: { ...c.template, statementDay: updated.template.statementDay, dueDateDay: updated.template.dueDateDay } }
+      ? { ...c, bank: updated.bank, network: updated.network, last4: updated.last4, template: { ...c.template, statementDay: updated.template.statementDay, dueDateDay: updated.template.dueDateDay, creditLimit: updated.template.creditLimit } }
       : c));
     toast.success("Card updated");
   }

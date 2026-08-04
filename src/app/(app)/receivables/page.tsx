@@ -25,7 +25,7 @@ export default async function ReceivablesPage() {
       where: { userId },
       include: {
         template: {
-          select: { id: true, name: true, isActive: true, statementDay: true, dueDateDay: true },
+          select: { id: true, name: true, isActive: true, statementDay: true, dueDateDay: true, creditLimit: true },
         },
       },
       orderBy: { createdAt: "asc" },

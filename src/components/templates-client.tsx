@@ -485,12 +485,6 @@ export function TemplatesClient({
                                   : t.category === "CHIT_FUND"
                                     ? `${fmt(t.amount)}/month${t.chitFund ? ` · pot ${fmt(t.chitFund.totalValue)}` : ""}`
                                     : `${fmt(t.amount)}/${t.frequency === "YEARLY" ? "year" : "month"}`}
-                              {!isClosed && t.category === "CREDIT_CARD" && (t.statementDay || t.dueDateDay) && (
-                                <span className="ml-1.5 text-muted-foreground">
-                                  {t.statementDay ? `generates ${t.statementDay}th` : ""}
-                                  {t.dueDateDay ? ` · due ${t.dueDateDay}th` : ""}
-                                </span>
-                              )}
                               {!isClosed && t.category === "LOAN" && t.loanInterestRate && (
                                 <span className="ml-1.5 text-muted-foreground/70">· {t.loanInterestRate}% {t.loanRateType === "FLOATING" ? "floating" : "fixed"}</span>
                               )}
@@ -580,8 +574,13 @@ export function TemplatesClient({
   );
 }
 
+// CREDIT_CARD excluded — cards are created in Vault instead (also creates
+// the linked CreditCard row for bank/network/last4, which adding one here
+// never would), and Vault is the single place their Bill Generation
+// Date/Payment Due Date/Credit Limit get edited (see the "managed
+// separately" banner above the expense list).
 const EXPENSE_CATEGORY_CHIPS = Object.entries(CATEGORY_LABELS).filter(
-  ([k]) => !["MISCELLANEOUS", "SALARY", "FREELANCE", "RENTAL", "BUSINESS", "INVESTMENTS", "OTHER_INCOME"].includes(k)
+  ([k]) => !["MISCELLANEOUS", "SALARY", "FREELANCE", "RENTAL", "BUSINESS", "INVESTMENTS", "OTHER_INCOME", "CREDIT_CARD"].includes(k)
 );
 const INCOME_CATEGORY_CHIPS_LABELS = INCOME_CATEGORIES.map(k => [k, CATEGORY_LABELS[k]] as [string, string]);
 
@@ -1003,18 +1002,6 @@ function TemplateDialog({
               </div>
             )}
 
-            {isCC && (
-              <div>
-                <Label className="text-xs">Bill Generation Date (optional)</Label>
-                <Input type="number" min="1" max="31" value={statementDay}
-                  onChange={(e) => setStatementDay(e.target.value)} placeholder="e.g. 15" className="mt-1" />
-                {statementDay && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Bill generates on the {statementDay}th — charges before this land in this bill, charges after go into next month&apos;s.
-                  </p>
-                )}
-              </div>
-            )}
           </div>
 
           {/* ── Advanced: upcoming change + end date ── */}

@@ -134,7 +134,7 @@ type EntryWithTemplate = {
   id: string; amount: number; isPaid: boolean; paidOn: string | null; paidAmount: number | null; cashbackAmount: number | null; notes: string | null; templateId: string;
   statementAmount: number | null; billedAmount: number | null; carriedInAmount?: number | null;
   paidViaCardTemplateId?: string | null; billPaymentsAttributed?: number | null;
-  template: { id: string; name: string; category: string; customCategory: string | null; isFixed: boolean; dueDateDay: number | null; statementDay: number | null; loanInterestRate: number | null; loanRateType: string | null; loanOriginalPrincipal: number | null; loanStartDate: string | null; loanOutstandingOverride: number | null };
+  template: { id: string; name: string; category: string; customCategory: string | null; isFixed: boolean; dueDateDay: number | null; statementDay: number | null; creditLimit?: number | null; loanInterestRate: number | null; loanRateType: string | null; loanOriginalPrincipal: number | null; loanStartDate: string | null; loanOutstandingOverride: number | null };
 };
 
 type AdHocItem = {
@@ -199,6 +199,8 @@ function CCCardBlock({
   const statementDay = entry.template.statementDay;
   const nextBillTotal = entry.statementAmount ?? 0;
   const billedTotal = entry.billedAmount ?? entry.amount;
+  const creditLimit = entry.template.creditLimit ?? null;
+  const utilPct = creditLimit ? Math.round((billedTotal / creditLimit) * 100) : null;
   const isDueNextMonth = isDueDateNextMonth(statementDay, entry.template.dueDateDay);
   const ccColor = getCategoryColor(entry.template.category, entry.template.customCategory);
   const ccIcon  = getCategoryIcon(entry.template.category, entry.template.customCategory);
@@ -237,7 +239,8 @@ function CCCardBlock({
   // instead of a collapsible one.
   const hasExpandableContent = (entry.billedAmount != null && entry.billedAmount > entry.amount)
     || nextBillTotal > 0
-    || (isBillPending && carriedInAmount > 0 && buildingThisCycle > 0);
+    || (isBillPending && carriedInAmount > 0 && buildingThisCycle > 0)
+    || utilPct != null;
 
   return (
     <div className={cn(
@@ -321,6 +324,25 @@ function CCCardBlock({
 
       {!collapsed && (
         <>
+          {/* Utilization — only when a Credit Limit is set on this card (Vault). */}
+          {utilPct != null && (
+            <div className="px-3 py-2 border-b border-border space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Utilization</span>
+                <span className="font-medium">{fmt(billedTotal)} / {fmt(creditLimit!)}</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all",
+                    utilPct >= 90 ? "bg-negative" : utilPct >= 70 ? "bg-warning" : "bg-primary"
+                  )}
+                  style={{ width: `${Math.min(100, utilPct)}%` }}
+                />
+              </div>
+            </div>
+          )}
+
           {/* Billed vs paying indicator — only when they differ */}
           {entry.billedAmount != null && entry.billedAmount > entry.amount && (
             <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border">

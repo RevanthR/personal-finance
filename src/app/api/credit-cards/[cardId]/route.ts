@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { validate, zName, zDay } from "@/lib/validation";
+import { validate, zName, zDay, zMoney } from "@/lib/validation";
 import { revalidatePath } from "next/cache";
 
 const CardPatchSchema = z.object({
@@ -12,6 +12,7 @@ const CardPatchSchema = z.object({
   last4:        z.string().trim().regex(/^\d{4}$/).nullable().optional(),
   statementDay: zDay.nullable().optional(),
   dueDateDay:   zDay.nullable().optional(),
+  creditLimit:  zMoney.nullable().optional(),
   isActive:     z.boolean().optional(),
 });
 
@@ -33,16 +34,17 @@ export async function PATCH(
 
   const parsed = validate(CardPatchSchema, await req.json());
   if (!parsed.ok) return parsed.response;
-  const { name, bank, network, last4, statementDay, dueDateDay, isActive } = parsed.data;
+  const { name, bank, network, last4, statementDay, dueDateDay, creditLimit, isActive } = parsed.data;
 
-  // Update template fields (name, statementDay, dueDateDay, isActive)
-  if (name !== undefined || statementDay !== undefined || dueDateDay !== undefined || isActive !== undefined) {
+  // Update template fields (name, statementDay, dueDateDay, creditLimit, isActive)
+  if (name !== undefined || statementDay !== undefined || dueDateDay !== undefined || creditLimit !== undefined || isActive !== undefined) {
     await db.lineItemTemplate.update({
       where: { id: card.templateId },
       data: {
         ...(name         !== undefined && { name }),
         ...(statementDay !== undefined && { statementDay }),
         ...(dueDateDay   !== undefined && { dueDateDay }),
+        ...(creditLimit  !== undefined && { creditLimit }),
         ...(isActive     !== undefined && { isActive }),
       },
     });
@@ -57,7 +59,7 @@ export async function PATCH(
     },
     include: {
       template: {
-        select: { id: true, name: true, isActive: true, statementDay: true, dueDateDay: true },
+        select: { id: true, name: true, isActive: true, statementDay: true, dueDateDay: true, creditLimit: true },
       },
     },
   });

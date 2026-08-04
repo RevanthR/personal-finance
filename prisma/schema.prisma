@@ -167,6 +167,9 @@ model LineItemTemplate {
   pendingFromMonth Int?
   pendingFromYear  Int?
   statementDay     Int?
+  // CC only: the card's total credit line, for showing utilization
+  // (spent / limit) — separate from any one cycle's bill amount.
+  creditLimit      Float?
   frequency        Frequency      @default(MONTHLY)
   dueMonth         Int?
   templateType     TemplateType   @default(EXPENSE)
