@@ -15,7 +15,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Plus, Pencil, ChevronDown, Trash2, ChevronLeft, ChevronRight, Check, Calendar, Loader2, RotateCcw, Receipt,
+  Plus, Pencil, ChevronDown, Trash2, ChevronLeft, ChevronRight, Check, Calendar, Loader2, RotateCcw, ScrollText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { EntryRow } from "./entry-row";
@@ -245,7 +245,7 @@ function CCCardBlock({
   // instead of a collapsible one.
   const hasExpandableContent = (entry.billedAmount != null && entry.billedAmount > entry.amount)
     || nextBillTotal > 0
-    || (isBillPending && carriedInAmount > 0 && buildingThisCycle > 0)
+    || (isBillPending && buildingThisCycle > 0)
     || utilPct != null;
 
   return (
@@ -301,7 +301,7 @@ function CCCardBlock({
               title="View statement"
               className="shrink-0 flex items-center justify-center w-7 h-7 -mx-1 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
             >
-              <Receipt className="w-3.5 h-3.5" />
+              <ScrollText className="w-3.5 h-3.5" />
             </button>
           )}
           <span className={cn("text-sm font-semibold tabular-nums shrink-0", tick.isPaid && "text-muted-foreground line-through")}>
@@ -388,18 +388,25 @@ function CCCardBlock({
             </div>
           )}
 
-          {/* Next cycle bill total — "building" makes clear this is spend
-              already made that hasn't turned into its own bill yet, not an
-              action or a due date. */}
-          {nextBillTotal > 0 && (
+          {/* Spend building toward a bill that hasn't generated yet —
+              "building" makes clear this is spend already made that hasn't
+              turned into its own bill yet, not an action or a due date.
+              Two different cards land here for two different reasons: a
+              card whose statement already closed this month is building
+              toward NEXT month's bill (nextBillTotal, from statementAmount);
+              a still-open card with nothing carried in from before (so
+              block above doesn't apply) is building toward THIS month's own
+              not-yet-generated bill (buildingThisCycle, from amount) — same
+              label, different source field, never both at once. */}
+          {(nextBillTotal > 0 || (isBillPending && carriedInAmount <= 0 && buildingThisCycle > 0)) && (
             <div className="border-t border-border px-3 py-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-muted-foreground">
                   {cycleStartLabel}
                 </span>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold tracking-tight">{fmt(nextBillTotal)}</span>
-                  {!hasPostCloseSpend && (
+                  <span className="text-xs font-semibold tracking-tight">{fmt(nextBillTotal > 0 ? nextBillTotal : buildingThisCycle)}</span>
+                  {nextBillTotal > 0 && !hasPostCloseSpend && (
                     <button
                       onClick={() => onClearStatement(entry.id)}
                       className="text-xs font-medium text-muted-foreground border border-border bg-card px-2.5 py-1 rounded-md hover:border-foreground/30 transition-colors"
@@ -420,6 +427,7 @@ function CCCardBlock({
         cardName={entry.template.name}
         statementDay={statementDay}
         transactions={transactions}
+        hasOutstandingBill={!isBillPending || carriedInAmount > 0}
       />
 
       {/* Owned here (not by EntryRow) so it works from the collapsed tick too */}
@@ -1563,10 +1571,10 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             respond to touch-drag at all — both read as "not responsive"
             once this dialog's content is long enough to need scrolling. */}
         <DialogContent className="max-w-sm max-h-[85vh] flex flex-col p-0 gap-0">
-          <DialogHeader className="p-4 pb-2 shrink-0">
+          <DialogHeader className="p-5 pb-3 border-b border-border/60 shrink-0">
             <DialogTitle>Income: {formatMonthYear(currentMonth?.month ?? viewMonth, currentMonth?.year ?? viewYear)}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 p-4 pt-0 overflow-y-auto overscroll-contain">
+          <div className="space-y-3 p-5 pt-4 overflow-y-auto overscroll-contain">
             {/* Recurring income from templates */}
             <div className="rounded-xl bg-muted/30 border px-3 py-2.5 space-y-1.5">
               <div className="flex items-center justify-between">
@@ -1752,10 +1760,10 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       {/* Pending drilldown */}
       <Dialog open={showPendingDrilldown} onOpenChange={setShowPendingDrilldown}>
         <DialogContent className="max-w-sm max-h-[85vh] flex flex-col p-0 gap-0">
-          <DialogHeader className="p-4 pb-2 shrink-0">
+          <DialogHeader className="p-5 pb-3 border-b border-border/60 shrink-0">
             <DialogTitle>Pending: {formatMonthYear(currentMonth?.month ?? viewMonth, currentMonth?.year ?? viewYear)}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 p-4 pt-0 overflow-y-auto overscroll-contain">
+          <div className="space-y-3 p-5 pt-4 overflow-y-auto overscroll-contain">
             <div className="space-y-1.5">
               <p className="fin-label">This month</p>
               <div className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
@@ -1835,10 +1843,10 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       {/* Payables drilldown */}
       <Dialog open={showExpenditureDrilldown} onOpenChange={setShowExpenditureDrilldown}>
         <DialogContent className="max-w-sm max-h-[85vh] flex flex-col p-0 gap-0">
-          <DialogHeader className="p-4 pb-2 shrink-0">
+          <DialogHeader className="p-5 pb-3 border-b border-border/60 shrink-0">
             <DialogTitle>Payables: {formatMonthYear(currentMonth?.month ?? viewMonth, currentMonth?.year ?? viewYear)}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 p-4 pt-0 overflow-y-auto overscroll-contain">
+          <div className="space-y-3 p-5 pt-4 overflow-y-auto overscroll-contain">
             <p className="text-xs text-muted-foreground">This month&apos;s own bills, plus any older debt actually paid off this month.</p>
 
             {/* Recurring is already fully itemized in the Payables tab —
