@@ -146,11 +146,16 @@ export function DailySpendsSection({ adHocItems, ccCards, onDelete, onEditReques
         <p className="text-sm text-muted-foreground py-6 text-center">No spends match these filters.</p>
       )}
 
-      {/* 2-up on desktop — a category card is fundamentally a compact list
-          (icon, name, total, sub-category rows), it doesn't need the full
-          lg:col-span-2 content width. items-start so a collapsed card next
-          to a taller expanded one doesn't stretch to match its height. */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
+      {/* 2-up on desktop, masonry-style (CSS columns, not grid) — a category
+          card is fundamentally a compact list (icon, name, total,
+          sub-category rows) whose height varies a lot with how many
+          sub-categories it has. A grid pairs cards into rows sized to their
+          row's tallest member (a 1-row Loan card next to a 5-row Family
+          card wastes the whole height difference before the next row can
+          start); columns instead let each card flow into whichever column
+          is currently shorter, so cards stay sorted by spend (biggest
+          category first) with no dead space regardless of pairing. */}
+      <div className="columns-1 lg:columns-2 gap-3 [&>*]:mb-3 [&>*]:break-inside-avoid">
         {visibleGroups.map(g => {
           const catCollapsed = isCollapsed(g.key, false);
           return (
