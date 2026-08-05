@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
+import { Input } from "@/components/ui/input";
 import { CategoryBadge } from "@/components/ui/category-badge";
 import { formatCurrency, getCategoryDisplay, getCategoryColor, getCategoryIcon, getSubCategoryIcon, groupItemsByCategory, cn } from "@/lib/utils";
 import { usePrivacy } from "@/contexts/privacy-context";
-import { Pencil, Trash2, ChevronDown, CreditCard, Wallet } from "lucide-react";
-import { format } from "date-fns";
+import { Pencil, Trash2, ChevronDown, CreditCard, Wallet, CalendarDays } from "lucide-react";
+import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, isWithinInterval } from "date-fns";
 
 export type AdHocItem = {
   id: string; name: string; amount: number; type: string;
@@ -36,13 +37,32 @@ export function DailySpendsSection({ adHocItems, ccCards, onDelete, onEditReques
   // "ALL" | "CASH" | a card's templateId — narrows by how the spend was paid,
   // independent of (and combinable with) the category filter above.
   const [activeMethod, setActiveMethod] = useState<string>("ALL");
+  // Third, independent filter axis — narrows WHEN, on top of category
+  // (what) and method (how). "This week" uses a Mon–Sun calendar week
+  // rather than a rolling 7 days, matching how a week is normally meant
+  // here rather than an arbitrary lookback window.
+  const [dateFilter, setDateFilter] = useState<"ALL" | "TODAY" | "WEEK" | "CUSTOM">("ALL");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
 
   const allExpenseItems = adHocItems.filter(i => i.type === "EXPENSE");
-  const expenseItems = activeMethod === "ALL"
+  const methodFilteredItems = activeMethod === "ALL"
     ? allExpenseItems
     : activeMethod === "CASH"
       ? allExpenseItems.filter(i => !i.ccTemplateId)
       : allExpenseItems.filter(i => i.ccTemplateId === activeMethod);
+
+  const today = new Date();
+  const expenseItems = methodFilteredItems.filter(i => {
+    if (dateFilter === "ALL") return true;
+    const d = new Date(i.date);
+    if (dateFilter === "TODAY") return isWithinInterval(d, { start: startOfDay(today), end: endOfDay(today) });
+    if (dateFilter === "WEEK") return isWithinInterval(d, { start: startOfWeek(today, { weekStartsOn: 1 }), end: endOfWeek(today, { weekStartsOn: 1 }) });
+    // CUSTOM with an incomplete range shows everything rather than nothing
+    // — a half-picked range isn't a deliberate "show zero results" filter.
+    if (!customFrom || !customTo) return true;
+    return isWithinInterval(d, { start: startOfDay(new Date(customFrom)), end: endOfDay(new Date(customTo)) });
+  });
 
   const groups = groupItemsByCategory(expenseItems).map(v => {
     // Items with no sub-category land in "Other" — same bucket the picker
@@ -80,7 +100,7 @@ export function DailySpendsSection({ adHocItems, ccCards, onDelete, onEditReques
   // Sum across whatever's currently visible (both filters already applied
   // upstream: activeMethod in expenseItems, activeFilter in visibleGroups),
   // so this always matches what's on screen, not just one category's total.
-  const isFiltered = activeFilter !== null || activeMethod !== "ALL";
+  const isFiltered = activeFilter !== null || activeMethod !== "ALL" || dateFilter !== "ALL";
   const filteredTotal = visibleGroups.reduce((s, g) => s + g.total, 0);
 
   // Categories default open (so the sub-category list is visible without an
@@ -129,6 +149,25 @@ export function DailySpendsSection({ adHocItems, ccCards, onDelete, onEditReques
               onClick={() => setActiveMethod(activeMethod === card.templateId ? "ALL" : card.templateId)}
             />
           ))}
+        </div>
+      )}
+
+      {/* Date filter — third, independent axis from category/method above.
+          Only worth showing once there's more than one day's spend to
+          actually narrow. */}
+      {allExpenseItems.length > 1 && (
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <Chip label="All dates" active={dateFilter === "ALL"} onClick={() => setDateFilter("ALL")} />
+          <Chip label="Today" icon={CalendarDays} active={dateFilter === "TODAY"} onClick={() => setDateFilter(dateFilter === "TODAY" ? "ALL" : "TODAY")} />
+          <Chip label="This week" icon={CalendarDays} active={dateFilter === "WEEK"} onClick={() => setDateFilter(dateFilter === "WEEK" ? "ALL" : "WEEK")} />
+          <Chip label="Custom" icon={CalendarDays} active={dateFilter === "CUSTOM"} onClick={() => setDateFilter(dateFilter === "CUSTOM" ? "ALL" : "CUSTOM")} />
+          {dateFilter === "CUSTOM" && (
+            <div className="flex items-center gap-1.5 basis-full">
+              <Input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="h-8 w-auto text-xs" />
+              <span className="text-xs text-muted-foreground">to</span>
+              <Input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className="h-8 w-auto text-xs" />
+            </div>
+          )}
         </div>
       )}
 
