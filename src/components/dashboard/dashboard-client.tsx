@@ -304,7 +304,18 @@ function CCCardBlock({
               <ScrollText className="w-3.5 h-3.5" />
             </button>
           )}
-          <span className={cn("text-sm font-semibold tabular-nums shrink-0", tick.isPaid && "text-muted-foreground line-through")}>
+          {/* A still-open card with nothing carried in shows ₹0 here — true,
+              but bold black next to a tick, sitting inside "Pending Card
+              Payments", reads as "you owe ₹0, nothing to do" when the real
+              story is "nothing's due yet, spend is still accumulating" (see
+              the "current outstanding" line below). Muted instead of bold
+              signals "not actually a due amount" without changing the
+              number itself. */}
+          <span className={cn(
+            "text-sm font-semibold tabular-nums shrink-0",
+            tick.isPaid && "text-muted-foreground line-through",
+            isBillPending && carriedInAmount <= 0 && "text-muted-foreground font-medium"
+          )}>
             {tick.isPartial ? fmt(tick.outstanding) : tick.cashback > 0 && !tick.isPaid ? fmt(tick.netBill) : isBillPending ? fmt(carriedInAmount) : fmt(billedTotal)}
           </span>
           {hasExpandableContent && (
