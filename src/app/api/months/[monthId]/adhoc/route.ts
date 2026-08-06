@@ -6,6 +6,7 @@ import { validate, AdHocPostSchema, AdHocPatchSchema } from "@/lib/validation";
 import { resolveCustomCategory } from "@/lib/custom-category";
 import { resolveSubCategory } from "@/lib/sub-category";
 import { applyCCEffect, reverseCCEffect, type EntryFields } from "@/lib/cc-effects";
+import { resolveMonthForDate } from "@/lib/months/resolve-month";
 
 // applyCCEffect/reverseCCEffect already no-op for a foreign ccTemplateId
 // (they look it up scoped by userId), but that only skips the statement
@@ -51,13 +52,20 @@ export async function POST(
     ? await resolveSubCategory(userId, { category: resolvedCategory ?? null, customCategoryId: customCat?.id ?? null }, body.subCategory)
     : null;
 
+  const date = new Date(body.date);
+  // A date outside the viewed month files this under the month it actually
+  // belongs to instead of blindly attaching it to whatever's in the URL —
+  // see resolveMonthForDate for why that month has to already exist.
+  const resolved = await resolveMonthForDate(db, userId, date, month);
+  const targetMonthId = resolved.monthId;
+
   // The AdHocItem write and its CC statement-effect write must succeed or
   // fail together — separately committed, a failure between them could
   // record a charge without ever updating the card's bill.
   const { item, updatedEntry } = await db.$transaction(async (tx) => {
     const item = await tx.adHocItem.create({
       data: {
-        monthId,
+        monthId: targetMonthId,
         name: body.name,
         amount: body.amount,
         type: body.type as AdHocType,
@@ -66,19 +74,22 @@ export async function POST(
         customCategoryId: customCat?.id ?? null,
         subCategory,
         ccTemplateId: body.ccTemplateId ?? null,
-        date: new Date(body.date),
+        date,
         notes: body.notes ?? null,
       },
     });
 
     let updatedEntry: EntryFields | null = null;
     if (body.type === "EXPENSE" && body.ccTemplateId) {
-      updatedEntry = await applyCCEffect(tx, userId, monthId, body.ccTemplateId, new Date(body.date), body.amount);
+      updatedEntry = await applyCCEffect(tx, userId, targetMonthId, body.ccTemplateId, date, body.amount);
     }
     return { item, updatedEntry };
   });
 
-  return NextResponse.json({ item, updatedEntry }, { status: 201 });
+  return NextResponse.json({
+    item, updatedEntry,
+    movedToMonth: resolved.moved ? { month: resolved.month, year: resolved.year } : null,
+  }, { status: 201 });
 }
 
 // PATCH /api/months/[monthId]/adhoc — edit any field except type.
@@ -117,6 +128,23 @@ export async function PATCH(
     ? (body.ccTemplateId || null)
     : existing.ccTemplateId;
 
+  // Editing the date across a month boundary re-files the item under the
+  // month it now actually belongs to (same reasoning as POST) — the old
+  // CC effect below still reverses against the OLD month (where it's
+  // currently filed), the new one applies against wherever it's moving to.
+  let targetMonthId = monthId;
+  let movedToMonth: { month: number; year: number } | null = null;
+  if (body.date) {
+    const viewedMonth = await db.month.findFirst({ where: { id: monthId, userId }, select: { id: true, month: true, year: true } });
+    if (viewedMonth) {
+      const resolved = await resolveMonthForDate(db, userId, nextDate, viewedMonth);
+      if (resolved.moved) {
+        targetMonthId = resolved.monthId;
+        movedToMonth = { month: resolved.month, year: resolved.year };
+      }
+    }
+  }
+
   // A category chip pick (no accompanying customCategory) clears any custom
   // top-level category, and forces category to MISCELLANEOUS when a new
   // custom category is picked instead — same convention as POST.
@@ -145,6 +173,7 @@ export async function PATCH(
     const item = await tx.adHocItem.update({
       where: { id: body.id },
       data: {
+        monthId: targetMonthId,
         name: nextName,
         amount: nextAmount,
         date: nextDate,
@@ -174,14 +203,14 @@ export async function PATCH(
     }
     if (item.type === "EXPENSE" && item.ccTemplateId) {
       const applied = item.isCredit
-        ? await reverseCCEffect(tx, userId, monthId, item.ccTemplateId, nextDate, nextAmount)
-        : await applyCCEffect(tx, userId, monthId, item.ccTemplateId, nextDate, nextAmount);
+        ? await reverseCCEffect(tx, userId, targetMonthId, item.ccTemplateId, nextDate, nextAmount)
+        : await applyCCEffect(tx, userId, targetMonthId, item.ccTemplateId, nextDate, nextAmount);
       if (applied) updatedEntries.set(applied.id, applied);
     }
     return { item, updatedEntries };
   });
 
-  return NextResponse.json({ item, updatedEntries: [...updatedEntries.values()] });
+  return NextResponse.json({ item, updatedEntries: [...updatedEntries.values()], movedToMonth });
 }
 
 // DELETE /api/months/[monthId]/adhoc?id=xxx

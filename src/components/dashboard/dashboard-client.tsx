@@ -958,8 +958,26 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       body: JSON.stringify(item),
     });
     if (!res.ok) { toast.error("Failed to add"); return; }
-    const { item: newItem, updatedEntry } = await res.json();
+    const { item: newItem, updatedEntry, movedToMonth } = await res.json();
     mergeNewCategory(newItem);
+
+    // A backdated/postdated date outside the viewed month files the item
+    // under the month it actually belongs to (see resolveMonthForDate) —
+    // it doesn't live in currentMonth at all, so it must NOT be spliced
+    // into currentMonth's own lists (that would show a July entry inside
+    // August). Only patch recentMonths, and only if that other month
+    // happens to already be in the loaded window.
+    if (movedToMonth) {
+      setRecentMonths(prev => prev.map(m =>
+        m.id === newItem.monthId
+          ? { ...m, adHocItems: [{ id: newItem.id, name: newItem.name, type: newItem.type, amount: newItem.amount, category: newItem.category, customCategory: newItem.customCategory ?? null, customCategoryId: newItem.customCategoryId ?? null, subCategory: newItem.subCategory ?? null, notes: newItem.notes ?? null, ccTemplateId: newItem.ccTemplateId ?? null, date: newItem.date }, ...m.adHocItems] }
+          : m
+      ));
+      toast.success(`Added to ${formatMonthYear(movedToMonth.month, movedToMonth.year)} — that's the entry's real month`);
+      setShowAdHoc(false);
+      return;
+    }
+
     withReorderTransition(() => {
       setCurrentMonth(prev => {
         if (!prev) return prev;
@@ -1020,7 +1038,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       body: JSON.stringify({ id, ...fields }),
     });
     if (!res.ok) { toast.error("Failed to save"); return; }
-    const { item: updated, updatedEntries } = await res.json();
+    const { item: updated, updatedEntries, movedToMonth } = await res.json();
     mergeNewCategory(updated);
     withReorderTransition(() => {
       setCurrentMonth(prev => {
@@ -1029,9 +1047,28 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
         for (const ue of updatedEntries as { id: string; amount: number; statementAmount: number | null }[]) {
           entries = entries.map(e => e.id === ue.id ? { ...e, amount: ue.amount, statementAmount: ue.statementAmount } : e);
         }
-        return { ...prev, adHocItems: prev.adHocItems.map(i => i.id === id ? { ...i, ...updated } : i), entries };
+        // Editing the date to fall outside this month re-files the item
+        // elsewhere (see resolveMonthForDate) — it no longer belongs in
+        // currentMonth's own list at all, so it's removed here rather than
+        // updated in place (the CC-effect entries above still apply: the
+        // OLD effect being reversed genuinely did happen against THIS
+        // month's own entry).
+        const adHocItems = movedToMonth
+          ? prev.adHocItems.filter(i => i.id !== id)
+          : prev.adHocItems.map(i => i.id === id ? { ...i, ...updated } : i);
+        return { ...prev, adHocItems, entries };
       });
     });
+    if (movedToMonth) {
+      setRecentMonths(prev => prev.map(m => {
+        if (m.id === currentMonth!.id) return { ...m, adHocItems: m.adHocItems.filter(i => i.id !== id) };
+        if (m.id === updated.monthId) return { ...m, adHocItems: [{ id: updated.id, name: updated.name, type: updated.type, amount: updated.amount, category: updated.category, customCategory: updated.customCategory ?? null, customCategoryId: updated.customCategoryId ?? null, subCategory: updated.subCategory ?? null, notes: updated.notes ?? null, ccTemplateId: updated.ccTemplateId ?? null, date: updated.date }, ...m.adHocItems.filter(i => i.id !== id)] };
+        return m;
+      }));
+      toast.success(`Moved to ${formatMonthYear(movedToMonth.month, movedToMonth.year)} — that's the entry's real month`);
+      setEditingItem(null);
+      return;
+    }
     setRecentMonths(prev => prev.map(m =>
       m.id === currentMonth!.id
         ? { ...m, adHocItems: m.adHocItems.map(i => i.id === id ? { ...i, type: updated.type, amount: updated.amount, category: updated.category, customCategory: updated.customCategory ?? null, customCategoryId: updated.customCategoryId ?? null, subCategory: updated.subCategory ?? null, notes: updated.notes ?? null, ccTemplateId: updated.ccTemplateId ?? null } : i) }
