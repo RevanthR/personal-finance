@@ -2,12 +2,13 @@ import { db } from "@/lib/db";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { AdminUsersClient } from "@/components/admin/admin-users-client";
-import { Users, Calendar, Activity, CreditCard, Clock, AlertTriangle, Mail, Sparkles, Zap, IndianRupee } from "lucide-react";
+import { Users, Calendar, Activity, CreditCard, Clock, AlertTriangle, Mail, Sparkles, Zap, IndianRupee, UserPlus } from "lucide-react";
 import { estimateCostUsd } from "@/lib/gmail/gemini-usage";
 import { getInrRate } from "@/lib/gmail/fx-rate";
+import { cn } from "@/lib/utils";
 
 export default async function AdminPage() {
-  const [users, emailsIngested, geminiByModel] = await Promise.all([
+  const [users, emailsIngested, geminiByModel, geminiByUser, gmailConnections, monthActivity] = await Promise.all([
     db.user.findMany({
       orderBy: { createdAt: "desc" },
       include: { _count: { select: { months: true } } },
@@ -17,6 +18,22 @@ export default async function AdminPage() {
       by: ["model"],
       _sum: { batchSize: true, promptTokens: true, candidatesTokens: true },
       _count: true,
+    }),
+    // Per-user slice of the same usage log, for a per-row cost column below
+    // instead of only ever seeing one platform-wide total.
+    db.geminiUsageLog.groupBy({
+      by: ["userId", "model"],
+      _sum: { promptTokens: true, candidatesTokens: true },
+    }),
+    db.gmailConnection.findMany({
+      select: { userId: true, email: true, connectedAt: true, lastSyncAt: true, needsReauth: true },
+    }),
+    // AdHocItem has no direct userId FK (only via its Month) — pulling
+    // through Month here instead of a raw query, fine at this user count.
+    // Doubles as the real "last active" signal: an isActive toggle is a
+    // manual admin flag, not evidence anyone's actually using the app.
+    db.month.findMany({
+      select: { userId: true, adHocItems: { select: { amount: true, type: true, createdAt: true } } },
     }),
   ]);
 
@@ -32,6 +49,34 @@ export default async function AdminPage() {
   // in the app; falls back to a rough fixed estimate if the lookup fails.
   const usdToInrRate = (await getInrRate("USD")) ?? 87.5;
   const estimatedSpendInr = estimatedSpendUsd * usdToInrRate;
+
+  const gmailByUserId = new Map(gmailConnections.map(g => [g.userId, g]));
+
+  const costUsdByUserId = new Map<string, number>();
+  for (const g of geminiByUser) {
+    const cost = estimateCostUsd(g.model, g._sum.promptTokens ?? 0, g._sum.candidatesTokens ?? 0);
+    costUsdByUserId.set(g.userId, (costUsdByUserId.get(g.userId) ?? 0) + cost);
+  }
+
+  const activityByUserId = new Map<string, { lastActiveAt: Date | null; lifetimeSpend: number }>();
+  for (const m of monthActivity) {
+    const acc = activityByUserId.get(m.userId) ?? { lastActiveAt: null, lifetimeSpend: 0 };
+    for (const item of m.adHocItems) {
+      if (item.type === "EXPENSE") acc.lifetimeSpend += item.amount;
+      if (!acc.lastActiveAt || item.createdAt > acc.lastActiveAt) acc.lastActiveAt = item.createdAt;
+    }
+    activityByUserId.set(m.userId, acc);
+  }
+
+  const enrichedUsers = users.map(u => ({
+    ...u,
+    gmail: gmailByUserId.get(u.id) ?? null,
+    lastActiveAt: activityByUserId.get(u.id)?.lastActiveAt ?? null,
+    lifetimeSpend: activityByUserId.get(u.id)?.lifetimeSpend ?? 0,
+    syncCostInr: (costUsdByUserId.get(u.id) ?? 0) * usdToInrRate,
+  }));
+
+  const pendingSyncRequests = users.filter(u => u.gmailSyncStatus === "REQUESTED").length;
 
   const now = new Date();
   const totalMonths = users.reduce((s: number, u: typeof users[0]) => s + u._count.months, 0);
@@ -110,7 +155,16 @@ export default async function AdminPage() {
 
       <div>
         <p className="fin-label mb-2">Gmail Sync</p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-3">
+          <Card className={cn(pendingSyncRequests > 0 && "border-primary/40 bg-primary/5")}>
+            <CardContent className="p-2.5 sm:p-3 flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2.5">
+              <UserPlus className={cn("w-4 h-4 sm:w-5 sm:h-5 shrink-0", pendingSyncRequests > 0 ? "text-primary" : "text-muted-foreground")} />
+              <div>
+                <p className="text-lg font-bold tabular-nums">{pendingSyncRequests}</p>
+                <p className="text-xs text-muted-foreground">Pending requests</p>
+              </div>
+            </CardContent>
+          </Card>
           <Card>
             <CardContent className="p-2.5 sm:p-3 flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2.5">
               <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground shrink-0" />
@@ -150,7 +204,7 @@ export default async function AdminPage() {
         </div>
       </div>
 
-      <AdminUsersClient users={JSON.parse(JSON.stringify(users))} />
+      <AdminUsersClient users={JSON.parse(JSON.stringify(enrichedUsers))} />
     </div>
   );
 }

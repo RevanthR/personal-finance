@@ -6,9 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Switch } from "@/components/ui/switch";
+import { AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import { format } from "date-fns";
-import { cn } from "@/lib/utils";
+import { format, formatDistanceToNow } from "date-fns";
+import { cn, formatCurrency } from "@/lib/utils";
 
 type User = {
   id: string;
@@ -21,8 +22,36 @@ type User = {
   planType: string;
   planExpiry: string | null;
   trialEndsAt: string | null;
+  gmailSyncStatus: "NONE" | "REQUESTED" | "APPROVED";
+  gmail: { email: string | null; connectedAt: string; lastSyncAt: string | null; needsReauth: boolean } | null;
+  lastActiveAt: string | null;
+  lifetimeSpend: number;
+  syncCostInr: number;
   _count: { months: number };
 };
+
+function GmailStatusCell({ user, onApprove }: { user: User; onApprove: () => void }) {
+  if (user.gmail) {
+    return user.gmail.needsReauth ? (
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-warning">
+        <AlertTriangle className="w-3 h-3" /> Needs reauth
+      </span>
+    ) : (
+      <span className="text-xs font-medium text-positive">Connected</span>
+    );
+  }
+  if (user.gmailSyncStatus === "REQUESTED") {
+    return (
+      <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={onApprove}>
+        Approve request
+      </Button>
+    );
+  }
+  if (user.gmailSyncStatus === "APPROVED") {
+    return <span className="text-xs text-muted-foreground">Approved, not connected</span>;
+  }
+  return <span className="text-xs text-muted-foreground">—</span>;
+}
 
 function PlanBadge({ planType, planExpiry, trialEndsAt }: { planType: string; planExpiry: string | null; trialEndsAt: string | null }) {
   const now = new Date();
@@ -73,7 +102,7 @@ function PlanBadge({ planType, planExpiry, trialEndsAt }: { planType: string; pl
 export function AdminUsersClient({ users: initial }: { users: User[] }) {
   const [users, setUsers] = useState(initial);
 
-  async function updateUser(userId: string, updates: { role?: string; isActive?: boolean }) {
+  async function updateUser(userId: string, updates: { role?: string; isActive?: boolean; gmailSyncStatus?: "NONE" | "REQUESTED" | "APPROVED" }) {
     const res = await fetch("/api/admin/users", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -82,6 +111,11 @@ export function AdminUsersClient({ users: initial }: { users: User[] }) {
     if (!res.ok) { toast.error("Failed to update"); return; }
     setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, ...updates } : u));
     toast.success("User updated");
+  }
+
+  async function approveSync(userId: string, name: string | null) {
+    await updateUser(userId, { gmailSyncStatus: "APPROVED" });
+    toast.message(`Reminder: add ${name ?? "this user"}'s email as a test user in Google Cloud Console too — approving here alone doesn't let them past Google's own consent screen.`);
   }
 
   return (
@@ -115,11 +149,39 @@ export function AdminUsersClient({ users: initial }: { users: User[] }) {
           render: (user) => <PlanBadge planType={user.planType} planExpiry={user.planExpiry} trialEndsAt={user.trialEndsAt} />,
         },
         {
+          key: "lastActive",
+          header: "Last active",
+          align: "right",
+          render: (user) => user.lastActiveAt
+            ? <span title={format(new Date(user.lastActiveAt), "dd MMM yyyy, h:mm a")}>{formatDistanceToNow(new Date(user.lastActiveAt), { addSuffix: true })}</span>
+            : <span className="text-muted-foreground">Never</span>,
+        },
+        {
+          key: "gmail",
+          header: "Gmail",
+          align: "right",
+          render: (user) => <GmailStatusCell user={user} onApprove={() => approveSync(user.id, user.name)} />,
+        },
+        {
           key: "months",
           header: "Months",
           align: "right",
           hideOnMobile: true,
           render: (user) => user._count.months,
+        },
+        {
+          key: "spend",
+          header: "Lifetime spend",
+          align: "right",
+          hideOnMobile: true,
+          render: (user) => formatCurrency(user.lifetimeSpend),
+        },
+        {
+          key: "syncCost",
+          header: "Sync cost",
+          align: "right",
+          hideOnMobile: true,
+          render: (user) => user.syncCostInr > 0 ? `₹${user.syncCostInr.toFixed(2)}` : "—",
         },
         {
           key: "joined",

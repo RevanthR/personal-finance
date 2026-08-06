@@ -11,7 +11,8 @@ export default async function ImportsPage() {
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
 
-  const [gmailConnection, ccTemplates, customCategories, subCategorySuggestions, pending] = await Promise.all([
+  const [user, gmailConnection, ccTemplates, customCategories, subCategorySuggestions, pending] = await Promise.all([
+    db.user.findUnique({ where: { id: userId }, select: { gmailSyncStatus: true } }),
     db.gmailConnection.findUnique({ where: { userId } }),
     db.lineItemTemplate.findMany({
       where: { userId, category: "CREDIT_CARD", isActive: true },
@@ -55,6 +56,7 @@ export default async function ImportsPage() {
 
   const gmail = {
     connected: !!gmailConnection,
+    syncStatus: user?.gmailSyncStatus ?? "NONE",
     connectedEmail: gmailConnection?.email ?? null,
     lastSyncAt: gmailConnection?.lastSyncAt?.toISOString() ?? null,
     ccCards: ccTemplates.map(t => ({ templateId: t.id, name: t.name })),

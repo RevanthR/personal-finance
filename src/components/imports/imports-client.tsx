@@ -92,6 +92,7 @@ interface ImportsClientProps {
     connected: boolean;
     connectedEmail: string | null;
     lastSyncAt: string | null;
+    syncStatus: "NONE" | "REQUESTED" | "APPROVED";
     ccCards: CCCard[];
     customCategories: CustomCat[];
     subCategorySuggestions: SubCategorySuggestion[];
@@ -104,6 +105,17 @@ export function ImportsClient({ gmail }: ImportsClientProps) {
   const [syncing, setSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState<{ processed: number; total: number } | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [requesting, setRequesting] = useState(false);
+  const [syncStatus, setSyncStatus] = useState(gmail.syncStatus);
+
+  async function handleRequestAccess() {
+    setRequesting(true);
+    const res = await fetch("/api/gmail/sync-request", { method: "POST" });
+    setRequesting(false);
+    if (!res.ok) { toast.error("Failed to send request"); return; }
+    setSyncStatus("REQUESTED");
+    toast.success("Requested — you'll be able to connect once approved");
+  }
 
   // Live-refresh (polling + focus/visibility) now lives in Sidebar, since
   // it's present on every page and this page is rendered inside it — no
@@ -193,12 +205,18 @@ export function ImportsClient({ gmail }: ImportsClientProps) {
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-medium truncate">
-                  {gmail.connected ? `Connected${gmail.connectedEmail ? ` as ${gmail.connectedEmail}` : ""}` : "Gmail not connected"}
+                  {gmail.connected
+                    ? `Connected${gmail.connectedEmail ? ` as ${gmail.connectedEmail}` : ""}`
+                    : syncStatus === "REQUESTED" ? "Access requested" : syncStatus === "NONE" ? "Gmail sync not enabled" : "Gmail not connected"}
                 </p>
                 <p className="text-xs text-muted-foreground truncate">
                   {gmail.connected
                     ? gmail.lastSyncAt ? `Last synced ${format(new Date(gmail.lastSyncAt), "d MMM, h:mm a")}` : "Not synced yet"
-                    : "Reads bank transaction alerts and suggests entries, nothing is added automatically."}
+                    : syncStatus === "REQUESTED"
+                      ? "Waiting on approval — you'll be able to connect once it's granted."
+                      : syncStatus === "NONE"
+                        ? "Reads bank transaction alerts and suggests entries, nothing is added automatically. Access needs a quick approval first."
+                        : "Reads bank transaction alerts and suggests entries, nothing is added automatically."}
                 </p>
               </div>
             </div>
@@ -215,10 +233,19 @@ export function ImportsClient({ gmail }: ImportsClientProps) {
                     {disconnecting ? "Disconnecting..." : "Disconnect"}
                   </Button>
                 </>
-              ) : (
+              ) : syncStatus === "APPROVED" ? (
                 <Button size="sm" onClick={() => { window.location.href = "/api/gmail/connect"; }}>
                   <Mail className="w-3.5 h-3.5 mr-1.5" />
                   Connect Gmail
+                </Button>
+              ) : syncStatus === "REQUESTED" ? (
+                <Button size="sm" variant="outline" disabled>
+                  Pending approval
+                </Button>
+              ) : (
+                <Button size="sm" onClick={handleRequestAccess} disabled={requesting}>
+                  {requesting && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
+                  {requesting ? "Requesting..." : "Request Gmail Sync Access"}
                 </Button>
               )}
             </div>

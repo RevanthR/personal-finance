@@ -11,6 +11,7 @@ const SAFE_USER_FIELDS = {
   id: true, name: true, email: true, image: true,
   role: true, isActive: true, createdAt: true,
   planType: true, planExpiry: true, trialEndsAt: true,
+  gmailSyncStatus: true, gmailSyncRequestedAt: true,
   _count: { select: { months: true } },
 } as const;
 
@@ -36,7 +37,7 @@ export async function PATCH(req: NextRequest) {
 
   const parsed = validate(AdminPatchSchema, await req.json());
   if (!parsed.ok) return parsed.response;
-  const { userId, role, isActive } = parsed.data;
+  const { userId, role, isActive, gmailSyncStatus } = parsed.data;
 
   // Prevent admin from locking themselves out
   if (userId === session.user.id && isActive === false) {
@@ -46,8 +47,9 @@ export async function PATCH(req: NextRequest) {
   const updated = await db.user.update({
     where: { id: userId },
     data: {
-      ...(role     !== undefined && { role }),
-      ...(isActive !== undefined && { isActive }),
+      ...(role            !== undefined && { role }),
+      ...(isActive         !== undefined && { isActive }),
+      ...(gmailSyncStatus !== undefined && { gmailSyncStatus }),
     },
     select: SAFE_USER_FIELDS,
   });

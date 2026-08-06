@@ -55,6 +55,20 @@ enum Role {
   USER
 }
 
+// Gmail sync is gated by Google's own OAuth "Testing" publishing status —
+// only emails manually added as test users in Google Cloud Console can
+// complete the consent screen at all, everyone else hits Google's own
+// cryptic "app hasn't completed verification" error with no path forward.
+// This tracks the in-app side of getting past that: a user requests
+// access, an admin adds them as a test user in Google Cloud Console (that
+// step can't be automated via any API) and then approves here, which is
+// what actually unlocks the real Connect Gmail button.
+enum GmailSyncStatus {
+  NONE
+  REQUESTED
+  APPROVED
+}
+
 model User {
   id                String             @id @default(cuid())
   name              String?
@@ -67,6 +81,8 @@ model User {
   planType          String             @default("FREE")  // FREE | WEEKLY | MONTHLY | QUARTERLY | YEARLY
   planExpiry        DateTime?
   trialEndsAt       DateTime?
+  gmailSyncStatus      GmailSyncStatus @default(NONE)
+  gmailSyncRequestedAt DateTime?
   accounts          Account[]
   sessions          Session[]
   months            Month[]

@@ -23,14 +23,16 @@ export const zFrequency          = z.enum(["MONTHLY","YEARLY"]);
 export const zAdHocType          = z.enum(["INCOME","EXPENSE"]);
 export const zPlanType           = z.enum(["FREE","WEEKLY","MONTHLY","QUARTERLY","YEARLY"]);
 export const zRole               = z.enum(["ADMIN","USER"]);
+export const zGmailSyncStatus     = z.enum(["NONE","REQUESTED","APPROVED"]);
 
 // ── Route schemas ─────────────────────────────────────────────────────────────
 export const AdminPatchSchema = z.object({
-  userId:   z.string().min(1),
-  role:     zRole.optional(),
-  isActive: z.boolean().optional(),
-}).refine((d) => d.role !== undefined || d.isActive !== undefined, {
-  message: "Must provide role or isActive",
+  userId:          z.string().min(1),
+  role:            zRole.optional(),
+  isActive:        z.boolean().optional(),
+  gmailSyncStatus: zGmailSyncStatus.optional(),
+}).refine((d) => d.role !== undefined || d.isActive !== undefined || d.gmailSyncStatus !== undefined, {
+  message: "Must provide role, isActive, or gmailSyncStatus",
 });
 
 export const MonthPostSchema = z.object({
