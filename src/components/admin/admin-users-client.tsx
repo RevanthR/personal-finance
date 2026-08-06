@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { format, formatDistanceToNow } from "date-fns";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 type User = {
   id: string;
@@ -25,7 +25,6 @@ type User = {
   gmailSyncStatus: "NONE" | "REQUESTED" | "APPROVED";
   gmail: { email: string | null; connectedAt: string; lastSyncAt: string | null; needsReauth: boolean } | null;
   lastActiveAt: string | null;
-  lifetimeSpend: number;
   syncCostInr: number;
   _count: { months: number };
 };
@@ -168,13 +167,6 @@ export function AdminUsersClient({ users: initial }: { users: User[] }) {
           align: "right",
           hideOnMobile: true,
           render: (user) => user._count.months,
-        },
-        {
-          key: "spend",
-          header: "Lifetime spend",
-          align: "right",
-          hideOnMobile: true,
-          render: (user) => formatCurrency(user.lifetimeSpend),
         },
         {
           key: "syncCost",

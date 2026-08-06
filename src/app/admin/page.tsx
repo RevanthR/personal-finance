@@ -33,7 +33,7 @@ export default async function AdminPage() {
     // Doubles as the real "last active" signal: an isActive toggle is a
     // manual admin flag, not evidence anyone's actually using the app.
     db.month.findMany({
-      select: { userId: true, adHocItems: { select: { amount: true, type: true, createdAt: true } } },
+      select: { userId: true, adHocItems: { select: { createdAt: true } } },
     }),
   ]);
 
@@ -58,21 +58,20 @@ export default async function AdminPage() {
     costUsdByUserId.set(g.userId, (costUsdByUserId.get(g.userId) ?? 0) + cost);
   }
 
-  const activityByUserId = new Map<string, { lastActiveAt: Date | null; lifetimeSpend: number }>();
+  // Deliberately just a timestamp, never an amount — this is a signal for
+  // "are they using the app," not a window into what they're spending.
+  const lastActiveByUserId = new Map<string, Date>();
   for (const m of monthActivity) {
-    const acc = activityByUserId.get(m.userId) ?? { lastActiveAt: null, lifetimeSpend: 0 };
     for (const item of m.adHocItems) {
-      if (item.type === "EXPENSE") acc.lifetimeSpend += item.amount;
-      if (!acc.lastActiveAt || item.createdAt > acc.lastActiveAt) acc.lastActiveAt = item.createdAt;
+      const current = lastActiveByUserId.get(m.userId);
+      if (!current || item.createdAt > current) lastActiveByUserId.set(m.userId, item.createdAt);
     }
-    activityByUserId.set(m.userId, acc);
   }
 
   const enrichedUsers = users.map(u => ({
     ...u,
     gmail: gmailByUserId.get(u.id) ?? null,
-    lastActiveAt: activityByUserId.get(u.id)?.lastActiveAt ?? null,
-    lifetimeSpend: activityByUserId.get(u.id)?.lifetimeSpend ?? 0,
+    lastActiveAt: lastActiveByUserId.get(u.id) ?? null,
     syncCostInr: (costUsdByUserId.get(u.id) ?? 0) * usdToInrRate,
   }));
 
