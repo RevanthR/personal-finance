@@ -179,6 +179,16 @@ export function YearOverviewClient({
   const ytdExpenses = actualMonths.reduce((s, m) => s + m.expenses, 0);
   const ytdSaved    = ytdIncome - ytdExpenses;
 
+  // The other half of "Year to date" — only the months still ahead,
+  // estimated (not yet real). Kept as its own card instead of folding it
+  // into "Projected full year" (YTD + this, already shown separately)
+  // so "what's still coming" and "where I'll end up overall" don't answer
+  // the same question twice.
+  const remainingMonths  = months.filter(m => !m.isPopulated);
+  const remainingIncome  = remainingMonths.reduce((s, m) => s + m.income, 0);
+  const remainingExpenses = remainingMonths.reduce((s, m) => s + m.expenses, 0);
+  const remainingSaved   = remainingIncome - remainingExpenses;
+
   // Savings-rate trend: this month against its own recent history instead
   // of a bare, context-free percentage. "vs FY average" excludes the
   // current (in-progress) month from the average it's being compared
@@ -230,6 +240,12 @@ export function YearOverviewClient({
       {tab === "overview" && (
         <div className="flex flex-col lg:flex-row gap-6 items-start">
           <div className="flex-1 min-w-0 space-y-5">
+            {/* Year to date + rest of year side by side (same width each
+                that already worked fine before this had a third card
+                crammed in) — Projected full year gets its own full-width
+                row below, both because it's really just the sum of the
+                two above it and because a 3-stat card needs real width or
+                the currency values themselves start truncating. */}
             <div className="flex flex-col md:flex-row gap-4 items-stretch">
               <SummaryCard
                 className="flex-1"
@@ -246,6 +262,25 @@ export function YearOverviewClient({
                 ]}
               />
 
+              {projCount > 0 && (
+                <SummaryCard
+                  className="flex-1"
+                  tag="Projected rest of year"
+                  stats={[
+                    {
+                      label: "Projected savings",
+                      value: `${remainingSaved >= 0 ? "+" : "−"}${fmt(Math.abs(remainingSaved))}`,
+                      valueClass: remainingSaved >= 0 ? "text-positive" : "text-negative",
+                      hint: <span className="text-xs text-muted-foreground">{projCount} month{projCount === 1 ? "" : "s"} left</span>,
+                    },
+                    { label: "Income", value: fmt(remainingIncome), valueClass: "text-positive" },
+                    { label: "Expenses", value: fmt(remainingExpenses), valueClass: "text-negative" },
+                  ]}
+                />
+              )}
+            </div>
+
+            <div className="flex flex-col md:flex-row gap-4 items-stretch">
               <SummaryCard
                 className="flex-1"
                 tag="Projected full year"
@@ -267,46 +302,45 @@ export function YearOverviewClient({
                   { label: "Expenses", value: fmt(totalExpenses), valueClass: "text-negative" },
                 ]}
               />
-            </div>
 
-            {currentMonthInsights && (
-              <Card className="w-full">
-                <CardContent className="p-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">Savings rate (this month)</span>
-                        <span className={cn(
-                          "text-sm font-bold",
-                          currentMonthInsights.savingsRate >= 20 ? "text-positive"
-                            : currentMonthInsights.savingsRate >= 0 ? "text-warning"
-                            : "text-negative"
-                        )}>
-                          {currentMonthInsights.savingsRate}%
-                        </span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                        <div
-                          className={cn("h-full rounded-full transition-all", currentMonthInsights.savingsRate >= 20 ? "bg-positive" : currentMonthInsights.savingsRate >= 0 ? "bg-warning" : "bg-negative")}
-                          style={{ width: `${Math.max(0, Math.min(100, currentMonthInsights.savingsRate))}%` }}
-                        />
-                      </div>
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>In: {fmt(currentMonthInsights.totalIncome)}</span>
-                        <span>Out: {fmt(currentMonthInsights.totalExpenses)}</span>
-                      </div>
+              {currentMonthInsights && (
+                <Card className="w-full md:w-72 shrink-0">
+                  <CardContent className="p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Savings rate (this month)</span>
+                      <span className={cn(
+                        "text-sm font-bold",
+                        currentMonthInsights.savingsRate >= 20 ? "text-positive"
+                          : currentMonthInsights.savingsRate >= 0 ? "text-warning"
+                          : "text-negative"
+                      )}>
+                        {currentMonthInsights.savingsRate}%
+                      </span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className={cn("h-full rounded-full transition-all", currentMonthInsights.savingsRate >= 20 ? "bg-positive" : currentMonthInsights.savingsRate >= 0 ? "bg-warning" : "bg-negative")}
+                        style={{ width: `${Math.max(0, Math.min(100, currentMonthInsights.savingsRate))}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>In: {fmt(currentMonthInsights.totalIncome)}</span>
+                      <span>Out: {fmt(currentMonthInsights.totalExpenses)}</span>
                     </div>
                     {/* A rate alone doesn't say whether it's good — these
                         two give it a reference point instead of leaving
-                        that to memory. */}
-                    <div className="space-y-1.5 sm:border-l sm:border-border sm:pl-4 sm:pt-0 pt-1.5 border-t sm:border-t-0 border-border">
+                        that to memory. One column, not a side-by-side
+                        split — this card is narrow by design (it sits
+                        beside another card, not full width), so a second
+                        column would squeeze both halves. */}
+                    <div className="space-y-1.5 pt-1.5 border-t border-border">
                       <SavingsDeltaRow label="vs last month" delta={vsLastMonthDelta} />
                       <SavingsDeltaRow label="vs your FY average" delta={vsFyAvgDelta} />
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
 
             <YearChart months={months} />
             <CCTrendChart months={months} />
