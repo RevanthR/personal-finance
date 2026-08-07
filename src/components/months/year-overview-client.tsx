@@ -187,9 +187,17 @@ export function YearOverviewClient({
                 tag="Projected year-end"
                 stats={[
                   {
-                    label: "Balance",
+                    // Not Income − Expenses (that's the two stats beside
+                    // it) — this is the real cash position: whatever
+                    // carried in before this FY, plus actual cash in/out
+                    // since. Labeled "Cash balance" (matching the
+                    // dashboard's own "Cash/UPI Bal") instead of a bare
+                    // "Balance" that reads like it should reconcile with
+                    // the other two numbers right next to it.
+                    label: "Cash balance",
                     value: `${yearEndBalance >= 0 ? "+" : "−"}${fmt(Math.abs(yearEndBalance))}`,
                     valueClass: yearEndBalance >= 0 ? "text-positive" : "text-negative",
+                    hint: <span className="text-xs text-muted-foreground">incl. opening cash</span>,
                   },
                   { label: "Income", value: fmt(totalIncome), valueClass: "text-positive" },
                   { label: "Expenses", value: fmt(totalExpenses), valueClass: "text-negative" },
