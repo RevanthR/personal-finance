@@ -34,6 +34,27 @@ function ordinal(n: number) {
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
+// A savings-rate percentage on its own says nothing about whether it's
+// good — "15%" needs a reference point. This renders that reference as a
+// small ↑/↓-pts line instead of a second bare number.
+function SavingsDeltaRow({ label, delta }: { label: string; delta: number | null }) {
+  return (
+    <div className="flex items-center justify-between text-xs">
+      <span className="text-muted-foreground">{label}</span>
+      {delta == null ? (
+        <span className="text-muted-foreground">—</span>
+      ) : (
+        <span className={cn(
+          "font-medium",
+          delta > 0 ? "text-positive" : delta < 0 ? "text-negative" : "text-muted-foreground"
+        )}>
+          {delta > 0 ? "↑" : delta < 0 ? "↓" : ""}{Math.abs(delta)} pts
+        </span>
+      )}
+    </div>
+  );
+}
+
 function RankedList({ items, total }: { items: { name: string; value: number; color?: string; pctOverride?: number }[]; total: number }) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
@@ -150,6 +171,34 @@ export function YearOverviewClient({
   const actualCount   = months.filter(m => m.isPopulated).length;
   const projCount     = 12 - actualCount;
 
+  // Real data only, no projected months blended in — "Projected full
+  // year" below answers "where will I end up" (a guess); this answers
+  // "where do I actually stand right now" (fact).
+  const actualMonths = months.filter(m => m.isPopulated);
+  const ytdIncome   = actualMonths.reduce((s, m) => s + m.income, 0);
+  const ytdExpenses = actualMonths.reduce((s, m) => s + m.expenses, 0);
+  const ytdSaved    = ytdIncome - ytdExpenses;
+
+  // Savings-rate trend: this month against its own recent history instead
+  // of a bare, context-free percentage. "vs FY average" excludes the
+  // current (in-progress) month from the average it's being compared
+  // against — including itself would just be comparing it to a number
+  // it's still busy dragging toward.
+  const priorActualMonths = actualMonths.filter(m => !m.isCurrent);
+  const priorIncome   = priorActualMonths.reduce((s, m) => s + m.income, 0);
+  const priorExpenses = priorActualMonths.reduce((s, m) => s + m.expenses, 0);
+  const fyAvgSavingsRate = priorIncome > 0 ? Math.round(((priorIncome - priorExpenses) / priorIncome) * 100) : null;
+
+  const currentIdx = months.findIndex(m => m.isCurrent);
+  const lastMonth = currentIdx > 0 ? [...months.slice(0, currentIdx)].reverse().find(m => m.isPopulated) : undefined;
+  const lastMonthSavingsRate = lastMonth && lastMonth.income > 0
+    ? Math.round(((lastMonth.income - lastMonth.expenses) / lastMonth.income) * 100)
+    : null;
+
+  const thisMonthSavingsRate = currentMonthInsights?.savingsRate ?? null;
+  const vsFyAvgDelta   = thisMonthSavingsRate != null && fyAvgSavingsRate != null ? thisMonthSavingsRate - fyAvgSavingsRate : null;
+  const vsLastMonthDelta = thisMonthSavingsRate != null && lastMonthSavingsRate != null ? thisMonthSavingsRate - lastMonthSavingsRate : null;
+
   const maxMonthValue = Math.max(...months.map(m => Math.max(m.income, m.expenses)));
 
   return (
@@ -184,7 +233,22 @@ export function YearOverviewClient({
             <div className="flex flex-col md:flex-row gap-4 items-stretch">
               <SummaryCard
                 className="flex-1"
-                tag="Projected year-end"
+                tag="Year to date"
+                stats={[
+                  {
+                    label: "Saved so far",
+                    value: `${ytdSaved >= 0 ? "+" : "−"}${fmt(Math.abs(ytdSaved))}`,
+                    valueClass: ytdSaved >= 0 ? "text-positive" : "text-negative",
+                    hint: <span className="text-xs text-muted-foreground">{actualCount} month{actualCount === 1 ? "" : "s"} so far</span>,
+                  },
+                  { label: "Income", value: fmt(ytdIncome), valueClass: "text-positive" },
+                  { label: "Expenses", value: fmt(ytdExpenses), valueClass: "text-negative" },
+                ]}
+              />
+
+              <SummaryCard
+                className="flex-1"
+                tag="Projected full year"
                 stats={[
                   {
                     // Not Income − Expenses (that's the two stats beside
@@ -203,35 +267,46 @@ export function YearOverviewClient({
                   { label: "Expenses", value: fmt(totalExpenses), valueClass: "text-negative" },
                 ]}
               />
-
-              {currentMonthInsights && (
-                <Card className="w-full md:w-64 shrink-0">
-                  <CardContent className="p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">Savings rate (this month)</span>
-                      <span className={cn(
-                        "text-sm font-bold",
-                        currentMonthInsights.savingsRate >= 20 ? "text-positive"
-                          : currentMonthInsights.savingsRate >= 0 ? "text-warning"
-                          : "text-negative"
-                      )}>
-                        {currentMonthInsights.savingsRate}%
-                      </span>
-                    </div>
-                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                      <div
-                        className={cn("h-full rounded-full transition-all", currentMonthInsights.savingsRate >= 20 ? "bg-positive" : currentMonthInsights.savingsRate >= 0 ? "bg-warning" : "bg-negative")}
-                        style={{ width: `${Math.max(0, Math.min(100, currentMonthInsights.savingsRate))}%` }}
-                      />
-                    </div>
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>In: {fmt(currentMonthInsights.totalIncome)}</span>
-                      <span>Out: {fmt(currentMonthInsights.totalExpenses)}</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
             </div>
+
+            {currentMonthInsights && (
+              <Card className="w-full">
+                <CardContent className="p-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">Savings rate (this month)</span>
+                        <span className={cn(
+                          "text-sm font-bold",
+                          currentMonthInsights.savingsRate >= 20 ? "text-positive"
+                            : currentMonthInsights.savingsRate >= 0 ? "text-warning"
+                            : "text-negative"
+                        )}>
+                          {currentMonthInsights.savingsRate}%
+                        </span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className={cn("h-full rounded-full transition-all", currentMonthInsights.savingsRate >= 20 ? "bg-positive" : currentMonthInsights.savingsRate >= 0 ? "bg-warning" : "bg-negative")}
+                          style={{ width: `${Math.max(0, Math.min(100, currentMonthInsights.savingsRate))}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>In: {fmt(currentMonthInsights.totalIncome)}</span>
+                        <span>Out: {fmt(currentMonthInsights.totalExpenses)}</span>
+                      </div>
+                    </div>
+                    {/* A rate alone doesn't say whether it's good — these
+                        two give it a reference point instead of leaving
+                        that to memory. */}
+                    <div className="space-y-1.5 sm:border-l sm:border-border sm:pl-4 sm:pt-0 pt-1.5 border-t sm:border-t-0 border-border">
+                      <SavingsDeltaRow label="vs last month" delta={vsLastMonthDelta} />
+                      <SavingsDeltaRow label="vs your FY average" delta={vsFyAvgDelta} />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             <YearChart months={months} />
             <CCTrendChart months={months} />
