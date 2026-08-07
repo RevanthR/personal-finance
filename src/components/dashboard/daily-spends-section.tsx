@@ -119,25 +119,32 @@ export function DailySpendsSection({ adHocItems, ccCards, onDelete, onEditReques
         <span className="fin-label">Daily / Regular Spends</span>
       </div>
 
-      {/* Category filter — tap to narrow the list to one category, tap
-          again (or "All") to clear. Built from the same grouped data below
-          rather than a separate query. */}
-      {groups.length > 1 && (
-        <div className="flex flex-wrap gap-2 mb-2">
-          <Chip label="All" active={activeFilter === null} onClick={() => setActiveFilter(null)} />
-          {groups.map(g => (
-            <Chip key={g.key} label={g.label} active={activeFilter === g.key} onClick={() => setActiveFilter(activeFilter === g.key ? null : g.key)} />
-          ))}
+      {/* Date filter — independent axis from method/category below. Only
+          worth showing once there's more than one day's spend to actually
+          narrow. */}
+      {allExpenseItems.length > 1 && (
+        <div className="flex flex-wrap items-center gap-2 mb-2">
+          <Chip label="All dates" active={dateFilter === "ALL"} onClick={() => setDateFilter("ALL")} />
+          <Chip label="Today" icon={CalendarDays} active={dateFilter === "TODAY"} onClick={() => setDateFilter(dateFilter === "TODAY" ? "ALL" : "TODAY")} />
+          <Chip label="This week" icon={CalendarDays} active={dateFilter === "WEEK"} onClick={() => setDateFilter(dateFilter === "WEEK" ? "ALL" : "WEEK")} />
+          <Chip label="Custom" icon={CalendarDays} active={dateFilter === "CUSTOM"} onClick={() => setDateFilter(dateFilter === "CUSTOM" ? "ALL" : "CUSTOM")} />
+          {dateFilter === "CUSTOM" && (
+            <div className="flex items-center gap-1.5 basis-full">
+              <Input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="h-8 w-auto text-xs" />
+              <span className="text-xs text-muted-foreground">to</span>
+              <Input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className="h-8 w-auto text-xs" />
+            </div>
+          )}
         </div>
       )}
 
-      {/* Paid-via filter — separate axis from category above, so "show me
+      {/* Paid-via filter — separate axis from category below, so "show me
           only card spends" or "only this card" works regardless of which
           category chip is active. Built from allExpenseItems (pre-method-
           filter) so a method that would zero out the list doesn't disappear
           from the row itself. */}
       {ccCards.length > 0 && allExpenseItems.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-3">
+        <div className="flex flex-wrap gap-2 mb-2">
           <Chip label="All" active={activeMethod === "ALL"} onClick={() => setActiveMethod("ALL")} />
           <Chip label="Cash/UPI" icon={Wallet} active={activeMethod === "CASH"} onClick={() => setActiveMethod(activeMethod === "CASH" ? "ALL" : "CASH")} />
           {ccCards.map(card => (
@@ -152,22 +159,15 @@ export function DailySpendsSection({ adHocItems, ccCards, onDelete, onEditReques
         </div>
       )}
 
-      {/* Date filter — third, independent axis from category/method above.
-          Only worth showing once there's more than one day's spend to
-          actually narrow. */}
-      {allExpenseItems.length > 1 && (
-        <div className="flex flex-wrap items-center gap-2 mb-3">
-          <Chip label="All dates" active={dateFilter === "ALL"} onClick={() => setDateFilter("ALL")} />
-          <Chip label="Today" icon={CalendarDays} active={dateFilter === "TODAY"} onClick={() => setDateFilter(dateFilter === "TODAY" ? "ALL" : "TODAY")} />
-          <Chip label="This week" icon={CalendarDays} active={dateFilter === "WEEK"} onClick={() => setDateFilter(dateFilter === "WEEK" ? "ALL" : "WEEK")} />
-          <Chip label="Custom" icon={CalendarDays} active={dateFilter === "CUSTOM"} onClick={() => setDateFilter(dateFilter === "CUSTOM" ? "ALL" : "CUSTOM")} />
-          {dateFilter === "CUSTOM" && (
-            <div className="flex items-center gap-1.5 basis-full">
-              <Input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="h-8 w-auto text-xs" />
-              <span className="text-xs text-muted-foreground">to</span>
-              <Input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className="h-8 w-auto text-xs" />
-            </div>
-          )}
+      {/* Category filter — tap to narrow the list to one category, tap
+          again (or "All") to clear. Built from the same grouped data below
+          rather than a separate query. */}
+      {groups.length > 1 && (
+        <div className="flex flex-wrap gap-2 mb-3">
+          <Chip label="All" active={activeFilter === null} onClick={() => setActiveFilter(null)} />
+          {groups.map(g => (
+            <Chip key={g.key} label={g.label} active={activeFilter === g.key} onClick={() => setActiveFilter(activeFilter === g.key ? null : g.key)} />
+          ))}
         </div>
       )}
 
