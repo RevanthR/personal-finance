@@ -299,7 +299,12 @@ export function YearOverviewClient({
                         </div>
                       </div>
 
-                      {/* Balance */}
+                      {/* Balance — the sign/color already say saved vs.
+                          deficit, so the caption below doesn't repeat that
+                          as a word squeezed next to an unrelated second
+                          number ("saved · ₹X spent" read as one run-on
+                          line). One number per line, each labeled for what
+                          it actually is. */}
                       <p className={cn(
                         "text-xs font-bold",
                         m.balance >= 0 ? "text-positive" : "text-negative"
@@ -307,7 +312,7 @@ export function YearOverviewClient({
                         {m.balance >= 0 ? "+" : "−"}{fmt(Math.abs(m.balance))}
                       </p>
                       <p className="text-xs mt-0.5 text-muted-foreground">
-                        {m.balance >= 0 ? "saved" : "deficit"} · {fmt(m.expenses)} spent
+                        Spent {fmt(m.expenses)}
                       </p>
                     </div>
                   );
