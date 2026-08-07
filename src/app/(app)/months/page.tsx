@@ -69,7 +69,7 @@ export default async function MonthsPage() {
   // (analyticsMonths just adds isPopulated: true, currentMonthFull just
   // narrows to one month/year) — both are strict subsets of allMonths and
   // are now derived from it below instead of refetched.
-  const [allMonths, allTemplates, pendingReceivables] = await Promise.all([
+  const [allMonths, allTemplates, pendingReceivables, foreclosures] = await Promise.all([
     db.month.findMany({
       where: { userId },
       include: { entries: { include: { template: true } }, adHocItems: true },
@@ -79,7 +79,23 @@ export default async function MonthsPage() {
     db.receivable.findMany({
       where: { userId, status: "PENDING", expectedDate: { not: null } },
     }),
+    // A foreclosure's lump sum is a real cash outflow (stays in Expenses
+    // and the Cash balance) but a one-off, not a spending pattern — kept
+    // separate here so the Monthly Breakdown can flag which month it hit,
+    // and the savings-rate trend below can compare like-for-like months
+    // instead of reading a deliberate early payoff as a bad month.
+    db.lineItemTemplate.findMany({
+      where: { userId, foreClosedOn: { not: null } },
+      select: { foreClosedOn: true, foreCloseAmount: true },
+    }),
   ]);
+
+  const foreclosureByMonthKey = new Map<string, number>();
+  for (const f of foreclosures) {
+    if (!f.foreClosedOn || !f.foreCloseAmount) continue;
+    const key = `${f.foreClosedOn.getUTCFullYear()}-${f.foreClosedOn.getUTCMonth() + 1}`;
+    foreclosureByMonthKey.set(key, (foreclosureByMonthKey.get(key) ?? 0) + f.foreCloseAmount);
+  }
 
   const currentMonthFull = allMonths.find(m => m.month === todayMonth && m.year === todayYear) ?? null;
   const analyticsMonths = allMonths.filter(m => m.isPopulated);
@@ -168,6 +184,7 @@ export default async function MonthsPage() {
         isCurrent: month === todayMonth && year === todayYear,
         hasIncomeChange: false,
         endingTemplateNames: [],
+        foreclosureAmount: foreclosureByMonthKey.get(`${year}-${month}`) ?? 0,
       };
     }
     // Projected: sum active expense templates that haven't ended yet
@@ -224,6 +241,7 @@ export default async function MonthsPage() {
       isCurrent: month === todayMonth && year === todayYear,
       hasIncomeChange: incomeChangeMonths.has(`${year}-${month}`),
       endingTemplateNames,
+      foreclosureAmount: foreclosureByMonthKey.get(`${year}-${month}`) ?? 0,
     };
   });
 

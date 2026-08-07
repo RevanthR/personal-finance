@@ -115,6 +115,10 @@ export type MonthData = {
   isCurrent: boolean;
   hasIncomeChange?: boolean;
   endingTemplateNames?: string[];
+  // A loan foreclosure's lump sum, already counted in `expenses`/`balance`
+  // above (it's real cash out) — surfaced separately so a one-off payoff
+  // can be flagged instead of just looking like a bad month.
+  foreclosureAmount?: number;
 };
 
 type PastFY = {
@@ -190,24 +194,37 @@ export function YearOverviewClient({
   const remainingSaved   = remainingIncome - remainingExpenses;
 
   // Savings-rate trend: this month against its own recent history instead
-  // of a bare, context-free percentage. "vs FY average" excludes the
-  // current (in-progress) month from the average it's being compared
-  // against — including itself would just be comparing it to a number
-  // it's still busy dragging toward.
+  // of a bare, context-free percentage. Every month in the comparison
+  // (this one, last month, and each month behind the FY average) has any
+  // loan-foreclosure lump sum excluded first — a deliberate early payoff
+  // isn't a spending pattern, and comparing it raw against a normal month
+  // would just read as an alarming one-time crash instead of the good
+  // move it actually was. The headline "Savings rate (this month)" number
+  // itself is untouched by this — only these comparison deltas are.
+  const recurringSavingsRate = (m: MonthData): number | null => {
+    if (m.income <= 0) return null;
+    const recurringExpenses = Math.max(0, m.expenses - (m.foreclosureAmount ?? 0));
+    return Math.round(((m.income - recurringExpenses) / m.income) * 100);
+  };
+
+  // "vs FY average" excludes the current (in-progress) month from the
+  // average it's being compared against — including itself would just be
+  // comparing it to a number it's still busy dragging toward.
   const priorActualMonths = actualMonths.filter(m => !m.isCurrent);
-  const priorIncome   = priorActualMonths.reduce((s, m) => s + m.income, 0);
-  const priorExpenses = priorActualMonths.reduce((s, m) => s + m.expenses, 0);
-  const fyAvgSavingsRate = priorIncome > 0 ? Math.round(((priorIncome - priorExpenses) / priorIncome) * 100) : null;
+  const priorRecurringIncome   = priorActualMonths.reduce((s, m) => s + m.income, 0);
+  const priorRecurringExpenses = priorActualMonths.reduce((s, m) => s + Math.max(0, m.expenses - (m.foreclosureAmount ?? 0)), 0);
+  const fyAvgSavingsRate = priorRecurringIncome > 0 ? Math.round(((priorRecurringIncome - priorRecurringExpenses) / priorRecurringIncome) * 100) : null;
 
   const currentIdx = months.findIndex(m => m.isCurrent);
   const lastMonth = currentIdx > 0 ? [...months.slice(0, currentIdx)].reverse().find(m => m.isPopulated) : undefined;
-  const lastMonthSavingsRate = lastMonth && lastMonth.income > 0
-    ? Math.round(((lastMonth.income - lastMonth.expenses) / lastMonth.income) * 100)
-    : null;
+  const lastMonthSavingsRate = lastMonth ? recurringSavingsRate(lastMonth) : null;
 
-  const thisMonthSavingsRate = currentMonthInsights?.savingsRate ?? null;
+  const currentMonthData = months.find(m => m.isCurrent);
+  const thisMonthSavingsRate = currentMonthData ? recurringSavingsRate(currentMonthData) : null;
   const vsFyAvgDelta   = thisMonthSavingsRate != null && fyAvgSavingsRate != null ? thisMonthSavingsRate - fyAvgSavingsRate : null;
   const vsLastMonthDelta = thisMonthSavingsRate != null && lastMonthSavingsRate != null ? thisMonthSavingsRate - lastMonthSavingsRate : null;
+  const hasForeclosureInComparison = (currentMonthData?.foreclosureAmount ?? 0) > 0 || (lastMonth?.foreclosureAmount ?? 0) > 0
+    || priorActualMonths.some(m => (m.foreclosureAmount ?? 0) > 0);
 
   const maxMonthValue = Math.max(...months.map(m => Math.max(m.income, m.expenses)));
 
@@ -336,6 +353,9 @@ export function YearOverviewClient({
                     <div className="space-y-1.5 pt-1.5 border-t border-border">
                       <SavingsDeltaRow label="vs last month" delta={vsLastMonthDelta} />
                       <SavingsDeltaRow label="vs your FY average" delta={vsFyAvgDelta} />
+                      {hasForeclosureInComparison && (
+                        <p className="text-[11px] text-muted-foreground pt-0.5">Excludes loan foreclosures (see FC-tagged months below)</p>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -374,6 +394,14 @@ export function YearOverviewClient({
                         <div className="flex items-center gap-0.5 flex-wrap justify-end">
                           {m.hasIncomeChange && (
                             <span className="text-xs font-bold text-positive bg-positive-bg px-1 py-0.5 rounded">↑</span>
+                          )}
+                          {(m.foreclosureAmount ?? 0) > 0 && (
+                            <span
+                              title={`Includes a ${fmt(m.foreclosureAmount!)} loan foreclosure — a one-off payoff, not regular spend`}
+                              className="text-xs font-bold text-primary bg-accent px-1 py-0.5 rounded"
+                            >
+                              FC
+                            </span>
                           )}
                           {(m.endingTemplateNames?.length ?? 0) > 0 && (
                             <span
