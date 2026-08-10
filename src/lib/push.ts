@@ -46,6 +46,20 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
       await db.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
     }
   }
+
+  // Track which tags currently have a notification showing, so a later
+  // close can tell whether it actually has anything to do (see
+  // closePushForUser) instead of firing a needless silent-then-flash push.
+  if (sent > 0 && payload.type !== "close" && payload.tag) {
+    const user = await db.user.findUnique({ where: { id: userId }, select: { activePushTags: true } });
+    if (user && !user.activePushTags.includes(payload.tag)) {
+      await db.user.update({
+        where: { id: userId },
+        data: { activePushTags: { push: payload.tag } },
+      }).catch(() => {});
+    }
+  }
+
   return sent;
 }
 
@@ -54,6 +68,20 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
 // the laptop shouldn't leave the same banner sitting on the phone. Pass
 // `url` too when closing a tag that's only just started being set (catches
 // anything already showing from before the tag existed).
+//
+// Skips sending anything when this tag has no notification currently
+// showing — every close still has to satisfy the browser's "every push is
+// visible" rule with a brief placeholder flash (see public/sw.js), so
+// firing one when there's nothing to close is a needless flash for no
+// reason, not just a wasted request.
 export async function closePushForUser(userId: string, tag: string, url?: string): Promise<number> {
+  const user = await db.user.findUnique({ where: { id: userId }, select: { activePushTags: true } });
+  if (!user?.activePushTags.includes(tag)) return 0;
+
+  await db.user.update({
+    where: { id: userId },
+    data: { activePushTags: user.activePushTags.filter((t) => t !== tag) },
+  }).catch(() => {});
+
   return sendPushToUser(userId, { type: "close", tag, url });
 }

@@ -1,7 +1,6 @@
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
-import webpush from "web-push";
-import { initVapid, PAYMENT_REMINDER_PUSH_TAG } from "@/lib/push";
+import { initVapid, sendPushToUser, PAYMENT_REMINDER_PUSH_TAG } from "@/lib/push";
 import { actualDueDate } from "@/lib/finance-utils";
 import { prevMonthYear } from "@/lib/utils";
 
@@ -65,23 +64,17 @@ export async function GET(req: NextRequest) {
     byUser.get(uid)!.push(e);
   }
 
-  // Fetch subscriptions for relevant users
-  const userIds = [...byUser.keys()];
-  const subs = await db.pushSubscription.findMany({
-    where: { userId: { in: userIds } },
-  });
-
   let sent = 0;
-  const expiredIds: string[] = [];
 
   for (const [userId, userEntries] of byUser) {
-    const userSubs = subs.filter(s => s.userId === userId);
-    if (userSubs.length === 0) continue;
-
     const names = userEntries.map(e => e.template.name);
     const dueDay = userEntries[0].template.dueDateDay!;
 
-    const payload = JSON.stringify({
+    // Routed through sendPushToUser (not raw webpush) so it marks
+    // PAYMENT_REMINDER_PUSH_TAG active — otherwise the close sent when a
+    // bill gets paid (src/app/api/months/[monthId]/entries/route.ts) would
+    // always see nothing to close and skip it, leaving this banner stuck.
+    sent += await sendPushToUser(userId, {
       title: names.length === 1
         ? `${names[0]} due in 3 days`
         : `${names.length} payments due in 3 days`,
@@ -93,24 +86,7 @@ export async function GET(req: NextRequest) {
       // entries/route.ts) closes this on every device — same tag.
       tag: PAYMENT_REMINDER_PUSH_TAG,
     });
-
-    for (const sub of userSubs) {
-      try {
-        await webpush.sendNotification(
-          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-          payload
-        );
-        sent++;
-      } catch {
-        expiredIds.push(sub.id);
-      }
-    }
   }
 
-  // Clean up expired subscriptions
-  if (expiredIds.length > 0) {
-    await db.pushSubscription.deleteMany({ where: { id: { in: expiredIds } } });
-  }
-
-  return NextResponse.json({ sent, expiredRemoved: expiredIds.length });
+  return NextResponse.json({ sent });
 }

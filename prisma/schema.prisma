@@ -83,6 +83,11 @@ model User {
   trialEndsAt       DateTime?
   gmailSyncStatus      GmailSyncStatus @default(NONE)
   gmailSyncRequestedAt DateTime?
+  // Push tags with a notification currently showing somewhere (set when a
+  // "notify" push is sent, cleared when the matching "close" push is sent).
+  // Lets closePushForUser skip sending anything when there's nothing to
+  // close — see src/lib/push.ts.
+  activePushTags       String[]        @default([])
   accounts          Account[]
   sessions          Session[]
   months            Month[]

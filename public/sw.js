@@ -93,12 +93,19 @@ self.addEventListener("push", (event) => {
         // Browsers require every push to a userVisibleOnly subscription to
         // result in a visible notification, or they eventually revoke the
         // subscription outright for "silent push" abuse — which is exactly
-        // what a close-only push (no showNotification call) used to be.
-        // Show a near-instant, silent placeholder and close it right away:
-        // this satisfies the browser's check without leaving a lingering
-        // banner for the user.
+        // what a close-only push (no showNotification call) used to be. The
+        // server only sends this when a notification is actually showing
+        // somewhere (see closePushForUser in src/lib/push.ts), so by the
+        // time this runs there's something real to say — show that instead
+        // of a blank flash, then close it right away rather than leaving it
+        // sitting in the tray.
         const silentTag = `silent-${data.tag ?? "close"}`;
-        await self.registration.showNotification("", { tag: silentTag, silent: true, requireInteraction: false });
+        await self.registration.showNotification("Handled on another device", {
+          body: "Cleared — no action needed here.",
+          tag: silentTag,
+          silent: true,
+          requireInteraction: false,
+        });
         const placeholder = await self.registration.getNotifications({ tag: silentTag });
         placeholder.forEach((n) => n.close());
       })()
