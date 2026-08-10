@@ -84,11 +84,24 @@ self.addEventListener("push", (event) => {
   // no tag to match, but still carries the same url, so it's still reachable.
   if (data.type === "close" && (data.tag || data.url)) {
     event.waitUntil(
-      self.registration.getNotifications().then((notifications) => {
+      (async () => {
+        const notifications = await self.registration.getNotifications();
         for (const n of notifications) {
           if ((data.tag && n.tag === data.tag) || (data.url && n.data?.url === data.url)) n.close();
         }
-      })
+
+        // Browsers require every push to a userVisibleOnly subscription to
+        // result in a visible notification, or they eventually revoke the
+        // subscription outright for "silent push" abuse — which is exactly
+        // what a close-only push (no showNotification call) used to be.
+        // Show a near-instant, silent placeholder and close it right away:
+        // this satisfies the browser's check without leaving a lingering
+        // banner for the user.
+        const silentTag = `silent-${data.tag ?? "close"}`;
+        await self.registration.showNotification("", { tag: silentTag, silent: true, requireInteraction: false });
+        const placeholder = await self.registration.getNotifications({ tag: silentTag });
+        placeholder.forEach((n) => n.close());
+      })()
     );
     return;
   }
