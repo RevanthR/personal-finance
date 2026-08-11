@@ -539,6 +539,22 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   const entries = useMemo(() => currentMonth?.entries ?? [], [currentMonth]);
   const adHocItems = useMemo(() => currentMonth?.adHocItems ?? [], [currentMonth]);
 
+  // Cross-month pool for the Daily Spends "Custom" date filter — recentMonths
+  // (last 6 real months, always fetched for the dashboard's own trend/carry
+  // logic) already carries every month's adHocItems, so a custom range isn't
+  // limited to whichever single month currentMonth happens to be. currentMonth
+  // itself may or may not already be one of the 6 (viewing an older month
+  // pushes it out of that window), so dedupe by id rather than concatenating
+  // blindly.
+  const allAdHocItems = useMemo(() => {
+    const byId = new Map<string, RecentMonthSummary["adHocItems"][number]>();
+    for (const m of recentMonths) {
+      for (const item of m.adHocItems) byId.set(item.id, item);
+    }
+    for (const item of adHocItems) byId.set(item.id, item);
+    return [...byId.values()];
+  }, [recentMonths, adHocItems]);
+
   // A card's statement popup needs every charge that could still belong to
   // its currently-outstanding bill or its accumulating one — for a card
   // whose Bill Generation Date falls early in the month (e.g. the 1st),
@@ -1302,8 +1318,8 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
           },
           ...(!isProjected ? [{
             label: "Cash/UPI Bal",
-            value: fmt(Math.max(0, inHandNow)),
-            valueClass: "text-positive",
+            value: `${inHandNow < 0 ? "-" : ""}${fmt(Math.abs(inHandNow))}`,
+            valueClass: inHandNow < 0 ? "text-negative" : "text-positive",
             onClick: () => setShowCashDrilldown(true),
             hint: openingBalance !== 0
               ? <span className="text-xs text-muted-foreground">{openingBalance > 0 ? "+" : "-"}{fmt(Math.abs(openingBalance))} carried over</span>
@@ -1568,6 +1584,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       {tab === "spends" && !isProjected && (
         <DailySpendsSection
           adHocItems={adHocItems}
+          allAdHocItems={allAdHocItems}
           ccCards={ccTemplates.map(t => ({ templateId: t.id, name: t.name }))}
           onDelete={handleAdHocDelete}
           onEditRequest={handleEditRequest}
@@ -1991,7 +2008,9 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             )}
             <div className="flex items-center justify-between pt-2 border-t border-border">
               <p className="text-sm font-semibold">Cash/UPI balance now</p>
-              <span className="text-sm font-bold text-positive">{fmt(inHandNow)}</span>
+              <span className={cn("text-sm font-bold", inHandNow < 0 ? "text-negative" : "text-positive")}>
+                {inHandNow < 0 ? "-" : ""}{fmt(Math.abs(inHandNow))}
+              </span>
             </div>
           </div>
         </DialogContent>

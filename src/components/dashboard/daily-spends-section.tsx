@@ -8,7 +8,7 @@ import { CategoryBadge } from "@/components/ui/category-badge";
 import { formatCurrency, getCategoryDisplay, getCategoryColor, getCategoryIcon, getSubCategoryIcon, groupItemsByCategory, cn } from "@/lib/utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { Pencil, Trash2, ChevronDown, CreditCard, Wallet, CalendarDays } from "lucide-react";
-import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, isWithinInterval } from "date-fns";
+import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, isWithinInterval, subMonths } from "date-fns";
 
 export type AdHocItem = {
   id: string; name: string; amount: number; type: string;
@@ -18,6 +18,11 @@ export type AdHocItem = {
 
 interface DailySpendsSectionProps {
   adHocItems: AdHocItem[];
+  // Cross-month pool (last 6 real months) — only tapped for the "Custom"
+  // date filter, since that's the one mode where the user is deliberately
+  // asking for a range that isn't implicitly "this month". Optional so
+  // callers that only ever show one month (if any) don't have to pass it.
+  allAdHocItems?: AdHocItem[];
   ccCards: { templateId: string; name: string }[];
   onDelete: (id: string) => void;
   onEditRequest: (item: AdHocItem) => void;
@@ -29,7 +34,7 @@ interface DailySpendsSectionProps {
 // longer live nested inside their card's block; the bill/dues side of a
 // card lives in PendingCardPaymentsSection instead, this is purely "what
 // did I spend, on what, via which mode, on which day."
-export function DailySpendsSection({ adHocItems, ccCards, onDelete, onEditRequest, removingIds }: DailySpendsSectionProps) {
+export function DailySpendsSection({ adHocItems, allAdHocItems, ccCards, onDelete, onEditRequest, removingIds }: DailySpendsSectionProps) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
@@ -46,13 +51,25 @@ export function DailySpendsSection({ adHocItems, ccCards, onDelete, onEditReques
   const [customTo, setCustomTo] = useState("");
 
   const allExpenseItems = adHocItems.filter(i => i.type === "EXPENSE");
+
+  // A fully-picked Custom range is the one mode where the user is
+  // deliberately asking outside "this month" — pull from the cross-month
+  // pool instead of the current month's own items. Everything else here
+  // (section visibility, the date/method chips themselves) still keys off
+  // allExpenseItems so switching dateFilter never changes what other chips
+  // are available.
+  const dateFilterSourceItems = dateFilter === "CUSTOM" && customFrom && customTo && allAdHocItems
+    ? allAdHocItems.filter(i => i.type === "EXPENSE")
+    : allExpenseItems;
+
   const methodFilteredItems = activeMethod === "ALL"
-    ? allExpenseItems
+    ? dateFilterSourceItems
     : activeMethod === "CASH"
-      ? allExpenseItems.filter(i => !i.ccTemplateId)
-      : allExpenseItems.filter(i => i.ccTemplateId === activeMethod);
+      ? dateFilterSourceItems.filter(i => !i.ccTemplateId)
+      : dateFilterSourceItems.filter(i => i.ccTemplateId === activeMethod);
 
   const today = new Date();
+  const minCustomDate = format(subMonths(today, 6), "yyyy-MM-dd");
   const expenseItems = methodFilteredItems.filter(i => {
     if (dateFilter === "ALL") return true;
     const d = new Date(i.date);
@@ -130,9 +147,12 @@ export function DailySpendsSection({ adHocItems, ccCards, onDelete, onEditReques
           <Chip label="Custom" icon={CalendarDays} active={dateFilter === "CUSTOM"} onClick={() => setDateFilter(dateFilter === "CUSTOM" ? "ALL" : "CUSTOM")} />
           {dateFilter === "CUSTOM" && (
             <div className="flex items-center gap-1.5 basis-full">
-              <Input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="h-8 w-auto text-xs" />
+              {/* allAdHocItems only carries the last 6 real months (see
+                  dashboard-client.tsx) — floor the picker there so a chosen
+                  range can't silently exceed what's actually available. */}
+              <Input type="date" min={minCustomDate} value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="h-8 w-auto text-xs" />
               <span className="text-xs text-muted-foreground">to</span>
-              <Input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className="h-8 w-auto text-xs" />
+              <Input type="date" min={minCustomDate} value={customTo} onChange={e => setCustomTo(e.target.value)} className="h-8 w-auto text-xs" />
             </div>
           )}
         </div>
