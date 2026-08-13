@@ -31,6 +31,7 @@ import { usePaymentTick } from "@/hooks/use-payment-tick";
 import { DashboardTour } from "@/components/coach/dashboard-tour";
 import { GmailReconnectBanner, type GmailStatus } from "./gmail-reconnect-banner";
 import type { CCCard, AdHocSubmitFields } from "./adhoc-dialog";
+import type { AdHocItem } from "@/types/adhoc-item";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -127,7 +128,7 @@ type RecentMonthSummary = {
   salaryIncome: number; freelanceIncome: number; otherIncome: number;
   openingBalance: number;
   entries: { id: string; templateId: string; amount: number; cashbackAmount: number | null }[];
-  adHocItems: { id: string; name: string; type: string; amount: number; category: string | null; customCategory: string | null; customCategoryId: string | null; subCategory: string | null; notes: string | null; ccTemplateId: string | null; isCredit?: boolean; isCardRepayment?: boolean; date: string }[];
+  adHocItems: AdHocItem[];
 };
 
 type EntryWithTemplate = {
@@ -137,16 +138,42 @@ type EntryWithTemplate = {
   template: { id: string; name: string; category: string; customCategory: string | null; isFixed: boolean; dueDateDay: number | null; statementDay: number | null; creditLimit?: number | null; loanInterestRate: number | null; loanRateType: string | null; loanOriginalPrincipal: number | null; loanStartDate: string | null; loanOutstandingOverride: number | null };
 };
 
-type AdHocItem = {
-  id: string; name: string; amount: number; type: string; category: string | null; customCategory: string | null; customCategoryId: string | null; subCategory: string | null; date: string; notes: string | null; ccTemplateId: string | null; isCredit?: boolean; isCardRepayment?: boolean;
-};
-
 
 // Every consumer below skips CREDIT_CARD immediately (it has its own
 // Pending Card Payments section), so its position in this list never
 // actually matters — safe to reuse the shared EXPENSE_CATEGORIES export
 // instead of maintaining a second, independently-ordered copy.
 const CATEGORY_ORDER = EXPENSE_CATEGORIES;
+
+// Builds the full AdHocItem shape from a raw API response (the POST/PATCH
+// /api/months/[monthId]/adhoc handlers always return every field, but this
+// makes that an explicit contract instead of four independent inline field
+// lists — one of which had already silently dropped isCredit before
+// isCardRepayment forced a closer look at all four). Used everywhere
+// recentMonths' cached copy of an item needs to be built or replaced after
+// an add/edit, so a future field only ever needs to be threaded through here.
+function toAdHocItemSummary(raw: {
+  id: string; name: string; amount: number; type: string; date: string;
+  category: string | null; customCategory?: string | null; customCategoryId?: string | null;
+  subCategory?: string | null; notes?: string | null; ccTemplateId?: string | null;
+  isCredit?: boolean; isCardRepayment?: boolean;
+}): AdHocItem {
+  return {
+    id: raw.id,
+    name: raw.name,
+    amount: raw.amount,
+    type: raw.type,
+    date: raw.date,
+    category: raw.category,
+    customCategory: raw.customCategory ?? null,
+    customCategoryId: raw.customCategoryId ?? null,
+    subCategory: raw.subCategory ?? null,
+    notes: raw.notes ?? null,
+    ccTemplateId: raw.ccTemplateId ?? null,
+    isCredit: raw.isCredit ?? false,
+    isCardRepayment: raw.isCardRepayment ?? false,
+  };
+}
 
 const INCOME_SOURCES = [
   { value: "bonus",     label: "Bonus",     dbCategory: "OTHER_INCOME" },
@@ -1003,7 +1030,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     if (movedToMonth) {
       setRecentMonths(prev => prev.map(m =>
         m.id === newItem.monthId
-          ? { ...m, adHocItems: [{ id: newItem.id, name: newItem.name, type: newItem.type, amount: newItem.amount, category: newItem.category, customCategory: newItem.customCategory ?? null, customCategoryId: newItem.customCategoryId ?? null, subCategory: newItem.subCategory ?? null, notes: newItem.notes ?? null, ccTemplateId: newItem.ccTemplateId ?? null, isCredit: newItem.isCredit ?? false, isCardRepayment: newItem.isCardRepayment ?? false, date: newItem.date }, ...m.adHocItems] }
+          ? { ...m, adHocItems: [toAdHocItemSummary(newItem), ...m.adHocItems] }
           : m
       ));
       toast.success(`Added to ${formatMonthYear(movedToMonth.month, movedToMonth.year)}, that's the entry's real month`);
@@ -1022,7 +1049,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     });
     setRecentMonths(prev => prev.map(m =>
       m.id === currentMonth!.id
-        ? { ...m, adHocItems: [{ id: newItem.id, name: newItem.name, type: newItem.type, amount: newItem.amount, category: newItem.category, customCategory: newItem.customCategory ?? null, customCategoryId: newItem.customCategoryId ?? null, subCategory: newItem.subCategory ?? null, notes: newItem.notes ?? null, ccTemplateId: newItem.ccTemplateId ?? null, isCredit: newItem.isCredit ?? false, isCardRepayment: newItem.isCardRepayment ?? false, date: newItem.date }, ...m.adHocItems] }
+        ? { ...m, adHocItems: [toAdHocItemSummary(newItem), ...m.adHocItems] }
         : m
     ));
     toast.success("Added");
@@ -1095,7 +1122,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     if (movedToMonth) {
       setRecentMonths(prev => prev.map(m => {
         if (m.id === currentMonth!.id) return { ...m, adHocItems: m.adHocItems.filter(i => i.id !== id) };
-        if (m.id === updated.monthId) return { ...m, adHocItems: [{ id: updated.id, name: updated.name, type: updated.type, amount: updated.amount, category: updated.category, customCategory: updated.customCategory ?? null, customCategoryId: updated.customCategoryId ?? null, subCategory: updated.subCategory ?? null, notes: updated.notes ?? null, ccTemplateId: updated.ccTemplateId ?? null, isCredit: updated.isCredit ?? false, isCardRepayment: updated.isCardRepayment ?? false, date: updated.date }, ...m.adHocItems.filter(i => i.id !== id)] };
+        if (m.id === updated.monthId) return { ...m, adHocItems: [toAdHocItemSummary(updated), ...m.adHocItems.filter(i => i.id !== id)] };
         return m;
       }));
       toast.success(`Moved to ${formatMonthYear(movedToMonth.month, movedToMonth.year)}, that's the entry's real month`);
@@ -1104,7 +1131,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     }
     setRecentMonths(prev => prev.map(m =>
       m.id === currentMonth!.id
-        ? { ...m, adHocItems: m.adHocItems.map(i => i.id === id ? { ...i, type: updated.type, amount: updated.amount, category: updated.category, customCategory: updated.customCategory ?? null, customCategoryId: updated.customCategoryId ?? null, subCategory: updated.subCategory ?? null, notes: updated.notes ?? null, ccTemplateId: updated.ccTemplateId ?? null, isCredit: updated.isCredit ?? false, isCardRepayment: updated.isCardRepayment ?? false } : i) }
+        ? { ...m, adHocItems: m.adHocItems.map(i => i.id === id ? toAdHocItemSummary(updated) : i) }
         : m
     ));
     toast.success("Updated");

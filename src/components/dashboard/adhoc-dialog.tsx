@@ -14,6 +14,7 @@ import { useCategoryPicker } from "@/hooks/use-category-picker";
 import { cn } from "@/lib/utils";
 import { Wallet, CreditCard } from "lucide-react";
 import { format } from "date-fns";
+import type { AdHocItem } from "@/types/adhoc-item";
 
 const INCOME_SOURCES = [
   { value: "bonus",         label: "Bonus",     dbCategory: "OTHER_INCOME" },
@@ -25,19 +26,11 @@ const INCOME_SOURCES = [
 export type CCCard = { templateId: string; name: string };
 export type SubCategorySuggestion = { category: string | null; customCategoryId: string | null; subCategory: string | null };
 
-export interface EditableAdHocItem {
-  id: string;
-  name: string;
-  amount: number;
-  type: string;
-  category: string | null;
-  customCategory: string | null;
-  subCategory: string | null;
-  date: string;
-  notes: string | null;
-  ccTemplateId: string | null;
-  isCardRepayment?: boolean;
-}
+// This dialog never edits customCategoryId or isCredit directly (custom
+// category is re-resolved from customCategoryName on submit, and isCredit
+// is derived server-side from isCardRepayment), so it narrows to what it
+// actually reads instead of the full shared shape.
+export type EditableAdHocItem = Pick<AdHocItem, "id" | "name" | "amount" | "type" | "category" | "customCategory" | "subCategory" | "date" | "notes" | "ccTemplateId" | "isCardRepayment">;
 
 export interface AdHocSubmitFields {
   name: string; amount: number; type: string;

@@ -9,26 +9,13 @@ import { usePrivacy } from "@/contexts/privacy-context";
 import { formatCurrency, cn } from "@/lib/utils";
 import { mostRecentCloseDate } from "@/lib/finance-utils";
 import { Pencil, Trash2 } from "lucide-react";
+import type { AdHocItem } from "@/types/adhoc-item";
 
 // Full AdHocItem shape, not just what's shown — a repayment row's edit/
 // delete buttons (see onEditRequest/onDelete below) hand the whole item
 // straight to the same handlers Daily Spend uses, which need every field
 // AdHocDialog's edit form reads.
-export type CardTransaction = {
-  id: string;
-  name: string;
-  amount: number;
-  date: string;
-  type: string;
-  category: string | null;
-  customCategory: string | null;
-  customCategoryId: string | null;
-  subCategory: string | null;
-  notes: string | null;
-  ccTemplateId: string | null;
-  isCredit?: boolean;
-  isCardRepayment?: boolean;
-};
+export type CardTransaction = AdHocItem;
 
 interface CardStatementDialogProps {
   open: boolean;

@@ -9,12 +9,11 @@ import { SegmentedControl } from "@/components/ui/segmented-control";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ReferenceLine, ResponsiveContainer,
 } from "recharts";
+import type { AdHocItem as FullAdHocItem } from "@/types/adhoc-item";
 
-type AdHocItem = {
-  id: string; type: string; amount: number; date: string;
-  category: string | null; customCategory: string | null; customCategoryId: string | null; subCategory: string | null; ccTemplateId: string | null;
-  isCredit?: boolean; isCardRepayment?: boolean;
-};
+// This chart never reads name/notes, so it narrows to just what it uses
+// instead of importing the full shape.
+type AdHocItem = Pick<FullAdHocItem, "id" | "type" | "amount" | "date" | "category" | "customCategory" | "customCategoryId" | "subCategory" | "ccTemplateId" | "isCredit" | "isCardRepayment">;
 
 // A credit/refund row's amount is stored as a positive magnitude but nets
 // OUT of spend totals instead of adding to them.

@@ -9,12 +9,9 @@ import { formatCurrency, getCategoryDisplay, getCategoryColor, getCategoryIcon, 
 import { usePrivacy } from "@/contexts/privacy-context";
 import { Pencil, Trash2, ChevronDown, CreditCard, Wallet, CalendarDays } from "lucide-react";
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, isWithinInterval, subMonths } from "date-fns";
+import type { AdHocItem } from "@/types/adhoc-item";
 
-export type AdHocItem = {
-  id: string; name: string; amount: number; type: string;
-  category: string | null; customCategory: string | null; customCategoryId: string | null; subCategory: string | null;
-  date: string; notes: string | null; ccTemplateId: string | null; isCredit?: boolean; isCardRepayment?: boolean;
-};
+export type { AdHocItem };
 
 interface DailySpendsSectionProps {
   adHocItems: AdHocItem[];
