@@ -74,6 +74,11 @@ export const AdHocPostSchema = z.object({
   date:           zDateStr,
   notes:          zNotes,
   ccTemplateId:   z.string().optional(),
+  // Money paid toward a card's own bill, not a new charge — see
+  // AdHocItem.isCardRepayment in schema.prisma. Requires ccTemplateId,
+  // enforced in the route handler (needs it resolved first to give a
+  // clearer error than a generic schema failure).
+  isCardRepayment: z.boolean().optional(),
 });
 
 export const AdHocPatchSchema = z.object({

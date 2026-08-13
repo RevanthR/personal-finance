@@ -127,7 +127,7 @@ type RecentMonthSummary = {
   salaryIncome: number; freelanceIncome: number; otherIncome: number;
   openingBalance: number;
   entries: { id: string; templateId: string; amount: number; cashbackAmount: number | null }[];
-  adHocItems: { id: string; name: string; type: string; amount: number; category: string | null; customCategory: string | null; customCategoryId: string | null; subCategory: string | null; notes: string | null; ccTemplateId: string | null; isCredit?: boolean; date: string }[];
+  adHocItems: { id: string; name: string; type: string; amount: number; category: string | null; customCategory: string | null; customCategoryId: string | null; subCategory: string | null; notes: string | null; ccTemplateId: string | null; isCredit?: boolean; isCardRepayment?: boolean; date: string }[];
 };
 
 type EntryWithTemplate = {
@@ -138,7 +138,7 @@ type EntryWithTemplate = {
 };
 
 type AdHocItem = {
-  id: string; name: string; amount: number; type: string; category: string | null; customCategory: string | null; customCategoryId: string | null; subCategory: string | null; date: string; notes: string | null; ccTemplateId: string | null; isCredit?: boolean;
+  id: string; name: string; amount: number; type: string; category: string | null; customCategory: string | null; customCategoryId: string | null; subCategory: string | null; date: string; notes: string | null; ccTemplateId: string | null; isCredit?: boolean; isCardRepayment?: boolean;
 };
 
 
@@ -180,7 +180,7 @@ function isBillPending(e: EntryWithTemplate, isCurrent: boolean, day: number)   
 // transaction list, only whether next cycle already has spend against it
 // (hasPostCloseSpend) to guard the "Clear" action.
 function CCCardBlock({
-  entry, hasPostCloseSpend, nextMonthName, isBillPending, onUpdate, onClearStatement, collapsed, onToggle, transactions,
+  entry, hasPostCloseSpend, nextMonthName, isBillPending, onUpdate, onClearStatement, collapsed, onToggle, transactions, onEditRequest, onDelete, removingIds,
 }: {
   entry: EntryWithTemplate;
   hasPostCloseSpend: boolean;
@@ -191,6 +191,9 @@ function CCCardBlock({
   collapsed: boolean;
   onToggle: () => void;
   transactions: CardTransaction[];
+  onEditRequest: (item: AdHocItem) => void;
+  onDelete: (id: string) => void;
+  removingIds: Set<string>;
 }) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
@@ -438,6 +441,9 @@ function CCCardBlock({
         cardName={entry.template.name}
         statementDay={statementDay}
         transactions={transactions}
+        onEditRequest={onEditRequest}
+        onDelete={onDelete}
+        removingIds={removingIds}
         hasOutstandingBill={!isBillPending || carriedInAmount > 0}
       />
 
@@ -997,7 +1003,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     if (movedToMonth) {
       setRecentMonths(prev => prev.map(m =>
         m.id === newItem.monthId
-          ? { ...m, adHocItems: [{ id: newItem.id, name: newItem.name, type: newItem.type, amount: newItem.amount, category: newItem.category, customCategory: newItem.customCategory ?? null, customCategoryId: newItem.customCategoryId ?? null, subCategory: newItem.subCategory ?? null, notes: newItem.notes ?? null, ccTemplateId: newItem.ccTemplateId ?? null, date: newItem.date }, ...m.adHocItems] }
+          ? { ...m, adHocItems: [{ id: newItem.id, name: newItem.name, type: newItem.type, amount: newItem.amount, category: newItem.category, customCategory: newItem.customCategory ?? null, customCategoryId: newItem.customCategoryId ?? null, subCategory: newItem.subCategory ?? null, notes: newItem.notes ?? null, ccTemplateId: newItem.ccTemplateId ?? null, isCredit: newItem.isCredit ?? false, isCardRepayment: newItem.isCardRepayment ?? false, date: newItem.date }, ...m.adHocItems] }
           : m
       ));
       toast.success(`Added to ${formatMonthYear(movedToMonth.month, movedToMonth.year)}, that's the entry's real month`);
@@ -1016,7 +1022,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     });
     setRecentMonths(prev => prev.map(m =>
       m.id === currentMonth!.id
-        ? { ...m, adHocItems: [{ id: newItem.id, name: newItem.name, type: newItem.type, amount: newItem.amount, category: newItem.category, customCategory: newItem.customCategory ?? null, customCategoryId: newItem.customCategoryId ?? null, subCategory: newItem.subCategory ?? null, notes: newItem.notes ?? null, ccTemplateId: newItem.ccTemplateId ?? null, date: newItem.date }, ...m.adHocItems] }
+        ? { ...m, adHocItems: [{ id: newItem.id, name: newItem.name, type: newItem.type, amount: newItem.amount, category: newItem.category, customCategory: newItem.customCategory ?? null, customCategoryId: newItem.customCategoryId ?? null, subCategory: newItem.subCategory ?? null, notes: newItem.notes ?? null, ccTemplateId: newItem.ccTemplateId ?? null, isCredit: newItem.isCredit ?? false, isCardRepayment: newItem.isCardRepayment ?? false, date: newItem.date }, ...m.adHocItems] }
         : m
     ));
     toast.success("Added");
@@ -1089,7 +1095,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     if (movedToMonth) {
       setRecentMonths(prev => prev.map(m => {
         if (m.id === currentMonth!.id) return { ...m, adHocItems: m.adHocItems.filter(i => i.id !== id) };
-        if (m.id === updated.monthId) return { ...m, adHocItems: [{ id: updated.id, name: updated.name, type: updated.type, amount: updated.amount, category: updated.category, customCategory: updated.customCategory ?? null, customCategoryId: updated.customCategoryId ?? null, subCategory: updated.subCategory ?? null, notes: updated.notes ?? null, ccTemplateId: updated.ccTemplateId ?? null, date: updated.date }, ...m.adHocItems.filter(i => i.id !== id)] };
+        if (m.id === updated.monthId) return { ...m, adHocItems: [{ id: updated.id, name: updated.name, type: updated.type, amount: updated.amount, category: updated.category, customCategory: updated.customCategory ?? null, customCategoryId: updated.customCategoryId ?? null, subCategory: updated.subCategory ?? null, notes: updated.notes ?? null, ccTemplateId: updated.ccTemplateId ?? null, isCredit: updated.isCredit ?? false, isCardRepayment: updated.isCardRepayment ?? false, date: updated.date }, ...m.adHocItems.filter(i => i.id !== id)] };
         return m;
       }));
       toast.success(`Moved to ${formatMonthYear(movedToMonth.month, movedToMonth.year)}, that's the entry's real month`);
@@ -1098,7 +1104,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     }
     setRecentMonths(prev => prev.map(m =>
       m.id === currentMonth!.id
-        ? { ...m, adHocItems: m.adHocItems.map(i => i.id === id ? { ...i, type: updated.type, amount: updated.amount, category: updated.category, customCategory: updated.customCategory ?? null, customCategoryId: updated.customCategoryId ?? null, subCategory: updated.subCategory ?? null, notes: updated.notes ?? null, ccTemplateId: updated.ccTemplateId ?? null } : i) }
+        ? { ...m, adHocItems: m.adHocItems.map(i => i.id === id ? { ...i, type: updated.type, amount: updated.amount, category: updated.category, customCategory: updated.customCategory ?? null, customCategoryId: updated.customCategoryId ?? null, subCategory: updated.subCategory ?? null, notes: updated.notes ?? null, ccTemplateId: updated.ccTemplateId ?? null, isCredit: updated.isCredit ?? false, isCardRepayment: updated.isCardRepayment ?? false } : i) }
         : m
     ));
     toast.success("Updated");
@@ -1537,6 +1543,9 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
               collapsed={isCCCardCollapsed(entry.id)}
               onToggle={() => toggleCCCard(entry.id)}
               transactions={cardTransactions}
+              onEditRequest={handleEditRequest}
+              onDelete={handleAdHocDelete}
+              removingIds={removingIds}
             />
           );
         };

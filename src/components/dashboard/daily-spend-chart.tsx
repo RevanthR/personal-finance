@@ -13,7 +13,7 @@ import {
 type AdHocItem = {
   id: string; type: string; amount: number; date: string;
   category: string | null; customCategory: string | null; customCategoryId: string | null; subCategory: string | null; ccTemplateId: string | null;
-  isCredit?: boolean;
+  isCredit?: boolean; isCardRepayment?: boolean;
 };
 
 // A credit/refund row's amount is stored as a positive magnitude but nets
@@ -71,7 +71,10 @@ export function DailySpendChart({ recentMonths, targetMonth, targetYear, todayMo
     const isCurrentMonth = selected.month === todayMonth && selected.year === todayYear;
     const lastDay = isCurrentMonth ? Math.min(new Date().getDate(), daysInMonth) : daysInMonth;
 
-    const expenseItems = selected.adHocItems.filter(i => i.type === "EXPENSE");
+    // A card repayment is a transfer toward the bill, not spend on either
+    // cash or card — excluded here the same way daily-spends-section.tsx
+    // excludes it from the category breakdown.
+    const expenseItems = selected.adHocItems.filter(i => i.type === "EXPENSE" && !i.isCardRepayment);
     const series = mode === "category" ? buildCategorySeries(expenseItems) : METHOD_SERIES;
     const seriesKeys = new Set(series.map(s => s.key));
 

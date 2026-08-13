@@ -443,6 +443,12 @@ function AddForm({ item, ccCards, customCategories, subCategorySuggestions, onDo
   const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD">(item.paymentMethod === "CREDIT_CARD" ? "CARD" : "CASH");
   const isCC = paymentMethod === "CARD";
   const [ccTemplateId, setCCTemplateId] = useState(item.suggestedCcTemplateId ?? ccCards[0]?.templateId ?? "");
+  // Same distinction (and same signal) the approve endpoint uses to skip
+  // category and exclude this from Daily Spend — see the isCC && isIncome
+  // branch in src/app/api/gmail/parsed/[id]/route.ts. Only used for the
+  // message below; the endpoint re-derives it server-side rather than
+  // trusting anything sent from here.
+  const isCardRepayment = item.paymentMethod !== "CREDIT_CARD";
   // A remembered choice for this merchant (see src/lib/merchant-memory.ts)
   // wins over the generic Family default and Gemini's freeform sub-category
   // guess — either way, the chip row just surfaces a pre-fill, easily
@@ -529,7 +535,9 @@ function AddForm({ item, ccCards, customCategories, subCategorySuggestions, onDo
         {isIncome ? (
           <p className="text-xs text-warning bg-warning-bg border border-warning-border rounded-md px-2 py-1">
             {isCC
-              ? <>Looks like a refund or credit. This will reduce the card&apos;s bill instead of adding a charge.</>
+              ? (isCardRepayment
+                  ? <>Looks like a payment toward this card&apos;s bill. This will reduce what&apos;s owed, no category needed.</>
+                  : <>Looks like a refund or credit. This will reduce the card&apos;s bill instead of adding a charge.</>)
               : <>Looks like a credit or refund. This will be added as income (Other Income) instead of an expense.</>}
           </p>
         ) : (

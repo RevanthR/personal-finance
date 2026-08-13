@@ -43,12 +43,20 @@ export async function POST(
     return NextResponse.json({ error: "Invalid card" }, { status: 400 });
   }
 
+  // A repayment must say which card it's paying down — there's nothing to
+  // reduce otherwise — and it isn't spending in any category, so any
+  // category the client sent is ignored rather than validated.
+  const isCardRepayment = body.type === "EXPENSE" && body.isCardRepayment === true;
+  if (isCardRepayment && !body.ccTemplateId) {
+    return NextResponse.json({ error: "A card repayment needs a card" }, { status: 400 });
+  }
+
   // A top-level custom category (e.g. "Kids") forces category to
   // MISCELLANEOUS — same convention LineItemTemplate's custom-category
   // flow already uses.
-  const customCat = body.customCategory ? await resolveCustomCategory(userId, body.customCategory) : null;
-  const resolvedCategory = (customCat ? "MISCELLANEOUS" : body.category) as Category | undefined;
-  const subCategory = body.subCategory
+  const customCat = !isCardRepayment && body.customCategory ? await resolveCustomCategory(userId, body.customCategory) : null;
+  const resolvedCategory = isCardRepayment ? undefined : ((customCat ? "MISCELLANEOUS" : body.category) as Category | undefined);
+  const subCategory = !isCardRepayment && body.subCategory
     ? await resolveSubCategory(userId, { category: resolvedCategory ?? null, customCategoryId: customCat?.id ?? null }, body.subCategory)
     : null;
 
@@ -74,14 +82,20 @@ export async function POST(
         customCategoryId: customCat?.id ?? null,
         subCategory,
         ccTemplateId: body.ccTemplateId ?? null,
+        isCredit: isCardRepayment,
+        isCardRepayment,
         date,
         notes: body.notes ?? null,
       },
     });
 
+    // A repayment reduces what's owed instead of adding to it — the
+    // inverse of a normal card charge.
     let updatedEntry: EntryFields | null = null;
     if (body.type === "EXPENSE" && body.ccTemplateId) {
-      updatedEntry = await applyCCEffect(tx, userId, targetMonthId, body.ccTemplateId, date, body.amount);
+      updatedEntry = isCardRepayment
+        ? await reverseCCEffect(tx, userId, targetMonthId, body.ccTemplateId, date, body.amount)
+        : await applyCCEffect(tx, userId, targetMonthId, body.ccTemplateId, date, body.amount);
     }
     return { item, updatedEntry };
   });

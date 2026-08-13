@@ -4,16 +4,30 @@ import { useState } from "react";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TabsUnderline } from "@/components/ui/tabs-underline";
+import { Button } from "@/components/ui/button";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { formatCurrency, cn } from "@/lib/utils";
 import { mostRecentCloseDate } from "@/lib/finance-utils";
+import { Pencil, Trash2 } from "lucide-react";
 
+// Full AdHocItem shape, not just what's shown — a repayment row's edit/
+// delete buttons (see onEditRequest/onDelete below) hand the whole item
+// straight to the same handlers Daily Spend uses, which need every field
+// AdHocDialog's edit form reads.
 export type CardTransaction = {
   id: string;
   name: string;
   amount: number;
   date: string;
+  type: string;
+  category: string | null;
+  customCategory: string | null;
+  customCategoryId: string | null;
+  subCategory: string | null;
+  notes: string | null;
+  ccTemplateId: string | null;
   isCredit?: boolean;
+  isCardRepayment?: boolean;
 };
 
 interface CardStatementDialogProps {
@@ -28,6 +42,14 @@ interface CardStatementDialogProps {
   // generated bill" in any meaningful sense even though real charges
   // exist there. See CCCardBlock's own carriedInAmount/isBillPending.
   hasOutstandingBill: boolean;
+  // Only offered for repayment rows (see the isCardRepayment check below) —
+  // this dialog stays a read-only itemized view for normal charges, same as
+  // before; repayments need SOME way to fix or remove a mistake now that
+  // excluding them from Daily Spend (see daily-spends-section.tsx) also
+  // removed their only other edit/delete surface.
+  onEditRequest?: (item: CardTransaction) => void;
+  onDelete?: (id: string) => void;
+  removingIds?: Set<string>;
 }
 
 // Itemized view of what's actually behind a card's two numbers — this
@@ -38,7 +60,7 @@ interface CardStatementDialogProps {
 // Date falls early in the month has most of its currently-owed bill's
 // transactions dated in the PREVIOUS calendar month, so day-of-month alone
 // (which only ever sees one month's items) can't place them correctly.
-export function CardStatementDialog({ open, onOpenChange, cardName, statementDay, transactions, hasOutstandingBill }: CardStatementDialogProps) {
+export function CardStatementDialog({ open, onOpenChange, cardName, statementDay, transactions, hasOutstandingBill, onEditRequest, onDelete, removingIds }: CardStatementDialogProps) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const [tab, setTab] = useState<"current" | "upcoming">("current");
@@ -105,11 +127,27 @@ export function CardStatementDialog({ open, onOpenChange, cardName, statementDay
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium truncate">{t.name}</p>
-                  {t.isCredit && <p className="text-xs text-positive">Credit</p>}
+                  {t.isCredit && <p className="text-xs text-positive">{t.isCardRepayment ? "Repayment" : "Credit"}</p>}
                 </div>
                 <span className={cn("text-sm font-semibold shrink-0 tabular-nums", t.isCredit ? "text-positive" : "text-foreground")}>
                   {t.isCredit ? "+" : "-"}{fmt(t.amount)}
                 </span>
+                {t.isCardRepayment && onEditRequest && (
+                  <Button variant="ghost" size="sm" onClick={() => onEditRequest(t)} className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground shrink-0">
+                    <Pencil className="w-3.5 h-3.5" />
+                  </Button>
+                )}
+                {t.isCardRepayment && onDelete && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={removingIds?.has(t.id)}
+                    onClick={() => onDelete(t.id)}
+                    className="h-8 w-8 p-0 text-muted-foreground hover:text-negative shrink-0"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                )}
               </div>
             ))
           )}

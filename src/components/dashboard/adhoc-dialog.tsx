@@ -36,11 +36,13 @@ export interface EditableAdHocItem {
   date: string;
   notes: string | null;
   ccTemplateId: string | null;
+  isCardRepayment?: boolean;
 }
 
 export interface AdHocSubmitFields {
   name: string; amount: number; type: string;
   category?: string; customCategory?: string; subCategory?: string; date: string; notes?: string; ccTemplateId?: string;
+  isCardRepayment?: boolean;
 }
 
 interface AdHocDialogProps {
@@ -73,16 +75,25 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
   const [date, setDate] = useState(editing ? editing.date.split("T")[0] : format(new Date(), "yyyy-MM-dd"));
   const [notes, setNotes] = useState(editing?.notes ?? "");
   const [loading, setLoading] = useState(false);
+  // Locked once created (same reasoning as type — converting a real charge
+  // into a repayment or back would need to reverse and reapply its CC
+  // effect the opposite way, better handled as delete + re-add). Only ever
+  // true here for an existing repayment row; new items get the checkbox
+  // below instead.
+  const isExistingRepayment = !!editing?.isCardRepayment;
+  const [isRepayment, setIsRepayment] = useState(isExistingRepayment);
 
   function reset() {
     setType("EXPENSE"); picker.reset();
     setPaymentMethod("CASH"); setCCCard(ccCards[0] ?? null);
-    setName(""); setAmount(""); setDate(format(new Date(), "yyyy-MM-dd")); setNotes("");
+    setName(""); setAmount(""); setDate(format(new Date(), "yyyy-MM-dd")); setNotes(""); setIsRepayment(false);
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!name || !amount || !picker.hasCategory) return;
+    // A repayment isn't spending in any category, so it never needs one —
+    // same reasoning as the isIncome branch of the Gmail review form.
+    if (!name || !amount || (!isRepayment && !picker.hasCategory) || (isRepayment && !ccCard)) return;
     setLoading(true);
 
     const resolvedCategory = type === "INCOME"
@@ -93,9 +104,9 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
       name,
       amount: parseFloat(amount),
       type,
-      category: resolvedCategory,
-      customCategory: type === "EXPENSE" ? (picker.customCategoryName.trim() || undefined) : undefined,
-      subCategory: type === "EXPENSE" ? (picker.subLabel.trim() || undefined) : undefined,
+      category: isRepayment ? undefined : resolvedCategory,
+      customCategory: type === "EXPENSE" && !isRepayment ? (picker.customCategoryName.trim() || undefined) : undefined,
+      subCategory: type === "EXPENSE" && !isRepayment ? (picker.subLabel.trim() || undefined) : undefined,
       date,
       notes: notes || undefined,
       ccTemplateId: type !== "EXPENSE"
@@ -105,6 +116,7 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
           // Editing needs an explicit "" to clear a previously-set card;
           // adding just omits the field so POST stores a clean null.
           : (isEditing ? "" : undefined),
+      isCardRepayment: isRepayment,
     };
 
     if (isEditing) {
@@ -118,7 +130,7 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
     if (!isEditing) onOpenChange(false);
   }
 
-  const canSubmit = !loading && !!name && !!amount && picker.hasCategory;
+  const canSubmit = !loading && !!name && !!amount && (isRepayment ? !!ccCard : picker.hasCategory);
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v && !isEditing) reset(); onOpenChange(v); }}>
@@ -169,13 +181,19 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
 
           {type === "EXPENSE" ? (
             <>
-              <CategoryChipPicker picker={picker} customCategories={customCategories} />
+              {isRepayment ? (
+                <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                  Card repayment, this pays down the card&apos;s balance rather than being a spending category.
+                </div>
+              ) : (
+                <CategoryChipPicker picker={picker} customCategories={customCategories} />
+              )}
 
               {/* Payment method — small, fixed option counts, chips suit these better than a dropdown */}
               <div>
                 <Label className="text-xs mb-2 block">Paid via</Label>
                 <div className="flex flex-wrap gap-1.5">
-                  <Chip label="Cash/UPI" icon={Wallet} active={paymentMethod === "CASH"} onClick={() => setPaymentMethod("CASH")} />
+                  <Chip label="Cash/UPI" icon={Wallet} active={paymentMethod === "CASH"} onClick={() => { setPaymentMethod("CASH"); setIsRepayment(false); }} />
                   <Chip label="Card" icon={CreditCard} active={paymentMethod === "CARD"} onClick={() => setPaymentMethod("CARD")} />
                 </div>
                 {paymentMethod === "CARD" && ccCards.length > 0 && (
@@ -184,6 +202,22 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
                       <Chip key={card.templateId} label={card.name} active={ccCard?.templateId === card.templateId} onClick={() => setCCCard(card)} />
                     ))}
                   </div>
+                )}
+                {/* Locked once created (see isExistingRepayment above) — only offered
+                    while adding a brand-new item, never for editing an existing charge. */}
+                {paymentMethod === "CARD" && !isEditing && (
+                  <label className="flex items-center gap-2 mt-2.5 text-xs text-muted-foreground cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isRepayment}
+                      onChange={e => setIsRepayment(e.target.checked)}
+                      className="rounded border-border"
+                    />
+                    This is a payment toward the card&apos;s bill, not a new purchase
+                  </label>
+                )}
+                {isEditing && isExistingRepayment && (
+                  <p className="text-xs text-muted-foreground mt-2">Repayment, can&apos;t be changed here.</p>
                 )}
               </div>
             </>

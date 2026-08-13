@@ -369,10 +369,19 @@ model AdHocItem {
   ccTemplate        LineItemTemplate? @relation(fields: [ccTemplateId], references: [id], onDelete: SetNull)
   // A credit/refund against a CC card (not a new charge) — amount is still
   // stored as a positive magnitude, this flags it to be netted OUT of the
-  // card's statement total instead of added, and out of spend totals
-  // instead of counted as a spend. Internal-only: never user-settable via
-  // the manual add-expense form, only ever set by the Gmail-approve flow.
+  // card's statement total instead of added. Set by the Gmail-approve
+  // flow (a detected refund) or by the manual dialog's "card repayment"
+  // toggle (see isCardRepayment below) — always paired with ccTemplateId.
   isCredit          Boolean         @default(false)
+  // Narrows isCredit to specifically "money paid toward the card's own
+  // bill" (bank transfer/UPI/autopay settling what's owed) rather than a
+  // merchant refund on a past purchase. The distinction matters because a
+  // repayment isn't spending in any category — unlike a merchant refund,
+  // which still nets sensibly against whatever category the original
+  // purchase was in — so a repayment is excluded entirely from category
+  // totals and the Daily Spend breakdown instead of just netting to zero
+  // there. Always false unless isCredit is also true.
+  isCardRepayment   Boolean         @default(false)
   date              DateTime
   notes             String?
   createdAt         DateTime        @default(now())

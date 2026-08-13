@@ -306,12 +306,15 @@ export default async function MonthsPage() {
         color: CATEGORY_COLORS[key] ?? "#94a3b8",
       }));
 
-    // CC sub-category breakdown from adHocItems
+    // CC sub-category breakdown from adHocItems — a repayment has no
+    // sub-category and isn't spend at all (see isCardRepayment), so it's
+    // excluded rather than dumped into "Other"; a genuine refund still
+    // nets OUT of its sub-category's total instead of adding to it.
     const ccMap = new Map<string, number>();
     for (const a of cm.adHocItems) {
-      if (a.type === "EXPENSE" && a.ccTemplateId) {
+      if (a.type === "EXPENSE" && a.ccTemplateId && !a.isCardRepayment) {
         const subcat = a.subCategory ?? "Other";
-        ccMap.set(subcat, (ccMap.get(subcat) ?? 0) + a.amount);
+        ccMap.set(subcat, (ccMap.get(subcat) ?? 0) + (a.isCredit ? -a.amount : a.amount));
       }
     }
     const ccSubcatBreakdown = [...ccMap.entries()]
@@ -334,7 +337,10 @@ export default async function MonthsPage() {
     );
     const cardMap = new Map<string, number>();
     for (const a of cm.adHocItems) {
-      if (a.type === "EXPENSE" && a.ccTemplateId) {
+      // A repayment isn't usage of the card, it's paying it down — leaving
+      // it in here would drag a heavily-used card's total down (or negative)
+      // by however much got paid off, understating real usage.
+      if (a.type === "EXPENSE" && a.ccTemplateId && !a.isCardRepayment) {
         const name = cardNameById.get(a.ccTemplateId) ?? "Card";
         cardMap.set(name, (cardMap.get(name) ?? 0) + (a.isCredit ? -a.amount : a.amount));
       }
@@ -620,13 +626,14 @@ export default async function MonthsPage() {
     reliefMilestones.push({ month: m, year: y, label: `${MONTHS[m - 1]} ${y}`, monthsFromNow, items, totalRelief, committedAfter: runningCommitted });
   }
 
-  // CC annual subcats
+  // CC annual subcats — same repayment exclusion and credit-netting as the
+  // monthly ccMap above.
   const ccAnnualSubcatMap = new Map<string, number>();
   for (const m of fyActual) {
     for (const a of m.adHocItems) {
-      if (a.type === "EXPENSE" && a.ccTemplateId) {
+      if (a.type === "EXPENSE" && a.ccTemplateId && !a.isCardRepayment) {
         const subcat = a.subCategory ?? "Other";
-        ccAnnualSubcatMap.set(subcat, (ccAnnualSubcatMap.get(subcat) ?? 0) + a.amount);
+        ccAnnualSubcatMap.set(subcat, (ccAnnualSubcatMap.get(subcat) ?? 0) + (a.isCredit ? -a.amount : a.amount));
       }
     }
   }

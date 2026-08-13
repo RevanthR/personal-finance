@@ -13,7 +13,7 @@ import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, isWithinInterval,
 export type AdHocItem = {
   id: string; name: string; amount: number; type: string;
   category: string | null; customCategory: string | null; customCategoryId: string | null; subCategory: string | null;
-  date: string; notes: string | null; ccTemplateId: string | null; isCredit?: boolean;
+  date: string; notes: string | null; ccTemplateId: string | null; isCredit?: boolean; isCardRepayment?: boolean;
 };
 
 interface DailySpendsSectionProps {
@@ -50,7 +50,11 @@ export function DailySpendsSection({ adHocItems, allAdHocItems, ccCards, onDelet
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
 
-  const allExpenseItems = adHocItems.filter(i => i.type === "EXPENSE");
+  // A card repayment is money paid TOWARD a card's bill, not a purchase in
+  // any category — it belongs in the card's own statement view (see
+  // CardStatementDialog), not here, so it's excluded outright rather than
+  // included and netted to a category total that has nothing to do with it.
+  const allExpenseItems = adHocItems.filter(i => i.type === "EXPENSE" && !i.isCardRepayment);
 
   // A fully-picked Custom range is the one mode where the user is
   // deliberately asking outside "this month" — pull from the cross-month
@@ -59,7 +63,7 @@ export function DailySpendsSection({ adHocItems, allAdHocItems, ccCards, onDelet
   // allExpenseItems so switching dateFilter never changes what other chips
   // are available.
   const dateFilterSourceItems = dateFilter === "CUSTOM" && customFrom && customTo && allAdHocItems
-    ? allAdHocItems.filter(i => i.type === "EXPENSE")
+    ? allAdHocItems.filter(i => i.type === "EXPENSE" && !i.isCardRepayment)
     : allExpenseItems;
 
   const methodFilteredItems = activeMethod === "ALL"

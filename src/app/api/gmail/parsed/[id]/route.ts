@@ -160,15 +160,31 @@ export async function PATCH(
   // stuck PENDING, or vice versa.
   if (isCC) {
     if (isIncome) {
+      // Two different things both show up as "isCC && isIncome": a merchant
+      // refund on a past card purchase (paymentMethod CREDIT_CARD — see the
+      // payment-method guidance in extract.ts), and money paid TOWARD the
+      // card's own bill from an external source, bank transfer/UPI/autopay
+      // (paymentMethod OTHER/UPI/DEBIT_CARD alongside a card selected here
+      // — same convention the indusind-bill-payment known-template already
+      // relies on). A merchant refund is still meaningfully "spend, just
+      // reversed" and keeps a category. A bill payment isn't spending in
+      // any category at all — it's a transfer — so it gets no category and
+      // is flagged isCardRepayment so the UI can exclude it from category
+      // totals and the Daily Spend breakdown entirely instead of just
+      // netting it to zero there.
+      const isCardRepayment = existing.paymentMethod !== "CREDIT_CARD";
+
       // A refund/credit against the card reduces what's owed on the
       // statement rather than adding a new charge — but it still has to be
       // a real, queryable row (isCredit: true) rather than a bare arithmetic
       // adjustment, since a post-close statement total is re-summed from
       // scratch on every subsequent charge; a decrement with no persisted
       // trace would just get silently erased by the next resum.
-      const customCat = body.customCategory ? await resolveCustomCategory(userId, body.customCategory) : null;
-      const resolvedCategory = (customCat ? "MISCELLANEOUS" : (body.category as Category | undefined)) ?? "MISCELLANEOUS";
-      const subCategory = body.subCategory
+      const customCat = !isCardRepayment && body.customCategory ? await resolveCustomCategory(userId, body.customCategory) : null;
+      const resolvedCategory = isCardRepayment
+        ? null
+        : ((customCat ? "MISCELLANEOUS" : (body.category as Category | undefined)) ?? "MISCELLANEOUS");
+      const subCategory = !isCardRepayment && body.subCategory
         ? await resolveSubCategory(userId, { category: resolvedCategory, customCategoryId: customCat?.id ?? null }, body.subCategory)
         : null;
 
@@ -185,8 +201,9 @@ export async function PATCH(
             subCategory,
             ccTemplateId,
             isCredit: true,
+            isCardRepayment,
             date: finalDate,
-            notes: "Refund/credit imported from Gmail",
+            notes: isCardRepayment ? "Card repayment imported from Gmail" : "Refund/credit imported from Gmail",
           },
         });
         const updatedEntry = await reverseCCEffect(tx, userId, monthRow.id, ccTemplateId, finalDate, finalAmount);
