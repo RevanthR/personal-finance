@@ -42,7 +42,7 @@ function SavingsDeltaRow({ label, delta }: { label: string; delta: number | null
     <div className="flex items-center justify-between text-xs">
       <span className="text-muted-foreground">{label}</span>
       {delta == null ? (
-        <span className="text-muted-foreground">—</span>
+        <span className="text-muted-foreground">-</span>
       ) : (
         <span className={cn(
           "font-medium",
@@ -397,7 +397,7 @@ export function YearOverviewClient({
                           )}
                           {(m.foreclosureAmount ?? 0) > 0 && (
                             <span
-                              title={`Includes a ${fmt(m.foreclosureAmount!)} loan foreclosure — a one-off payoff, not regular spend`}
+                              title={`Includes a ${fmt(m.foreclosureAmount!)} loan foreclosure, a one-off payoff, not regular spend`}
                               className="text-xs font-bold text-primary bg-accent px-1 py-0.5 rounded"
                             >
                               FC

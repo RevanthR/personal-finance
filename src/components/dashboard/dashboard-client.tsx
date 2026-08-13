@@ -1000,7 +1000,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
           ? { ...m, adHocItems: [{ id: newItem.id, name: newItem.name, type: newItem.type, amount: newItem.amount, category: newItem.category, customCategory: newItem.customCategory ?? null, customCategoryId: newItem.customCategoryId ?? null, subCategory: newItem.subCategory ?? null, notes: newItem.notes ?? null, ccTemplateId: newItem.ccTemplateId ?? null, date: newItem.date }, ...m.adHocItems] }
           : m
       ));
-      toast.success(`Added to ${formatMonthYear(movedToMonth.month, movedToMonth.year)} — that's the entry's real month`);
+      toast.success(`Added to ${formatMonthYear(movedToMonth.month, movedToMonth.year)}, that's the entry's real month`);
       setShowAdHoc(false);
       return;
     }
@@ -1092,7 +1092,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
         if (m.id === updated.monthId) return { ...m, adHocItems: [{ id: updated.id, name: updated.name, type: updated.type, amount: updated.amount, category: updated.category, customCategory: updated.customCategory ?? null, customCategoryId: updated.customCategoryId ?? null, subCategory: updated.subCategory ?? null, notes: updated.notes ?? null, ccTemplateId: updated.ccTemplateId ?? null, date: updated.date }, ...m.adHocItems.filter(i => i.id !== id)] };
         return m;
       }));
-      toast.success(`Moved to ${formatMonthYear(movedToMonth.month, movedToMonth.year)} — that's the entry's real month`);
+      toast.success(`Moved to ${formatMonthYear(movedToMonth.month, movedToMonth.year)}, that's the entry's real month`);
       setEditingItem(null);
       return;
     }

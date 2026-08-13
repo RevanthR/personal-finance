@@ -114,7 +114,7 @@ export function ImportsClient({ gmail }: ImportsClientProps) {
     setRequesting(false);
     if (!res.ok) { toast.error("Failed to send request"); return; }
     setSyncStatus("REQUESTED");
-    toast.success("Requested — you'll be able to connect once approved");
+    toast.success("Requested, you'll be able to connect once approved");
   }
 
   // Live-refresh (polling + focus/visibility) now lives in Sidebar, since
@@ -213,7 +213,7 @@ export function ImportsClient({ gmail }: ImportsClientProps) {
                   {gmail.connected
                     ? gmail.lastSyncAt ? `Last synced ${format(new Date(gmail.lastSyncAt), "d MMM, h:mm a")}` : "Not synced yet"
                     : syncStatus === "REQUESTED"
-                      ? "Waiting on approval — you'll be able to connect once it's granted."
+                      ? "Waiting on approval, you'll be able to connect once it's granted."
                       : syncStatus === "NONE"
                         ? "Reads bank transaction alerts and suggests entries, nothing is added automatically. Access needs a quick approval first."
                         : "Reads bank transaction alerts and suggests entries, nothing is added automatically."}

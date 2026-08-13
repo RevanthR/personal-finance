@@ -49,7 +49,7 @@ function GmailStatusCell({ user, onApprove }: { user: User; onApprove: () => voi
   if (user.gmailSyncStatus === "APPROVED") {
     return <span className="text-xs text-muted-foreground">Approved, not connected</span>;
   }
-  return <span className="text-xs text-muted-foreground">—</span>;
+  return <span className="text-xs text-muted-foreground">-</span>;
 }
 
 function PlanBadge({ planType, planExpiry, trialEndsAt }: { planType: string; planExpiry: string | null; trialEndsAt: string | null }) {
@@ -114,7 +114,7 @@ export function AdminUsersClient({ users: initial }: { users: User[] }) {
 
   async function approveSync(userId: string, name: string | null) {
     await updateUser(userId, { gmailSyncStatus: "APPROVED" });
-    toast.message(`Reminder: add ${name ?? "this user"}'s email as a test user in Google Cloud Console too — approving here alone doesn't let them past Google's own consent screen.`);
+    toast.message(`Reminder: add ${name ?? "this user"}'s email as a test user in Google Cloud Console too. Approving here alone doesn't let them past Google's own consent screen.`);
   }
 
   return (
@@ -173,7 +173,7 @@ export function AdminUsersClient({ users: initial }: { users: User[] }) {
           header: "Sync cost",
           align: "right",
           hideOnMobile: true,
-          render: (user) => user.syncCostInr > 0 ? `₹${user.syncCostInr.toFixed(2)}` : "—",
+          render: (user) => user.syncCostInr > 0 ? `₹${user.syncCostInr.toFixed(2)}` : "-",
         },
         {
           key: "joined",

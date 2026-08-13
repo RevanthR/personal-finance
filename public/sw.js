@@ -101,7 +101,7 @@ self.addEventListener("push", (event) => {
         // sitting in the tray.
         const silentTag = `silent-${data.tag ?? "close"}`;
         await self.registration.showNotification("Handled on another device", {
-          body: "Cleared — no action needed here.",
+          body: "Cleared, no action needed here.",
           tag: silentTag,
           silent: true,
           requireInteraction: false,
