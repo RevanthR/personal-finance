@@ -41,8 +41,62 @@ async function recomputeStatementAmount(
   });
 }
 
+// Recompute a CC card's pre-close `amount`/`billedAmount` from scratch:
+// openingAmount (the frozen starting balance from month-open — see
+// MonthlyEntry.openingAmount) plus every pre-close AdHocItem currently
+// linked to this card this cycle. Self-healing the same way
+// recomputeStatementAmount already is for next cycle's figure — replaces
+// the old approach of nudging `amount` up/down by hand on every charge and
+// repayment, which had no way to notice or correct drift once introduced
+// (found via a real card whose live balance had quietly drifted a few
+// rupees off from what its own transaction history actually added up to).
+async function recomputePreCloseAmount(
+  client: DbClient,
+  entryId: string,
+  monthId: string,
+  ccTemplateId: string,
+  statementDay: number | null,
+): Promise<EntryFields> {
+  const entry = await client.monthlyEntry.findUniqueOrThrow({
+    where: { id: entryId },
+    select: { openingAmount: true, carriedInAmount: true, cashbackAmount: true, isPaid: true, billPaymentsAttributed: true },
+  });
+
+  const cardItems = await client.adHocItem.findMany({
+    where: { monthId, type: "EXPENSE", ccTemplateId },
+    select: { amount: true, date: true, isCredit: true },
+  });
+  const preCloseTotal = cardItems
+    .filter(i => statementDay !== null && isPreCloseDate(new Date(i.date), statementDay))
+    .reduce((sum, i) => sum + (i.isCredit ? -i.amount : i.amount), 0);
+
+  // billPaymentsAttributed (a non-CC bill paid "via" this card — see
+  // applyBillPaymentToCard below) has no AdHocItem row of its own, so it
+  // has to be folded in explicitly here or a resum-from-AdHocItems-only
+  // approach would silently drop it entirely.
+  const newAmount = Math.max(0, entry.openingAmount + preCloseTotal + (entry.billPaymentsAttributed ?? 0));
+  // Same self-heal as before: a card that lands back at zero owed this way
+  // closes itself instead of sitting pending for a "paid" tap that would
+  // settle nothing.
+  const autoPaid = !entry.isPaid && isZeroCCBalance(newAmount, entry.carriedInAmount, entry.cashbackAmount);
+
+  return client.monthlyEntry.update({
+    where: { id: entryId },
+    data: {
+      amount: newAmount,
+      billedAmount: newAmount,
+      ...(autoPaid && { isPaid: true, paidOn: new Date() }),
+    },
+    select: { id: true, amount: true, statementAmount: true, billedAmount: true },
+  });
+}
+
 // Apply a CC charge's effect onto its card's MonthlyEntry (creating the
-// entry if this is the first charge against it this month).
+// entry if this is the first charge against it this month). `amount` is
+// unused in the body — both recompute functions below always re-derive the
+// real total live rather than trust a delta — kept in the signature only
+// because every call site already has a real amount on hand and stating it
+// documents intent at each call site.
 export async function applyCCEffect(
   client: DbClient,
   userId: string,
@@ -72,14 +126,7 @@ export async function applyCCEffect(
   const isPreClose = isPreCloseDate(date, statementDay);
 
   if (isPreClose) {
-    return client.monthlyEntry.update({
-      where: { id: entry.id },
-      data: {
-        amount: entry.amount + amount,
-        billedAmount: (entry.billedAmount ?? entry.amount) + amount,
-      },
-      select: { id: true, amount: true, statementAmount: true, billedAmount: true },
-    });
+    return recomputePreCloseAmount(client, entry.id, monthId, ccTemplateId, statementDay);
   }
   return recomputeStatementAmount(client, entry.id, monthId, ccTemplateId, statementDay);
 }
@@ -145,6 +192,12 @@ export async function settleCarriedDebtBackward(
 // other manual charge. billPaymentsAttributed tracks that this portion
 // isn't genuine card spend, so Expenditure/category totals don't count it
 // twice (once under the bill's own category, once under the card).
+//
+// Updates billPaymentsAttributed BEFORE recomputing amount/billedAmount
+// (rather than calling applyCCEffect and incrementing afterward) — the
+// recompute above reads billPaymentsAttributed directly, so it has to
+// already reflect this payment by the time it runs, or the newly-added
+// amount would be computed away on the very next recompute.
 export async function applyBillPaymentToCard(
   client: DbClient,
   userId: string,
@@ -154,17 +207,33 @@ export async function applyBillPaymentToCard(
   const { month, year } = getCurrentMonthYear();
   const monthRow = await client.month.findFirst({ where: { userId, month, year } });
   if (!monthRow) return;
-  const updated = await applyCCEffect(client, userId, monthRow.id, cardTemplateId, new Date(), amount);
-  if (updated) {
-    await client.monthlyEntry.update({
-      where: { id: updated.id },
-      data: { billPaymentsAttributed: { increment: amount } },
-    });
-  }
+  const template = await client.lineItemTemplate.findFirst({
+    where: { id: cardTemplateId, userId, category: "CREDIT_CARD" },
+  });
+  if (!template) return;
+
+  const entry = await client.monthlyEntry.upsert({
+    where: { monthId_templateId: { monthId: monthRow.id, templateId: cardTemplateId } },
+    // Mirrors applyCCEffect's own "first charge before month setup ran"
+    // fallback — nothing carried in yet for a brand-new entry.
+    create: {
+      monthId: monthRow.id, templateId: cardTemplateId,
+      amount: 0, billedAmount: 0, carriedInAmount: 0, isPaid: false, statementAmount: 0,
+      billPaymentsAttributed: amount,
+    },
+    update: { billPaymentsAttributed: { increment: amount } },
+  });
+
+  const statementDay = template.statementDay ?? null;
+  const isPreClose = isPreCloseDate(new Date(), statementDay);
+  await (isPreClose
+    ? recomputePreCloseAmount(client, entry.id, monthRow.id, cardTemplateId, statementDay)
+    : recomputeStatementAmount(client, entry.id, monthRow.id, cardTemplateId, statementDay));
 }
 
 // Undo the above — un-marking a bill as "paid via card" removes the charge
-// from that card the same way deleting the charge itself would.
+// from that card the same way deleting the charge itself would. Same
+// ordering requirement as applyBillPaymentToCard above.
 export async function reverseBillPaymentFromCard(
   client: DbClient,
   userId: string,
@@ -174,19 +243,35 @@ export async function reverseBillPaymentFromCard(
   const { month, year } = getCurrentMonthYear();
   const monthRow = await client.month.findFirst({ where: { userId, month, year } });
   if (!monthRow) return;
-  const updated = await reverseCCEffect(client, userId, monthRow.id, cardTemplateId, new Date(), amount);
-  if (updated) {
-    await client.monthlyEntry.update({
-      where: { id: updated.id },
-      data: { billPaymentsAttributed: { decrement: amount } },
-    });
-  }
+  const template = await client.lineItemTemplate.findFirst({
+    where: { id: cardTemplateId, userId, category: "CREDIT_CARD" },
+  });
+  if (!template) return;
+  const existing = await client.monthlyEntry.findUnique({
+    where: { monthId_templateId: { monthId: monthRow.id, templateId: cardTemplateId } },
+  });
+  if (!existing) return;
+
+  await client.monthlyEntry.update({
+    where: { id: existing.id },
+    data: { billPaymentsAttributed: { decrement: amount } },
+  });
+
+  const statementDay = template.statementDay ?? null;
+  const isPreClose = isPreCloseDate(new Date(), statementDay);
+  await (isPreClose
+    ? recomputePreCloseAmount(client, existing.id, monthRow.id, cardTemplateId, statementDay)
+    : recomputeStatementAmount(client, existing.id, monthRow.id, cardTemplateId, statementDay));
 }
 
-// Reverse a CC charge's effect off its card's MonthlyEntry. Call this
-// BEFORE the AdHocItem row is deleted (post-close needs it excluded from
-// the live re-sum) or AFTER it's been updated to new values (edit — the
-// captured old amount is used for the delta, not the row's current state).
+// Reverse a CC charge's effect off its card's MonthlyEntry. Both the pre-
+// and post-close paths are live re-sums of whatever AdHocItem rows
+// currently exist (see recomputePreCloseAmount/recomputeStatementAmount),
+// not an arithmetic delta against `amount` — so call this AFTER the
+// AdHocItem row has already been deleted, or updated to its new values on
+// an edit, not before. Only `date` actually affects anything here (it picks
+// which side of the close boundary this routes to); `amount` is unused for
+// the same reason as applyCCEffect above.
 export async function reverseCCEffect(
   client: DbClient,
   userId: string,
@@ -209,21 +294,7 @@ export async function reverseCCEffect(
   const isPreClose = isPreCloseDate(date, statementDay);
 
   if (isPreClose) {
-    const newAmount = Math.max(0, entry.amount - amount);
-    // Deleting/refunding the only charge this cycle can bring a card back
-    // down to owing nothing — self-heal it the same way a freshly-created
-    // zero-balance entry is auto-closed, instead of leaving it pending for
-    // a "paid" tap that settles nothing.
-    const autoPaid = !entry.isPaid && isZeroCCBalance(newAmount, entry.carriedInAmount, entry.cashbackAmount);
-    return client.monthlyEntry.update({
-      where: { id: entry.id },
-      data: {
-        amount: newAmount,
-        billedAmount: Math.max(0, (entry.billedAmount ?? entry.amount) - amount),
-        ...(autoPaid && { isPaid: true, paidOn: new Date() }),
-      },
-      select: { id: true, amount: true, statementAmount: true, billedAmount: true },
-    });
+    return recomputePreCloseAmount(client, entry.id, monthId, ccTemplateId, statementDay);
   }
   return recomputeStatementAmount(client, entry.id, monthId, ccTemplateId, statementDay);
 }
