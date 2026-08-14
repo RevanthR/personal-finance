@@ -263,6 +263,16 @@ model MonthlyEntry {
   // their own statement closes). Always counts toward Pending even before
   // THIS cycle's statement closes. Never touched after creation.
   carriedInAmount Float?
+  // CC only: the starting balance this cycle opened with (last cycle's
+  // closed bill + any real carried debt), set once at month-open and never
+  // touched again — see computeTemplateEntryAmount. Lets `amount` be
+  // recomputed from scratch as openingAmount + this cycle's own AdHocItems
+  // (cc-effects.ts's recomputePreCloseAmount) instead of drifting via
+  // incremental +=/-= on every charge and repayment, the way it did before
+  // this field existed (see the isCardRepayment investigation this field
+  // came from — a card's live balance had quietly drifted a few rupees off
+  // from what its own transaction history actually added up to).
+  openingAmount   Float            @default(0)
   createdAt       DateTime         @default(now())
   // Non-CC only: which card actually settled this bill, if not cash/bank —
   // paying rent/insurance/an EMI with a credit card instead of cash. When

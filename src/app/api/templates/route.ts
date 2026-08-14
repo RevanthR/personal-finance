@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
         });
         prevCC = computePrevCCState(prevEntry);
       }
-      const { amount, billedAmount, carriedInAmount } = computeTemplateEntryAmount(template, template.amount, prevCC);
+      const { amount, billedAmount, carriedInAmount, openingAmount } = computeTemplateEntryAmount(template, template.amount, prevCC);
       const autoPaid = template.category === "CREDIT_CARD" && isZeroCCBalance(amount, carriedInAmount);
       await db.monthlyEntry.upsert({
         where: { monthId_templateId: { monthId: curMonthRecord.id, templateId: template.id } },
@@ -88,6 +88,7 @@ export async function POST(req: NextRequest) {
           monthId: curMonthRecord.id, templateId: template.id, amount,
           ...(billedAmount !== undefined && { billedAmount }),
           ...(carriedInAmount !== undefined && { carriedInAmount }),
+          ...(openingAmount !== undefined && { openingAmount }),
           ...(autoPaid && { isPaid: true, paidOn: new Date() }),
         },
         update: {},

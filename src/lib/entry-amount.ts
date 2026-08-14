@@ -53,7 +53,7 @@ export function computeTemplateEntryAmount(
   },
   baseAmount: number,
   prevCC?: PrevCCState,
-): { amount: number; billedAmount?: number; carriedInAmount?: number } {
+): { amount: number; billedAmount?: number; carriedInAmount?: number; openingAmount?: number } {
   if (t.chitFund) {
     return { amount: chitMonthlyAmount(t.chitFund, baseAmount) };
   }
@@ -69,7 +69,11 @@ export function computeTemplateEntryAmount(
     // as "carried over" until this cycle's own statement closes, same as
     // any other new spend. Only real unpaid debt should show as owed
     // before its own statement day.
-    return { amount, billedAmount: amount, carriedInAmount: Math.max(0, prevCC?.outstanding ?? 0) };
+    // openingAmount is the same value as amount, but frozen forever — see
+    // MonthlyEntry.openingAmount and cc-effects.ts's recomputePreCloseAmount,
+    // which uses it (never the live, mutable `amount`) as the fixed starting
+    // point to resum from.
+    return { amount, billedAmount: amount, carriedInAmount: Math.max(0, prevCC?.outstanding ?? 0), openingAmount: amount };
   }
   return { amount: baseAmount };
 }

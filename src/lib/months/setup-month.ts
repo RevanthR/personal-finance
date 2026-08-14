@@ -109,7 +109,7 @@ export async function setupMonth(userId: string, month: number, year: number, sa
           });
         }
 
-        const { amount, billedAmount, carriedInAmount } = computeTemplateEntryAmount(t, baseAmount, prevCCState.get(t.id));
+        const { amount, billedAmount, carriedInAmount, openingAmount } = computeTemplateEntryAmount(t, baseAmount, prevCCState.get(t.id));
         // A card that rolls in with nothing carried and nothing billed yet
         // owes nothing this cycle — close it immediately instead of making
         // the user tap "paid" on a bill that was never going to have one.
@@ -121,6 +121,7 @@ export async function setupMonth(userId: string, month: number, year: number, sa
             monthId: monthRecord.id, templateId: t.id, amount,
             ...(billedAmount !== undefined && { billedAmount }),
             ...(carriedInAmount !== undefined && { carriedInAmount }),
+            ...(openingAmount !== undefined && { openingAmount }),
             ...(autoPaid && { isPaid: true, paidOn: new Date() }),
           },
           update: {},
