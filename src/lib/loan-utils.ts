@@ -4,10 +4,16 @@ export function computeLoanEndDate(params: {
   originalPrincipal?: number | null;
   startDate?: Date | string | null;
   outstandingOverride?: number | null;
+  // Baseline to project monthsRemaining forward from. Defaults to today.
+  // Pass the loan's own start date to get a full-tenure (k=0) projection
+  // for a loan that hasn't started yet, instead of one anchored to today
+  // that understates the term by however far away the start date is.
+  asOf?: Date;
 }): { month: number; year: number } | null {
-  const amort = computeLoanAmortization(params);
+  const asOf = params.asOf ?? new Date();
+  const amort = computeLoanAmortization({ ...params, today: asOf });
   if (!amort || amort.monthsRemaining <= 0) return null;
-  const d = new Date();
+  const d = new Date(asOf);
   d.setMonth(d.getMonth() + amort.monthsRemaining);
   return { month: d.getMonth() + 1, year: d.getFullYear() };
 }

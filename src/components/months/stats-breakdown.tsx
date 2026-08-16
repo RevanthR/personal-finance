@@ -67,6 +67,10 @@ export type AnalyticsData = {
       monthsRemaining: number;
       isOverride: boolean;
     } | null;
+    isOpenEnded: boolean;
+    openEndedReason: "no_data" | "incomplete_data" | null;
+    missingAmortizationInputs: string[];
+    isProjectedFullTenure: boolean;
   }[];
   chits: {
     name: string;
@@ -81,6 +85,8 @@ export type AnalyticsData = {
     startYear: number;
   }[];
   currentMonthlyCommitted: number;
+  resolvableMonthlyCommitted: number;
+  openEndedMonthlyCommitted: number;
   reliefMilestones: {
     month: number;
     year: number;
@@ -244,11 +250,12 @@ function ReliefTimeline({ data, fmt }: {
   data: AnalyticsData;
   fmt: (v: number) => string;
 }) {
-  const { loans, chits, reliefMilestones, currentMonthlyCommitted } = data;
+  const { loans, chits, reliefMilestones, currentMonthlyCommitted, openEndedMonthlyCommitted } = data;
   const hasAny = loans.length > 0 || chits.some(c => c.remainingMonths > 0);
   if (!hasAny) return null;
 
   const lastMilestone = reliefMilestones[reliefMilestones.length - 1];
+  const openEndedLoans = loans.filter(l => l.isOpenEnded);
 
   return (
     <div className="space-y-3">
@@ -257,20 +264,40 @@ function ReliefTimeline({ data, fmt }: {
         <div className="rounded-lg border bg-negative-bg border-negative-border p-3">
           <p className="text-xs text-negative uppercase tracking-widest font-medium mb-0.5">Monthly committed</p>
           <p className="text-lg font-bold text-negative tabular-nums">{fmt(currentMonthlyCommitted)}</p>
-          <p className="text-xs text-negative">{loans.length} loan{loans.length !== 1 ? "s" : ""} · {chits.filter(c => c.remainingMonths > 0).length} chit{chits.filter(c => c.remainingMonths > 0).length !== 1 ? "s" : ""}</p>
+          <p className="text-xs text-negative">
+            {loans.length} loan{loans.length !== 1 ? "s" : ""} · {chits.filter(c => c.remainingMonths > 0).length} chit{chits.filter(c => c.remainingMonths > 0).length !== 1 ? "s" : ""}
+            {openEndedMonthlyCommitted > 0 && <> · {fmt(openEndedMonthlyCommitted)} open-ended</>}
+          </p>
         </div>
-        {lastMilestone && (
+        {(lastMilestone || openEndedMonthlyCommitted > 0) && (
           <div className="rounded-lg border bg-positive-bg border-positive-border p-3">
-            <p className="text-xs text-positive uppercase tracking-widest font-medium mb-0.5">After all clear</p>
-            <p className="text-lg font-bold text-positive tabular-nums">{fmt(Math.max(0, lastMilestone.committedAfter))}</p>
-            <p className="text-xs text-positive">by {lastMilestone.label}</p>
+            {openEndedMonthlyCommitted === 0 && lastMilestone ? (
+              <>
+                <p className="text-xs text-positive uppercase tracking-widest font-medium mb-0.5">After all clear</p>
+                <p className="text-lg font-bold text-positive tabular-nums">{fmt(Math.max(0, lastMilestone.committedAfter))}</p>
+                <p className="text-xs text-positive">by {lastMilestone.label}</p>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-positive uppercase tracking-widest font-medium mb-0.5">
+                  {lastMilestone ? "After tracked debt clears" : "Open-ended commitment"}
+                </p>
+                <p className="text-lg font-bold text-positive tabular-nums">
+                  {fmt(lastMilestone ? Math.max(0, lastMilestone.committedAfter) : openEndedMonthlyCommitted)}
+                </p>
+                <p className="text-xs text-positive">
+                  {lastMilestone && `by ${lastMilestone.label} · `}
+                  +{fmt(openEndedMonthlyCommitted)}/mo continues ({openEndedLoans.map(l => l.name).join(", ")})
+                </p>
+              </>
+            )}
           </div>
         )}
       </div>
 
       {/* Loan cards — amortization embedded */}
       {loans.length > 0 && (
-        <div className="space-y-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           {loans.map(l => {
             const a = l.amortization;
             const iPct = a && l.monthlyAmount > 0 ? Math.round((a.interestThisMonth / l.monthlyAmount) * 100) : 0;
@@ -283,6 +310,14 @@ function ReliefTimeline({ data, fmt }: {
                     {l.rateType === "FLOATING" && (
                       <span className="text-xs px-1.5 py-0.5 rounded-full bg-warning-bg text-warning font-medium shrink-0">floating</span>
                     )}
+                    {l.isOpenEnded && (
+                      <span
+                        className="text-xs px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium shrink-0"
+                        title={l.openEndedReason === "no_data" ? "No end date or loan details on file" : `Missing: ${l.missingAmortizationInputs.join(", ")}`}
+                      >
+                        open-ended
+                      </span>
+                    )}
                   </div>
                   <span className="text-xs text-muted-foreground shrink-0 ml-2">
                     {l.interestRate ? `${l.interestRate}% p.a.` : fmt(l.monthlyAmount) + "/mo"}
@@ -293,6 +328,18 @@ function ReliefTimeline({ data, fmt }: {
                   <p className="text-xs text-muted-foreground">
                     <span className="px-1.5 py-0.5 rounded-full bg-accent text-accent-foreground font-medium mr-1">upcoming</span>
                     Starts {MONTHS[l.startsMonth - 1]} {l.startsYear} · {fmt(l.monthlyAmount)}/mo
+                    {!l.isOpenEnded && l.endsMonth && l.endsYear && (
+                      <span className="block mt-0.5 text-muted-foreground/80">
+                        Projected to clear {MONTHS[l.endsMonth - 1]} {l.endsYear}{l.isProjectedFullTenure ? " (full tenure from start)" : ""}
+                      </span>
+                    )}
+                    {l.isOpenEnded && (
+                      <span className="block mt-0.5 text-muted-foreground/60 italic">
+                        {l.openEndedReason === "no_data"
+                          ? "No interest rate/tenure on file, add loan details in Templates to project an end date."
+                          : `Add ${l.missingAmortizationInputs.join(", ")} in Templates to project an end date.`}
+                      </span>
+                    )}
                   </p>
                 ) : a ? (
                   <>
@@ -623,16 +670,17 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
             </div>
           )}
 
-          {/* Relief timeline — when expenses will drop */}
-          {(data.loans.length > 0 || data.chits.some(c => c.remainingMonths > 0)) && (
-            <div>
-              <SectionTitle>When does it get lighter</SectionTitle>
-              <ReliefTimeline data={data} fmt={fmt} />
-            </div>
-          )}
-
         </div>
       </div>
+
+      {/* Relief timeline — full width; loan cards + milestones need more
+          room than a column can give without dwarfing everything else in it */}
+      {(data.loans.length > 0 || data.chits.some(c => c.remainingMonths > 0)) && (
+        <div>
+          <SectionTitle>When does it get lighter</SectionTitle>
+          <ReliefTimeline data={data} fmt={fmt} />
+        </div>
+      )}
 
       {/* YoY — full width below the grid */}
       {data.prevFYLabel && data.prevFYSpendByCategory.length > 0 && (

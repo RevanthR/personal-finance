@@ -2,7 +2,7 @@ import { getSession } from "@/lib/get-session";
 import { getActiveTemplates } from "@/lib/cached-queries";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
-import { isTemplateActiveInMonth } from "@/lib/loan-utils";
+import { isTemplateActiveInMonth, computeLoanAmortization, computeLoanEndDate, type LoanAmortization } from "@/lib/loan-utils";
 import { chitMonthlyAmount } from "@/lib/entry-amount";
 import { computeMonthIncome, effectiveEntryAmount, cashEntryAmount, isBillPending, isPastDueDate, netAmount, effectivePaid, type EntryBase } from "@/lib/finance-utils";
 import { YearOverviewClient, type MonthData } from "@/components/months/year-overview-client";
@@ -452,7 +452,7 @@ export default async function MonthsPage() {
     m.adHocItems.filter(a => a.type === "EXPENSE" && !a.isCredit)
   );
   const topMerchants = clusterByName(merchantItems, a => a.name, a => a.amount)
-    .slice(0, 15);
+    .slice(0, 8);
 
   // Spending character — use catMap so adhoc is included and Essential+Lifestyle = fyExpenses
   const ESSENTIAL_CATS = new Set(["LOAN", "HOUSE_MAINTENANCE", "SAVINGS"]);
@@ -505,50 +505,67 @@ export default async function MonthsPage() {
     })
     .map(t => {
       const notStartedYet = loanStartsAfter(t, todayM2, todayY2);
+      const startDate = t.loanStartDate ? new Date(t.loanStartDate) : null;
       let remainingMonths: number | null = null, totalRemaining: number | null = null;
       if (t.endsOnMonth && t.endsOnYear) {
         remainingMonths = Math.max(0, (t.endsOnYear - todayY2) * 12 + (t.endsOnMonth - todayM2));
         totalRemaining = remainingMonths * t.amount;
       }
-      // Compute amortization if loan details are present — skipped entirely
-      // for a not-yet-started loan, since "months elapsed" would otherwise
-      // clamp to 0 and report figures as if payments had already begun.
-      let amortization: { outstandingPrincipal: number; interestThisMonth: number; principalThisMonth: number; totalInterestRemaining: number; monthsRemaining: number; isOverride: boolean } | null = null;
+      // Live this-month principal/interest split — skipped entirely for a
+      // not-yet-started loan, since "months elapsed" would otherwise clamp
+      // to 0 and report figures as if payments had already begun.
+      let amortization: LoanAmortization | null = null;
       if (!notStartedYet && t.loanInterestRate != null) {
-        const r = t.loanInterestRate / 12 / 100;
-        let outstanding = t.loanOutstandingOverride ?? 0;
-        const isOverride = t.loanOutstandingOverride != null && t.loanOutstandingOverride > 0;
-        if (!isOverride && t.loanOriginalPrincipal && t.loanStartDate) {
-          const start = new Date(t.loanStartDate);
-          const k = Math.max(0, (now2.getFullYear() - start.getFullYear()) * 12 + (now2.getMonth() - start.getMonth()));
-          const factor = Math.pow(1 + r, k);
-          outstanding = Math.max(0, t.loanOriginalPrincipal * factor - (t.amount * (factor - 1)) / r);
-        }
-        if (outstanding > 0 && r > 0) {
-          const interestThisMonth = outstanding * r;
-          const principalThisMonth = Math.max(0, t.amount - interestThisMonth);
-          const monthsRem = interestThisMonth < t.amount ? Math.ceil(Math.log(t.amount / (t.amount - outstanding * r)) / Math.log(1 + r)) : 0;
-          amortization = {
-            outstandingPrincipal: Math.round(outstanding),
-            interestThisMonth: Math.round(interestThisMonth),
-            principalThisMonth: Math.round(principalThisMonth),
-            totalInterestRemaining: Math.max(0, Math.round(monthsRem * t.amount - outstanding)),
-            monthsRemaining: monthsRem,
-            isOverride,
-          };
-        }
+        amortization = computeLoanAmortization({
+          emi: t.amount, annualRate: t.loanInterestRate, originalPrincipal: t.loanOriginalPrincipal,
+          startDate: t.loanStartDate, outstandingOverride: t.loanOutstandingOverride, today: now2,
+        });
       }
-      // If amortization is available, derive end date from monthsRemaining (more accurate)
+      // End date is resolved separately from the live figures above — a
+      // not-yet-started loan still needs a projected payoff date to be
+      // trackable in the relief timeline, it just can't show today's
+      // principal/interest split before payments begin.
       let finalEndsMonth = t.endsOnMonth ?? null;
       let finalEndsYear = t.endsOnYear ?? null;
+      let isProjectedFullTenure = false;
       if (amortization && amortization.monthsRemaining > 0) {
-        const projEnd = new Date(now2.getFullYear(), now2.getMonth() + amortization.monthsRemaining, 1);
-        finalEndsMonth = projEnd.getMonth() + 1;
-        finalEndsYear = projEnd.getFullYear();
-        remainingMonths = amortization.monthsRemaining;
-        totalRemaining = amortization.monthsRemaining * t.amount;
+        const end = computeLoanEndDate({
+          emi: t.amount, annualRate: t.loanInterestRate!, originalPrincipal: t.loanOriginalPrincipal,
+          startDate: t.loanStartDate, outstandingOverride: t.loanOutstandingOverride, asOf: now2,
+        });
+        if (end) {
+          finalEndsMonth = end.month; finalEndsYear = end.year;
+          remainingMonths = amortization.monthsRemaining;
+          totalRemaining = amortization.monthsRemaining * t.amount;
+        }
+      } else if (notStartedYet && t.loanInterestRate != null && t.loanOriginalPrincipal != null && startDate) {
+        // Not started yet, but has full loan detail — project the full
+        // tenure from the loan's own start date (k=0 there), not from
+        // today, which would understate months-remaining by however far
+        // away the start date is.
+        const tenureAmort = computeLoanAmortization({
+          emi: t.amount, annualRate: t.loanInterestRate, originalPrincipal: t.loanOriginalPrincipal,
+          startDate: t.loanStartDate, today: startDate,
+        });
+        const end = computeLoanEndDate({
+          emi: t.amount, annualRate: t.loanInterestRate, originalPrincipal: t.loanOriginalPrincipal,
+          startDate: t.loanStartDate, asOf: startDate,
+        });
+        if (end && tenureAmort) {
+          finalEndsMonth = end.month; finalEndsYear = end.year;
+          isProjectedFullTenure = true;
+          remainingMonths = tenureAmort.monthsRemaining;
+          totalRemaining = tenureAmort.monthsRemaining * t.amount;
+        }
       }
-      const startDate = t.loanStartDate ? new Date(t.loanStartDate) : null;
+      const isOpenEnded = finalEndsMonth == null || finalEndsYear == null;
+      const missingAmortizationInputs: string[] = [];
+      if (t.loanInterestRate == null) missingAmortizationInputs.push("interest rate");
+      if (t.loanOriginalPrincipal == null) missingAmortizationInputs.push("original principal");
+      if (t.loanStartDate == null) missingAmortizationInputs.push("start date");
+      const openEndedReason: "no_data" | "incomplete_data" | null = !isOpenEnded
+        ? null
+        : missingAmortizationInputs.length === 3 ? "no_data" : "incomplete_data";
       return {
         name: t.name, monthlyAmount: t.amount,
         endsMonth: finalEndsMonth, endsYear: finalEndsYear,
@@ -558,6 +575,7 @@ export default async function MonthsPage() {
         amortization,
         startsMonth: notStartedYet && startDate ? startDate.getUTCMonth() + 1 : null,
         startsYear: notStartedYet && startDate ? startDate.getUTCFullYear() : null,
+        isOpenEnded, openEndedReason, missingAmortizationInputs, isProjectedFullTenure,
       };
     });
 
@@ -599,7 +617,7 @@ export default async function MonthsPage() {
   type ReliefItem = { name: string; type: "LOAN" | "CHIT"; monthlyRelief: number };
   const eventMap = new Map<string, ReliefItem[]>();
   for (const l of loans) {
-    if (l.endsYear && l.endsMonth) {
+    if (!l.isOpenEnded) {
       const key = `${l.endsYear}-${String(l.endsMonth).padStart(2, "0")}`;
       if (!eventMap.has(key)) eventMap.set(key, []);
       eventMap.get(key)!.push({ name: l.name, type: "LOAN", monthlyRelief: l.monthlyAmount });
@@ -615,9 +633,17 @@ export default async function MonthsPage() {
   }
   const currentMonthlyCommitted = loans.reduce((s, l) => s + l.monthlyAmount, 0)
     + chits.reduce((s, c) => s + (c.isLifted && c.remainingMonths > 0 ? c.monthlyAmount : 0), 0);
+  // Loans with no resolvable end date (explicitly indefinite, or missing
+  // the rate/principal/start-date needed to project one) never appear in
+  // reliefMilestones below, so they must be excluded from the seed total
+  // too — otherwise the running total never reaches zero and "after all
+  // clear" silently understates what's actually left.
+  const resolvableMonthlyCommitted = loans.reduce((s, l) => s + (l.isOpenEnded ? 0 : l.monthlyAmount), 0)
+    + chits.reduce((s, c) => s + (c.isLifted && c.remainingMonths > 0 ? c.monthlyAmount : 0), 0);
+  const openEndedMonthlyCommitted = currentMonthlyCommitted - resolvableMonthlyCommitted;
   const sortedReliefEvents = [...eventMap.entries()].sort(([a], [b]) => a.localeCompare(b));
   const reliefMilestones: { month: number; year: number; label: string; monthsFromNow: number; items: ReliefItem[]; totalRelief: number; committedAfter: number }[] = [];
-  let runningCommitted = currentMonthlyCommitted;
+  let runningCommitted = resolvableMonthlyCommitted;
   for (const [key, items] of sortedReliefEvents) {
     const [y, m] = key.split("-").map(Number);
     const monthsFromNow = Math.max(0, (y - todayY2) * 12 + (m - todayM2));
@@ -692,7 +718,7 @@ export default async function MonthsPage() {
     bestMonth, worstMonth,
     prevFYLabel: prevFYKey, prevFYSpendByCategory,
     avgMonthlyIncome, freelancePct, incomeSources,
-    currentMonthlyCommitted, reliefMilestones,
+    currentMonthlyCommitted, resolvableMonthlyCommitted, openEndedMonthlyCommitted, reliefMilestones,
   };
 
   // The FY's real starting cash position (April's carried-forward balance)
