@@ -520,6 +520,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   const [showIncomeEdit, setShowIncomeEdit] = useState(false);
   const [showPendingDrilldown, setShowPendingDrilldown] = useState(false);
   const [showCCBillDrilldown, setShowCCBillDrilldown] = useState(false);
+  const [showCCNextMonthDrilldown, setShowCCNextMonthDrilldown] = useState(false);
   const [showExpenditureDrilldown, setShowExpenditureDrilldown] = useState(false);
   const [showCashDrilldown, setShowCashDrilldown] = useState(false);
   // Payables (recurring bills + card dues, both action-oriented) vs Daily
@@ -792,6 +793,20 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       })
       .filter(c => c.amount > 0);
   }, [ccEntries, isCurrentMonth, todayDay]);
+
+  // Same figure as ccNextMonth in computeMetrics (finance-utils.ts) — next
+  // cycle's building statementAmount, plus any unpaid rolling overflow
+  // between billedAmount and amount — itemized per card instead of summed.
+  const ccNextMonthBreakdown = useMemo(() => {
+    return ccEntries
+      .filter((i): i is { kind: "entry"; data: EntryWithTemplate } => i.kind === "entry")
+      .map(({ data: e }) => {
+        const rolling = !e.isPaid ? Math.max(0, (e.billedAmount ?? e.amount) - e.amount) : 0;
+        const amount = (e.statementAmount ?? 0) + rolling;
+        return { id: e.id, name: e.template.name, amount };
+      })
+      .filter(c => c.amount > 0);
+  }, [ccEntries]);
 
   const { fyIncome, fyExpenses, fyBalance, trendData } = useMemo(() => {
     const ccStatementDayById = new Map(ccTemplates.map(t => [t.id, t.statementDay]));
@@ -1346,6 +1361,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
           ...(hasCCCards && !isProjected ? [{
             label: "CC Next Month",
             value: ccNextMonth > 0 ? fmt(ccNextMonth) : "-",
+            onClick: ccNextMonth <= 0 ? undefined : () => setShowCCNextMonthDrilldown(true),
             hint: <span className="text-xs text-muted-foreground">{ccNextMonth > 0 ? `building for ${nextMonthName}` : "nothing yet"}</span>,
           }] : []),
           {
@@ -1946,6 +1962,27 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             <div className="flex items-center justify-between pt-2 border-t border-border">
               <p className="text-sm font-semibold">Total</p>
               <span className="text-sm font-bold">{fmt(dispCCBills)}</span>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* CC Next Month drilldown */}
+      <Dialog open={showCCNextMonthDrilldown} onOpenChange={setShowCCNextMonthDrilldown}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>CC Next Month: {nextMonthName}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1.5 pt-1">
+            {ccNextMonthBreakdown.map(c => (
+              <div key={c.id} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
+                <span>{c.name}</span>
+                <span className="font-semibold shrink-0 ml-2">{fmt(c.amount)}</span>
+              </div>
+            ))}
+            <div className="flex items-center justify-between pt-2 border-t border-border">
+              <p className="text-sm font-semibold">Total</p>
+              <span className="text-sm font-bold">{fmt(ccNextMonth)}</span>
             </div>
           </div>
         </DialogContent>
