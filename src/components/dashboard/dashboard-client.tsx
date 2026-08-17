@@ -236,13 +236,18 @@ function CCCardBlock({
     : null;
   const billedTotal = entry.billedAmount ?? entry.amount;
   const creditLimit = entry.template.creditLimit ?? null;
-  const utilPct = creditLimit ? Math.round((billedTotal / creditLimit) * 100) : null;
   const isDueNextMonth = isDueDateNextMonth(statementDay, entry.template.dueDateDay);
   const ccColor = getCategoryColor(entry.template.category, entry.template.customCategory);
   const ccIcon  = getCategoryIcon(entry.template.category, entry.template.customCategory);
   // Single shared tick instance — used by both the collapsed header's tick
   // and the expanded EntryRow's tick, so they never fall out of sync.
   const tick = usePaymentTick(entry, onUpdate);
+  // Same netting every other "what's really owed" figure in the app already
+  // does (see netAmount/effectivePaid/isZeroCCBalance) — cashback is a credit
+  // against the statement, so utilization should reflect it too, not just the
+  // headline amount.
+  const utilBalance = Math.max(0, billedTotal - tick.cashback);
+  const utilPct = creditLimit ? Math.round((utilBalance / creditLimit) * 100) : null;
 
   // While the statement hasn't closed yet, `amount` is a blend of real
   // already-owed debt (carriedInAmount) and new spend still accumulating
@@ -376,7 +381,7 @@ function CCCardBlock({
             <div className="px-3 py-2 border-b border-border space-y-1">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">Utilization</span>
-                <span className="font-medium">{fmt(billedTotal)} / {fmt(creditLimit!)}</span>
+                <span className="font-medium">{fmt(utilBalance)} / {fmt(creditLimit!)}</span>
               </div>
               <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                 <div
@@ -1325,7 +1330,12 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             label: "Payables",
             value: fmt(dispCommitted + dispAdHoc + (isProjected ? 0 : settledCarryOverTotal)),
             onClick: isProjected ? undefined : () => setShowExpenditureDrilldown(true),
-            hint: <span className="text-xs text-muted-foreground">{fmt(dispRecurringNonCC)} recurring</span>,
+            hint: (() => {
+              const payableTotal = dispCommitted + dispAdHoc + (isProjected ? 0 : settledCarryOverTotal);
+              return payableTotal > dispIncome
+                ? <span className="text-xs text-negative">{fmt(payableTotal - dispIncome)} over income</span>
+                : undefined;
+            })(),
           },
           ...(hasCCCards ? [{
             label: "CC Bill",
