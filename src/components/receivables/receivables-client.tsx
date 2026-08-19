@@ -310,8 +310,12 @@ function CCCardTile({ card, fmt, onEntryUpdate, onDelete, onMetaUpdate }: {
   const paying  = entry?.amount ?? 0;
   const rolling = billed != null ? Math.max(0, billed - paying) : 0;
   const accent  = card.network ? NETWORK_ACCENT[card.network] : null;
-  const utilPct = card.template.creditLimit && billed != null
-    ? Math.round((billed / card.template.creditLimit) * 100)
+  // Same netting as the dashboard's CCCardBlock (see dashboard-client.tsx).
+  // Cashback is a credit against the statement, so utilization should
+  // reflect it too, not just the "Bill" figure above.
+  const utilBalance = billed != null ? Math.max(0, billed - (entry?.cashbackAmount ?? 0)) : null;
+  const utilPct = card.template.creditLimit && utilBalance != null
+    ? Math.round((utilBalance / card.template.creditLimit) * 100)
     : null;
 
   const [settingBill, setSettingBill]     = useState(false);
@@ -416,7 +420,7 @@ function CCCardTile({ card, fmt, onEntryUpdate, onDelete, onMetaUpdate }: {
           <div className="space-y-1">
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted-foreground">Utilization</span>
-              <span className="font-medium">{fmt(billed!)} / {fmt(card.template.creditLimit!)}</span>
+              <span className="font-medium">{fmt(utilBalance!)} / {fmt(card.template.creditLimit!)}</span>
             </div>
             <div className="h-1.5 rounded-full bg-muted overflow-hidden">
               <div
