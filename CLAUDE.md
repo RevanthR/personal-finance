@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Never use the em dash / long dash (—) in text written for the user: chat replies, code comments, commit messages, or docs. Use a comma, period, parentheses, or split into two sentences instead.
+
 @AGENTS.md
 
 ## Commands
