@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { Role } from "@/generated/prisma/client";
 import { addDays } from "@/lib/plans";
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+export const { handlers, auth, signIn } = NextAuth({
   adapter: PrismaAdapter(db),
   providers: [
     Google({
