@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev             # start dev server (port 3000)
 npm run build           # prisma generate + next build
 npm run lint            # eslint
-npm test                # vitest — currently covers src/lib/finance-utils.ts's pure functions
+npm test                # vitest — covers finance-utils.ts's pure functions and cc-effects.ts's ledger recompute (via a hand-rolled fake Prisma client)
 
 npm run db:migrate      # create + apply a new migration from schema changes (see DB migrations below)
 npm run db:migrate:deploy  # apply pending migrations without prompting — CI/prod
@@ -30,7 +30,7 @@ Requires `.env` (not committed):
 
 ## Architecture
 
-**Next.js 16 App Router** PWA, deployed to Vercel. Test coverage is partial (see `npm test`) — vitest with unit tests for the pure functions in `src/lib/finance-utils.ts`; nothing else is covered yet.
+**Next.js 16 App Router** PWA, deployed to Vercel. Test coverage is partial (see `npm test`) — vitest with unit tests for the pure functions in `src/lib/finance-utils.ts`, plus `src/lib/cc-effects.ts`'s self-healing CC ledger recompute (`cc-effects.test.ts` fakes the small slice of the Prisma client it calls rather than hitting a real DB); most other modules aren't covered yet.
 
 ### Route groups
 - `src/app/(app)/` — authenticated app pages (dashboard, months, templates, chits, settings). Layout at `(app)/layout.tsx` enforces auth.
