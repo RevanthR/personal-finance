@@ -245,8 +245,9 @@ function CCCardBlock({
   // Same netting every other "what's really owed" figure in the app already
   // does (see netAmount/effectivePaid/isZeroCCBalance) — cashback is a credit
   // against the statement, so utilization should reflect it too, not just the
-  // headline amount.
-  const utilBalance = Math.max(0, billedTotal - tick.cashback);
+  // headline amount. Also folds in statementAmount: spend already posted
+  // after close still counts against the limit even though it isn't billed yet.
+  const utilBalance = Math.max(0, billedTotal + (entry.statementAmount ?? 0) - tick.cashback);
   const utilPct = creditLimit ? Math.round((utilBalance / creditLimit) * 100) : null;
 
   // While the statement hasn't closed yet, `amount` is a blend of real

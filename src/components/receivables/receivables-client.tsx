@@ -312,8 +312,10 @@ function CCCardTile({ card, fmt, onEntryUpdate, onDelete, onMetaUpdate }: {
   const accent  = card.network ? NETWORK_ACCENT[card.network] : null;
   // Same netting as the dashboard's CCCardBlock (see dashboard-client.tsx).
   // Cashback is a credit against the statement, so utilization should
-  // reflect it too, not just the "Bill" figure above.
-  const utilBalance = billed != null ? Math.max(0, billed - (entry?.cashbackAmount ?? 0)) : null;
+  // reflect it too, not just the "Bill" figure above. Also folds in
+  // statementAmount: spend already posted after close still counts against
+  // the limit even though it isn't billed yet.
+  const utilBalance = billed != null ? Math.max(0, billed + (entry?.statementAmount ?? 0) - (entry?.cashbackAmount ?? 0)) : null;
   const utilPct = card.template.creditLimit && utilBalance != null
     ? Math.round((utilBalance / card.template.creditLimit) * 100)
     : null;
