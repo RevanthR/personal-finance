@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { initVapid, sendPushToUser, PAYMENT_REMINDER_PUSH_TAG } from "@/lib/push";
 import { actualDueDate } from "@/lib/finance-utils";
-import { prevMonthYear } from "@/lib/utils";
+import { prevMonthYear, ordinal } from "@/lib/utils";
 
 // GET /api/cron/reminders — called daily by Vercel Cron
 export async function GET(req: NextRequest) {
@@ -79,8 +79,8 @@ export async function GET(req: NextRequest) {
         ? `${names[0]} due in 3 days`
         : `${names.length} payments due in 3 days`,
       body: names.length === 1
-        ? `Due on the ${dueDay}th, mark it paid once done`
-        : `${names.slice(0, 2).join(", ")}${names.length > 2 ? ` +${names.length - 2} more` : ""}, due on the ${dueDay}th`,
+        ? `Due on the ${ordinal(dueDay)}, mark it paid once done`
+        : `${names.slice(0, 2).join(", ")}${names.length > 2 ? ` +${names.length - 2} more` : ""}, due on the ${ordinal(dueDay)}`,
       url: "/dashboard",
       // Marking any of today's due bills paid (src/app/api/months/[monthId]/
       // entries/route.ts) closes this on every device — same tag.

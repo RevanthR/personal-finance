@@ -478,6 +478,16 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
     ? Math.round(data.fyExpenses / data.actualMonthCount) : 0;
   const avgSavingsRate = data.monthlyTrends.length > 0
     ? Math.round(data.monthlyTrends.reduce((s, m) => s + m.savingsRate, 0) / data.monthlyTrends.length) : 0;
+  // The bare average reads as flatly bad on a month that's actually
+  // trending up (e.g. -20% avg while the real story is -33% -> +7%) —
+  // pair it with first-vs-latest so a glance shows the trajectory too.
+  const savingsTrend = data.monthlyTrends.length > 1
+    ? (() => {
+        const first = data.monthlyTrends[0];
+        const latest = data.monthlyTrends[data.monthlyTrends.length - 1];
+        return `${first.label} ${first.savingsRate}% → ${latest.label} ${latest.savingsRate}%`;
+      })()
+    : undefined;
   const recurringPct = data.fyExpenses > 0 ? pct(data.recurringTotal, data.fyExpenses) : 0;
   const essentialPct = pct(data.essentialTotal, data.fyExpenses);
   const lifestylePct = pct(data.lifestyleTotal, data.fyExpenses);
@@ -504,7 +514,7 @@ export function StatsBreakdown({ data }: { data: AnalyticsData }) {
         <StatCard label="Spend to date" value={fmt(data.fyExpenses)} sub={`${data.actualMonthCount} mo · proj ${fmt(data.fyExpensesProjected)}`} color="text-negative" />
         <StatCard label="Avg / month" value={fmt(avgMonthlySpend)} />
         <StatCard label="Income to date" value={fmt(data.fyIncome)} sub={`proj ${fmt(data.fyIncomeProjected)}`} color="text-positive" />
-        <StatCard label="Avg savings" value={`${avgSavingsRate}%`} color={avgSavingsRate >= 20 ? "text-positive" : avgSavingsRate >= 10 ? "text-warning" : "text-negative"} />
+        <StatCard label="Avg savings" value={`${avgSavingsRate}%`} sub={savingsTrend} color={avgSavingsRate >= 20 ? "text-positive" : avgSavingsRate >= 10 ? "text-warning" : "text-negative"} />
       </div>
 
       {/* Monthly overview — full width, above the columns */}

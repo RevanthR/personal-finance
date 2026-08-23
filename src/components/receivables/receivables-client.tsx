@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { TabsUnderline, type TabsUnderlineOption } from "@/components/ui/tabs-underline";
-import { formatCurrency, cn, MONTHS } from "@/lib/utils";
+import { formatCurrency, cn, MONTHS, ordinal } from "@/lib/utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { Plus, TrendingUp, TrendingDown, Wallet, Clock, CheckCircle2, Trash2, CreditCard, Pencil } from "lucide-react";
 import { PageCoach } from "@/components/coach/page-coach";
@@ -338,8 +338,8 @@ function CCCardTile({ card, fmt, onEntryUpdate, onDelete, onMetaUpdate }: {
 
   const dueLabel = card.template.statementDay || card.template.dueDateDay
     ? [
-        card.template.statementDay && `Generates ${card.template.statementDay}th`,
-        card.template.dueDateDay && `Due ${card.template.dueDateDay}th`,
+        card.template.statementDay && `Generates ${ordinal(card.template.statementDay)}`,
+        card.template.dueDateDay && `Due ${ordinal(card.template.dueDateDay)}`,
       ].filter(Boolean).join(" · ")
     : "-";
 
@@ -704,7 +704,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                             <p className="font-semibold">
                               {fmt(chit.monthlyUnliftedAmount)}
                               {chit.template.dueDateDay && (
-                                <span className="ml-1 text-xs font-normal text-muted-foreground">due {chit.template.dueDateDay}th</span>
+                                <span className="ml-1 text-xs font-normal text-muted-foreground">due {ordinal(chit.template.dueDateDay)}</span>
                               )}
                             </p>
                           </div>
@@ -781,7 +781,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
                           <p className="font-semibold">
                             {fmt(chit.monthlyLiftedAmount ?? chit.monthlyUnliftedAmount)}
                             {chit.template.dueDateDay && (
-                              <span className="ml-1 text-xs font-normal text-muted-foreground">due {chit.template.dueDateDay}th</span>
+                              <span className="ml-1 text-xs font-normal text-muted-foreground">due {ordinal(chit.template.dueDateDay)}</span>
                             )}
                           </p>
                         </div>

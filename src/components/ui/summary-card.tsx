@@ -51,7 +51,14 @@ export function SummaryCard({ tag, stats, toolbar, className }: SummaryCardProps
         {stats.map((s, i) => {
           const Comp = s.onClick ? "button" : "div";
           return (
-            <Comp key={i} onClick={s.onClick} className={cn("min-w-0", s.onClick && "text-left")}>
+            <Comp
+              key={i}
+              onClick={s.onClick}
+              className={cn(
+                "min-w-0",
+                s.onClick && "text-left cursor-pointer rounded-md -mx-1.5 -my-1 px-1.5 py-1 transition-colors hover:bg-muted"
+              )}
+            >
               <p className="text-xs text-muted-foreground flex items-center gap-1">{s.label}</p>
               {/* text-base on mobile, not text-lg — an extra digit at text-lg
                   was wide enough to overflow a 2-col grid cell on narrow

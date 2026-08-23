@@ -393,7 +393,7 @@ export function YearOverviewClient({
                         </span>
                         <div className="flex items-center gap-0.5 flex-wrap justify-end">
                           {m.hasIncomeChange && (
-                            <span className="text-xs font-bold text-positive bg-positive-bg px-1 py-0.5 rounded">↑</span>
+                            <span title="A scheduled income change takes effect this month" className="text-xs font-bold text-positive bg-positive-bg px-1 py-0.5 rounded">↑</span>
                           )}
                           {(m.foreclosureAmount ?? 0) > 0 && (
                             <span
@@ -412,7 +412,7 @@ export function YearOverviewClient({
                             </span>
                           )}
                           {!m.isPopulated && (
-                            <span className="text-xs font-medium text-muted-foreground bg-muted px-1 py-0.5 rounded">est</span>
+                            <span title="Estimated, projected from active recurring items, not yet real transactions" className="text-xs font-medium text-muted-foreground bg-muted px-1 py-0.5 rounded">est</span>
                           )}
                           {m.isPopulated && !m.isCurrent && m.paid !== null && m.total !== null && (
                             <span className={cn(

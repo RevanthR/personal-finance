@@ -1392,10 +1392,10 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
       <div className="space-y-1.5">
         <div className="flex justify-between text-xs text-muted-foreground">
           <span>{isProjected ? "Paid: none" : `Paid ${fmt(totalPaid)}`}</span>
-          <span className="font-semibold text-foreground">{dispPaidPct}%</span>
+          <span className="font-semibold text-foreground">{hidden ? "••%" : `${dispPaidPct}%`}</span>
           <span>{isProjected ? `Projected ${fmt(dispPending)}` : `Pending ${fmt(Math.max(0, totalPending))}`}</span>
         </div>
-        <Progress value={dispPaidPct} className="h-1.5" />
+        <Progress value={hidden ? 0 : dispPaidPct} className="h-1.5" />
       </div>
 
       <TabsUnderline

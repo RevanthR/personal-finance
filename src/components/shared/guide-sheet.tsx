@@ -47,9 +47,10 @@ const sections = [
     color: "text-emerald-600 dark:text-emerald-400",
     bg: "bg-emerald-100 dark:bg-emerald-500/15",
     lines: [
-      "Track money that others owe you. This includes personal loans and chit fund lifts.",
-      "Set an expected date and that month's forecast will include this amount as income.",
-      "Tap Mark as Received when the money comes in. It gets added as income for that month.",
+      "Three tabs: Cards, Chits, and Receivables (money others owe you).",
+      "Cards: each card's Bill is this cycle's already-generated statement; Utilization also includes spend still accumulating toward next cycle's bill.",
+      'Tap a card\'s bill to see every transaction behind it, split into "Generated Bill" and "Accumulating" tabs.',
+      "Receivables: set an expected date and that month's forecast will include this amount as income. Tap Mark as Received when the money comes in.",
     ],
   },
   {

@@ -112,6 +112,21 @@ export function AdminUsersClient({ users: initial }: { users: User[] }) {
     toast.success("User updated");
   }
 
+  // Both of these act instantly on a real other person's account with no
+  // undo in the UI (deactivate blocks their access immediately; Make Admin
+  // grants full read access to every user's financial data) — a plain
+  // window.confirm matches the pattern already used for template deletes.
+  function toggleActive(user: User, active: boolean) {
+    if (!active && !window.confirm(`Deactivate ${user.name ?? user.email}? They'll immediately lose access to their account.`)) return;
+    updateUser(user.id, { isActive: active });
+  }
+
+  function toggleAdmin(user: User) {
+    const promoting = user.role !== "ADMIN";
+    if (promoting && !window.confirm(`Make ${user.name ?? user.email} an admin? They'll get full access to every user's data, including yours.`)) return;
+    updateUser(user.id, { role: promoting ? "ADMIN" : "USER" });
+  }
+
   async function approveSync(userId: string, name: string | null) {
     await updateUser(userId, { gmailSyncStatus: "APPROVED" });
     toast.message(`Reminder: add ${name ?? "this user"}'s email as a test user in Google Cloud Console too. Approving here alone doesn't let them past Google's own consent screen.`);
@@ -187,13 +202,13 @@ export function AdminUsersClient({ users: initial }: { users: User[] }) {
         <div className="flex items-center gap-3">
           <Switch
             checked={user.isActive}
-            onCheckedChange={(v) => updateUser(user.id, { isActive: v })}
+            onCheckedChange={(v) => toggleActive(user, v)}
           />
           <Button
             variant="outline"
             size="sm"
             className="text-xs h-7 px-2"
-            onClick={() => updateUser(user.id, { role: user.role !== "ADMIN" ? "ADMIN" : "USER" })}
+            onClick={() => toggleAdmin(user)}
           >
             {user.role !== "ADMIN" ? "Make Admin" : "Remove Admin"}
           </Button>

@@ -125,6 +125,17 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
 
   const canSubmit = !loading && !!name && !!amount && (isRepayment ? !!ccCard : picker.hasCategory);
 
+  // The submit button is disabled rather than actively erroring on click
+  // (native `required` validation never fires on a disabled button), so
+  // without this a user can tap a dead button and see nothing happen with
+  // no explanation of what's missing.
+  const missingFields: string[] = [];
+  if (!amount) missingFields.push("an amount");
+  if (!name) missingFields.push("a description");
+  if (isRepayment ? !ccCard : !picker.hasCategory) {
+    missingFields.push(isRepayment ? "a card" : type === "INCOME" ? "a source" : "a category");
+  }
+
   return (
     <Dialog open={open} onOpenChange={v => { if (!v && !isEditing) reset(); onOpenChange(v); }}>
       <DialogContent className="max-w-sm sm:max-w-md max-h-[85dvh] overflow-y-auto">
@@ -241,10 +252,15 @@ export function AdHocDialog({ open, onOpenChange, onAdd, onEdit, ccCards, custom
             <Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any notes..." />
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex-col gap-1.5">
             <Button type="submit" disabled={!canSubmit} className="w-full">
               {loading ? "Saving..." : isEditing ? "Save Changes" : type === "INCOME" ? "Add Income" : "Add Expense"}
             </Button>
+            {!canSubmit && !loading && missingFields.length > 0 && (
+              <p className="text-xs text-muted-foreground text-center">
+                Add {missingFields.join(", ")} to continue
+              </p>
+            )}
           </DialogFooter>
         </form>
       </DialogContent>

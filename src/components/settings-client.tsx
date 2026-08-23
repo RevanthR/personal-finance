@@ -84,7 +84,17 @@ export function SettingsClient({ user }: SettingsClientProps) {
 
     setPushLoading(true);
     try {
-      const reg = await navigator.serviceWorker.ready;
+      // serviceWorker.ready never resolves if registration silently failed
+      // (sw-register.tsx swallows that into console.error) — without a
+      // timeout this hangs forever with the switch stuck disabled and no
+      // explanation, which is exactly what "requires the app installed"
+      // looks like when it isn't actually the cause.
+      const reg = await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Service worker isn't ready. Reload the page and try again.")), 8000)
+        ),
+      ]);
       if (enable) {
         const permission = await Notification.requestPermission();
         if (permission !== "granted") {
@@ -173,9 +183,13 @@ export function SettingsClient({ user }: SettingsClientProps) {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium">{pushEnabled ? "Reminders on" : "Reminders off"}</p>
+                <p className="text-sm font-medium">
+                  {pushLoading ? "Requesting permission..." : pushEnabled ? "Reminders on" : "Reminders off"}
+                </p>
                 <p className="text-xs text-muted-foreground">
-                  {pushEnabled ? "You'll be notified for pending payments" : "Enable to get payment reminders"}
+                  {pushLoading
+                    ? "Check for a browser permission prompt"
+                    : pushEnabled ? "You'll be notified for pending payments" : "Enable to get payment reminders"}
                 </p>
               </div>
               <Switch

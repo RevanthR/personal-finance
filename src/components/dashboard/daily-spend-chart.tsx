@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatMonthYear, getCategoryColor, getCategoryDisplay, groupItemsByCategory } from "@/lib/utils";
 import { usePrivacy } from "@/contexts/privacy-context";
+import { EyeOff } from "lucide-react";
 import { compactAxisFmt } from "@/components/months/compact-axis-fmt";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import {
@@ -176,7 +177,16 @@ export function DailySpendChart({ recentMonths, targetMonth, targetYear, todayMo
           ]}
           className="mb-2"
         />
-        {buckets.length > 0 ? (
+        {hidden ? (
+          // Axis labels and totals were already masked, but the bars
+          // themselves still plot real (unmasked) magnitudes — the shape of
+          // spending stays fully visible even with privacy mode on. Swap in
+          // a placeholder instead of trying to mask the chart in place.
+          <div className="h-40 flex flex-col items-center justify-center gap-2 text-muted-foreground">
+            <EyeOff className="w-5 h-5" />
+            <p className="text-xs">Chart hidden while privacy mode is on</p>
+          </div>
+        ) : buckets.length > 0 ? (
           <ResponsiveContainer width="100%" height={160}>
             <BarChart data={buckets} barGap={1}>
               <XAxis

@@ -15,7 +15,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  formatCurrency, CATEGORY_LABELS, INCOME_CATEGORIES, getCategoryDisplay, getCategoryColor, cn, MONTHS,
+  formatCurrency, CATEGORY_LABELS, INCOME_CATEGORIES, getCategoryDisplay, getCategoryColor, cn, MONTHS, ordinal,
 } from "@/lib/utils";
 import { Plus, Pencil, Trash2, Lock, ChevronDown, TrendingUp, SlidersHorizontal } from "lucide-react";
 import { computeLoanAmortization, computeChitCurrentMonth } from "@/lib/loan-utils";
@@ -459,7 +459,7 @@ export function TemplatesClient({
                                 </Badge>
                               )}
                               {t.dueDateDay && !isClosed && (
-                                <Badge variant="secondary" className="text-xs">Due {t.dueDateDay}th</Badge>
+                                <Badge variant="secondary" className="text-xs">Due {ordinal(t.dueDateDay)}</Badge>
                               )}
                               {isClosed && (
                                 <Badge className="text-xs bg-muted text-muted-foreground hover:bg-muted border border-border">
