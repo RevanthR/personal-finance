@@ -11,8 +11,16 @@ const CONCURRENCY = 4;
 // server-side `q:` search isn't available on that endpoint, so this is the
 // client-side approximation applied after a cheap metadata-only fetch,
 // before deciding whether a candidate is worth a full body fetch at all.
-const SUBJECT_KEYWORDS = ["transaction", "spent", "debited", "credited", "alert", "payment", "upi", "statement", "bill", "billed", "a/c"];
-const FROM_KEYWORDS = ["alert", "alerts", "notification", "notifications", "bank", "onecard", "cred"];
+const SUBJECT_KEYWORDS = [
+  "transaction", "spent", "debited", "credited", "alert", "payment", "upi", "statement", "bill", "billed", "a/c",
+  "refund", "refunded", "reversal", "reversed", "rrn", "chargeback", "purchase", "purchased", "withdrawal",
+  "withdrawn", "deposit", "deposited", "recharge", "recharged", "neft", "imps", "rtgs", "netbanking", "autopay",
+  "auto-pay", "auto debit", "txn", "money received", "amount debited", "amount credited", "card ending",
+];
+const FROM_KEYWORDS = [
+  "alert", "alerts", "notification", "notifications", "bank", "onecard", "cred", "card",
+  "razorpay", "payu", "cashfree", "billdesk", "ccavenue", "instamojo", "juspay", "paytm", "phonepe",
+];
 const EXCLUDE_SUBJECT_KEYWORDS = ["reward", "rewards", "emi", "luxury", "deals", "podcast", "insights", "maintenance", "loan", "hiring", "job", "jobs", "capital gains", "wealth insights", "under maintenance"];
 
 export function matchesKeywordFilter(subject: string, from: string): boolean {

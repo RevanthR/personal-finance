@@ -22,7 +22,8 @@ import type { ParsedTransactionPaymentMethod, ParsedTransactionType } from "@/ge
 // Promotions/Social mail, so this drops a lot of noise before anything is
 // even fetched, let alone billed.
 const SEARCH_QUERY =
-  'newer_than:7d (subject:(transaction OR spent OR debited OR credited OR alert OR payment OR upi OR statement OR bill OR billed OR "a/c") OR from:(alert OR alerts OR notification OR notifications OR bank OR onecard OR cred)) '
+  'newer_than:7d (subject:(transaction OR spent OR debited OR credited OR alert OR payment OR upi OR statement OR bill OR billed OR "a/c" OR refund OR refunded OR reversal OR reversed OR rrn OR chargeback OR purchase OR purchased OR withdrawal OR withdrawn OR deposit OR deposited OR recharge OR recharged OR neft OR imps OR rtgs OR netbanking OR autopay OR "auto-pay" OR "auto debit" OR txn OR "money received" OR "amount debited" OR "amount credited" OR "card ending") '
+  + 'OR from:(alert OR alerts OR notification OR notifications OR bank OR onecard OR cred OR card OR razorpay OR payu OR cashfree OR billdesk OR ccavenue OR instamojo OR juspay OR paytm OR phonepe)) '
   + '-subject:(reward OR rewards OR EMI OR luxury OR deals OR podcast OR insights OR maintenance OR loan OR hiring OR job OR jobs OR "capital gains" OR "wealth insights" OR "under maintenance") '
   + '-category:promotions -category:social';
 
