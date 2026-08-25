@@ -439,8 +439,15 @@ function AddForm({ item, ccCards, customCategories, subCategorySuggestions, onDo
   const isIncome = item.transactionType === "CREDIT" || item.transactionType === "REFUND";
   // Payment method defaults to Gmail's guess but is user-overridable — it
   // was previously locked to item.paymentMethod with no way to correct a
-  // misclassified UPI-vs-card charge before approving.
-  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD">(item.paymentMethod === "CREDIT_CARD" ? "CARD" : "CASH");
+  // misclassified UPI-vs-card charge before approving. Also defaults to
+  // Card whenever a card was actually matched (suggestedCcTemplateId), not
+  // just when Gemini's own paymentMethod guess says "creditCard" — an
+  // exact last4 match is a harder signal than that guess, and trusting the
+  // guess alone silently defaulted real card refunds to Cash/UPI whenever
+  // Gemini misclassified paymentMethod despite last4 matching a real card.
+  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD">(
+    item.paymentMethod === "CREDIT_CARD" || item.suggestedCcTemplateId ? "CARD" : "CASH"
+  );
   const isCC = paymentMethod === "CARD";
   const [ccTemplateId, setCCTemplateId] = useState(item.suggestedCcTemplateId ?? ccCards[0]?.templateId ?? "");
   // Same distinction (and same signal) the approve endpoint uses to skip

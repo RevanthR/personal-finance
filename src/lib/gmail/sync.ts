@@ -314,7 +314,14 @@ export async function syncGmailForUser(userId: string, onProgress?: ProgressCall
     try {
       const paymentMethod = PAYMENT_METHOD_MAP[extracted.paymentMethod ?? "other"] ?? "OTHER";
       const transactionType = TRANSACTION_TYPE_MAP[extracted.transactionType ?? "debit"] ?? "DEBIT";
-      const suggestedCcTemplateId = paymentMethod === "CREDIT_CARD"
+      // Gated on last4 being present, not on paymentMethod === "creditCard" —
+      // Gemini's payment-method guess is a much softer signal than an exact
+      // last4 match against a card the user actually configured (seen in the
+      // wild: a genuine card refund misclassified paymentMethod "other",
+      // silently discarding a last4 that would've matched Axis CC). last4
+      // alone is still a real signal even when the LLM's own classification
+      // of "how the money moved" is wrong or uncertain.
+      const suggestedCcTemplateId = extracted.last4
         ? matchCard({ bank: extracted.bank, last4: extracted.last4 }, cards)
         : null;
       const { amount, originalCurrency, originalAmount } = await resolveInrAmount(extracted);
