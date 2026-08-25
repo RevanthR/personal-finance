@@ -25,6 +25,11 @@ const SEARCH_QUERY =
   'newer_than:7d (subject:(transaction OR spent OR debited OR credited OR alert OR payment OR upi OR statement OR bill OR billed OR "a/c" OR refund OR refunded OR reversal OR reversed OR rrn OR chargeback OR purchase OR purchased OR withdrawal OR withdrawn OR deposit OR deposited OR recharge OR recharged OR neft OR imps OR rtgs OR netbanking OR autopay OR "auto-pay" OR "auto debit" OR txn OR "money received" OR "amount debited" OR "amount credited" OR "card ending") '
   + 'OR from:(alert OR alerts OR notification OR notifications OR bank OR onecard OR cred OR card OR razorpay OR payu OR cashfree OR billdesk OR ccavenue OR instamojo OR juspay OR paytm OR phonepe)) '
   + '-subject:(reward OR rewards OR EMI OR luxury OR deals OR podcast OR insights OR maintenance OR loan OR hiring OR job OR jobs OR "capital gains" OR "wealth insights" OR "under maintenance") '
+  // "alert"/"alerts" in from:(...) above substring-matches job-alert senders
+  // (jobalerts-noreply@linkedin.com) that the subject exclusion above can't
+  // catch (their subjects are just job titles, no "job" text at all) —
+  // these were crowding real bank mail out of the 25-result cap.
+  + '-from:(linkedin OR indeed OR naukri OR glassdoor) '
   + '-category:promotions -category:social';
 
 const PAYMENT_METHOD_MAP: Record<string, ParsedTransactionPaymentMethod> = {
@@ -48,7 +53,26 @@ const TRANSACTION_TYPE_MAP: Record<string, ParsedTransactionType> = {
 const REPUTATION_SKIP_THRESHOLD = 3;
 const REPUTATION_PROBE_INTERVAL = 20;
 
-function isReputationBlocked(rep: { notTxnStreak: number; totalSeen: number } | null): boolean {
+// Payment-gateway/aggregator addresses (as opposed to a bank's own
+// dedicated "alerts@" address) send several genuinely different kinds of
+// mail from the SAME address — settlement summaries, downtime notices,
+// purchase confirmations, refund notices — so "N non-transactions in a
+// row" says nothing about whether the NEXT one is a transaction too. A
+// real case: no-reply@razorpay.com racked up 3 non-transaction emails
+// (settlement/downtime noise) and then silently ate a genuine refund
+// notice under the same address. Exempt these from the streak-based gate
+// entirely rather than raising the threshold, which would just delay the
+// same false block.
+const REPUTATION_EXEMPT_SENDER_KEYWORDS = ["razorpay", "payu", "cashfree", "billdesk", "ccavenue", "instamojo", "juspay", "paytm", "phonepe"];
+
+function isAggregatorSender(senderEmail: string | null): boolean {
+  if (!senderEmail) return false;
+  const s = senderEmail.toLowerCase();
+  return REPUTATION_EXEMPT_SENDER_KEYWORDS.some(k => s.includes(k));
+}
+
+function isReputationBlocked(rep: { notTxnStreak: number; totalSeen: number } | null, senderEmail: string | null): boolean {
+  if (isAggregatorSender(senderEmail)) return false;
   if (!rep || rep.notTxnStreak < REPUTATION_SKIP_THRESHOLD) return false;
   return rep.totalSeen % REPUTATION_PROBE_INTERVAL !== 0;
 }
@@ -354,7 +378,7 @@ export async function syncGmailForUser(userId: string, onProgress?: ProgressCall
       const rep = candidate.senderEmail
         ? await db.gmailSenderReputation.findUnique({ where: { userId_senderEmail: { userId, senderEmail: candidate.senderEmail } } })
         : null;
-      if (isReputationBlocked(rep)) {
+      if (isReputationBlocked(rep, candidate.senderEmail)) {
         await db.gmailSeenMessage.create({ data: { userId, gmailMessageId: id } });
         // The probe check below is `totalSeen % PROBE_INTERVAL === 0` — if
         // this counter stopped advancing the moment a sender got blocked,

@@ -22,11 +22,16 @@ const FROM_KEYWORDS = [
   "razorpay", "payu", "cashfree", "billdesk", "ccavenue", "instamojo", "juspay", "paytm", "phonepe",
 ];
 const EXCLUDE_SUBJECT_KEYWORDS = ["reward", "rewards", "emi", "luxury", "deals", "podcast", "insights", "maintenance", "loan", "hiring", "job", "jobs", "capital gains", "wealth insights", "under maintenance"];
+// "alert"/"alerts" in FROM_KEYWORDS above substring-matches job-alert
+// senders (jobalerts-noreply@linkedin.com) whose subjects are just job
+// titles, with no text EXCLUDE_SUBJECT_KEYWORDS can catch.
+const EXCLUDE_FROM_KEYWORDS = ["linkedin", "indeed", "naukri", "glassdoor"];
 
 export function matchesKeywordFilter(subject: string, from: string): boolean {
   const s = subject.toLowerCase();
   const f = from.toLowerCase();
   if (EXCLUDE_SUBJECT_KEYWORDS.some(k => s.includes(k))) return false;
+  if (EXCLUDE_FROM_KEYWORDS.some(k => f.includes(k))) return false;
   return SUBJECT_KEYWORDS.some(k => s.includes(k)) || FROM_KEYWORDS.some(k => f.includes(k));
 }
 
