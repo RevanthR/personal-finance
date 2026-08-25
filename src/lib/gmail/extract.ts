@@ -31,12 +31,19 @@ export const MODEL = "gemini-flash-latest";
 export interface GeminiCallUsage {
   promptTokens: number;
   candidatesTokens: number;
+  // Gemini 2.5's internal reasoning tokens, billed at the same per-token
+  // rate as candidatesTokens but returned in a separate usageMetadata
+  // field — easy to miss since the visible response text only reflects
+  // candidatesTokens. For a trivial one-line extraction this was measured
+  // at ~30x candidatesTokens, so omitting it (as this used to) badly
+  // undercounts real cost, not just this field.
+  thoughtsTokens: number;
 }
 
-function toUsage(response: { usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number } }): GeminiCallUsage | null {
+function toUsage(response: { usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number } }): GeminiCallUsage | null {
   const meta = response.usageMetadata;
   if (!meta || meta.promptTokenCount == null || meta.candidatesTokenCount == null) return null;
-  return { promptTokens: meta.promptTokenCount, candidatesTokens: meta.candidatesTokenCount };
+  return { promptTokens: meta.promptTokenCount, candidatesTokens: meta.candidatesTokenCount, thoughtsTokens: meta.thoughtsTokenCount ?? 0 };
 }
 
 let client: GoogleGenAI | null = null;

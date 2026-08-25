@@ -572,6 +572,13 @@ model GeminiUsageLog {
   batchSize        Int
   promptTokens     Int
   candidatesTokens Int
+  // Gemini 2.5's internal reasoning tokens — billed as output tokens (same
+  // rate as candidatesTokens) but reported separately. Defaults to 0 for
+  // rows logged before this column existed; those are backfilled with an
+  // estimate derived by re-running a sample of real historical emails
+  // through the same prompt, not the exact original value (which was never
+  // captured, so it isn't recoverable) — see scripts/backfill-thoughts-tokens.ts.
+  thoughtsTokens   Int      @default(0)
   createdAt        DateTime @default(now())
 }
 

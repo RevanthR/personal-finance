@@ -11,15 +11,21 @@ const PRICING_USD_PER_MILLION: Record<string, { input: number; output: number }>
   [MODEL]: { input: 0.30, output: 2.50 },
 };
 
-export function estimateCostUsd(model: string, promptTokens: number, candidatesTokens: number): number {
+// thoughtsTokens (Gemini 2.5's internal reasoning tokens, see GeminiCallUsage
+// in extract.ts) are billed at the same per-token rate as candidatesTokens —
+// Google's pricing docs bill them both simply as "output tokens", they're
+// just reported as two separate usageMetadata fields. Omitting thoughtsTokens
+// here was undercounting real cost, not just under-reporting it.
+export function estimateCostUsd(model: string, promptTokens: number, candidatesTokens: number, thoughtsTokens = 0): number {
   const pricing = PRICING_USD_PER_MILLION[model];
   if (!pricing) return 0;
-  return (promptTokens / 1_000_000) * pricing.input + (candidatesTokens / 1_000_000) * pricing.output;
+  return (promptTokens / 1_000_000) * pricing.input + ((candidatesTokens + thoughtsTokens) / 1_000_000) * pricing.output;
 }
 
 export interface GeminiUsage {
   promptTokens: number;
   candidatesTokens: number;
+  thoughtsTokens: number;
 }
 
 // Records one real Gemini API call (batchSize > 1 for a batched call
@@ -37,6 +43,7 @@ export async function logGeminiCall(
         batchSize: params.batchSize,
         promptTokens: params.promptTokens,
         candidatesTokens: params.candidatesTokens,
+        thoughtsTokens: params.thoughtsTokens,
       },
     });
   } catch {

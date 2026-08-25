@@ -16,14 +16,14 @@ export default async function AdminPage() {
     db.gmailSeenMessage.count(),
     db.geminiUsageLog.groupBy({
       by: ["model"],
-      _sum: { batchSize: true, promptTokens: true, candidatesTokens: true },
+      _sum: { batchSize: true, promptTokens: true, candidatesTokens: true, thoughtsTokens: true },
       _count: true,
     }),
     // Per-user slice of the same usage log, for a per-row cost column below
     // instead of only ever seeing one platform-wide total.
     db.geminiUsageLog.groupBy({
       by: ["userId", "model"],
-      _sum: { promptTokens: true, candidatesTokens: true },
+      _sum: { promptTokens: true, candidatesTokens: true, thoughtsTokens: true },
     }),
     db.gmailConnection.findMany({
       select: { userId: true, email: true, connectedAt: true, lastSyncAt: true, needsReauth: true },
@@ -42,7 +42,7 @@ export default async function AdminPage() {
   const emailsSentToGemini = geminiByModel.reduce((s, g) => s + (g._sum.batchSize ?? 0), 0);
   const geminiCalls = geminiByModel.reduce((s, g) => s + g._count, 0);
   const estimatedSpendUsd = geminiByModel.reduce(
-    (s, g) => s + estimateCostUsd(g.model, g._sum.promptTokens ?? 0, g._sum.candidatesTokens ?? 0),
+    (s, g) => s + estimateCostUsd(g.model, g._sum.promptTokens ?? 0, g._sum.candidatesTokens ?? 0, g._sum.thoughtsTokens ?? 0),
     0,
   );
   // Same live-rate helper used for foreign-currency transactions elsewhere
@@ -54,7 +54,7 @@ export default async function AdminPage() {
 
   const costUsdByUserId = new Map<string, number>();
   for (const g of geminiByUser) {
-    const cost = estimateCostUsd(g.model, g._sum.promptTokens ?? 0, g._sum.candidatesTokens ?? 0);
+    const cost = estimateCostUsd(g.model, g._sum.promptTokens ?? 0, g._sum.candidatesTokens ?? 0, g._sum.thoughtsTokens ?? 0);
     costUsdByUserId.set(g.userId, (costUsdByUserId.get(g.userId) ?? 0) + cost);
   }
 
