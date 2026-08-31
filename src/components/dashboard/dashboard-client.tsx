@@ -5,7 +5,7 @@ import { flushSync } from "react-dom";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { formatCurrency, formatMonthYear, getCategoryDisplay, getCategoryColor, getCategoryIcon, MONTHS, pendingAmountKicks, ordinal, EXPENSE_CATEGORIES } from "@/lib/utils";
-import { netAmount as _net, effectivePaid as _effectivePaid, isBillPending as _isBillPending, isPreCloseDate, isPastDueDate, isDueDateNextMonth, mostRecentCloseDate, computeMetrics, computeMonthIncome, computeCashBalance } from "@/lib/finance-utils";
+import { netAmount as _net, effectivePaid as _effectivePaid, isBillPending as _isBillPending, isPreCloseDate, isPastDueDate, isDueDateNextMonth, mostRecentCloseDate, computeMetrics, computeMonthIncome, computeCashBalance, groupProjectedExpenses } from "@/lib/finance-utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -890,38 +890,23 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   // click could reach.
   const projectedBreakdown = useMemo(() => {
     if (!isProjected) return null;
-    const byCat = new Map<string, { key: string; label: string; color: string; items: ProjectedEntry[]; total: number }>();
-    for (const e of projEntries) {
-      if (e.category === "CREDIT_CARD") continue;
-      const key = e.customCategory ?? e.category;
-      const g = byCat.get(key) ?? {
-        key,
-        label: getCategoryDisplay(e.category, e.customCategory),
-        color: getCategoryColor(e.category, e.customCategory),
-        items: [] as ProjectedEntry[],
-        total: 0,
-      };
-      g.items.push(e);
-      g.total += e.amount;
-      byCat.set(key, g);
-    }
-    const categories = [...byCat.values()]
-      .map(g => ({ ...g, items: [...g.items].sort((a, b) => b.amount - a.amount) }))
-      .sort((a, b) => b.total - a.total);
-    const cc = projEntries
-      .filter(e => e.category === "CREDIT_CARD")
-      .map(e => ({ name: e.name, amount: e.amount }))
-      .sort((a, b) => b.amount - a.amount);
+    const g = groupProjectedExpenses(projEntries);
     return {
-      categories,
-      cc,
-      recurringNonCC: dispRecurringNonCC,
-      ccTotal: dispCCBills,
-      fixed: dispFixed,
-      variable: dispVariable,
-      total: dispCommitted,
+      categories: g.categories.map(c => ({
+        key: c.key,
+        label: getCategoryDisplay(c.items[0].category, c.items[0].customCategory),
+        color: getCategoryColor(c.items[0].category, c.items[0].customCategory),
+        items: c.items,
+        total: c.total,
+      })),
+      cc: g.cc.map(e => ({ name: e.name, amount: e.amount })),
+      recurringNonCC: g.total - g.ccTotal,
+      ccTotal: g.ccTotal,
+      fixed: g.fixed,
+      variable: g.variable,
+      total: g.total,
     };
-  }, [isProjected, projEntries, dispRecurringNonCC, dispCCBills, dispFixed, dispVariable, dispCommitted]);
+  }, [isProjected, projEntries]);
 
   // Nearest unpaid items across both recurring bills and CC dues — a
   // single glanceable "what needs action" row instead of only surfacing

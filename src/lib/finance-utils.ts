@@ -420,3 +420,59 @@ export function computeMetrics(
     cashPaid,
   };
 }
+
+// ── Projected (future-month) expense grouping ────────────────────────────────
+
+export type ProjectedExpenseInput = {
+  amount: number;
+  category: string;
+  customCategory: string | null;
+  isFixed: boolean;
+};
+
+export type ProjectedExpenseGroups<T> = {
+  // Non-CC entries grouped by custom category (if set) else base category,
+  // categories sorted by total desc, items within each sorted by amount desc.
+  categories: { key: string; items: T[]; total: number }[];
+  cc: T[];
+  ccTotal: number;
+  // fixed/variable span every entry (CC included), matching the dashboard's
+  // own Fixed/Variable tiles: variable is just total minus fixed.
+  fixed: number;
+  variable: number;
+  total: number;
+};
+
+// Regroups the flat projected-entry list the dashboard already computes for a
+// future month into the shape its Payables / Pending drilldowns render. Pure
+// so it can be unit-tested and reused server-side; the presentational label
+// and color per category are added by the caller.
+export function groupProjectedExpenses<T extends ProjectedExpenseInput>(entries: T[]): ProjectedExpenseGroups<T> {
+  const byCat = new Map<string, { key: string; items: T[]; total: number }>();
+  const cc: T[] = [];
+  let ccTotal = 0;
+  let fixed = 0;
+  let total = 0;
+
+  for (const e of entries) {
+    total += e.amount;
+    if (e.isFixed) fixed += e.amount;
+    if (e.category === "CREDIT_CARD") {
+      cc.push(e);
+      ccTotal += e.amount;
+      continue;
+    }
+    const key = e.customCategory ?? e.category;
+    const g = byCat.get(key) ?? { key, items: [], total: 0 };
+    g.items.push(e);
+    g.total += e.amount;
+    byCat.set(key, g);
+  }
+
+  const categories = [...byCat.values()]
+    .map(g => ({ ...g, items: [...g.items].sort((a, b) => b.amount - a.amount) }))
+    .sort((a, b) => b.total - a.total);
+  cc.sort((a, b) => b.amount - a.amount);
+
+  return { categories, cc, ccTotal, fixed, variable: total - fixed, total };
+}

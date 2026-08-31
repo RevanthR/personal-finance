@@ -8,6 +8,7 @@ import {
   computeCashBalance,
   isZeroCCBalance,
   computeMetrics,
+  groupProjectedExpenses,
   type EntryBase,
 } from "./finance-utils";
 
@@ -214,5 +215,66 @@ describe("computeMetrics", () => {
     const m = computeMetrics(entries, true, 20); // closed
     expect(m.totalCommitted).toBe(3000); // 5000 - 2000 attributed
     expect(m.cashCommitted).toBe(5000); // full amount still moves as real cash
+  });
+});
+
+describe("groupProjectedExpenses", () => {
+  type PE = { name: string; amount: number; category: string; customCategory: string | null; isFixed: boolean; dueDateDay: number | null };
+  const pe = (o: Partial<PE> = {}): PE => ({
+    name: "Item",
+    amount: 100,
+    category: "PERSONAL",
+    customCategory: null,
+    isFixed: false,
+    dueDateDay: null,
+    ...o,
+  });
+
+  it("returns empty groups for no entries", () => {
+    const g = groupProjectedExpenses([]);
+    expect(g).toEqual({ categories: [], cc: [], ccTotal: 0, fixed: 0, variable: 0, total: 0 });
+  });
+
+  it("groups non-CC entries by category and sorts categories by total desc", () => {
+    const g = groupProjectedExpenses([
+      pe({ name: "Rent", category: "HOUSE_MAINTENANCE", amount: 20000 }),
+      pe({ name: "Netflix", category: "PERSONAL", amount: 500 }),
+      pe({ name: "Gym", category: "PERSONAL", amount: 1500 }),
+    ]);
+    expect(g.categories.map(c => c.key)).toEqual(["HOUSE_MAINTENANCE", "PERSONAL"]);
+    expect(g.categories[1].items.map(i => i.name)).toEqual(["Gym", "Netflix"]); // amount desc
+    expect(g.categories[1].total).toBe(2000);
+    expect(g.total).toBe(22000);
+  });
+
+  it("buckets by customCategory when set, keeping it separate from the base category", () => {
+    const g = groupProjectedExpenses([
+      pe({ name: "Kid fees", category: "PERSONAL", customCategory: "Kids", amount: 3000 }),
+      pe({ name: "Coffee", category: "PERSONAL", customCategory: null, amount: 400 }),
+    ]);
+    expect(g.categories.map(c => c.key).sort()).toEqual(["Kids", "PERSONAL"]);
+  });
+
+  it("splits CREDIT_CARD entries into cc, out of categories, and sorts them by amount desc", () => {
+    const g = groupProjectedExpenses([
+      pe({ name: "Amex", category: "CREDIT_CARD", amount: 12000 }),
+      pe({ name: "HDFC", category: "CREDIT_CARD", amount: 8000 }),
+      pe({ name: "Rent", category: "HOUSE_MAINTENANCE", amount: 20000 }),
+    ]);
+    expect(g.cc.map(c => c.name)).toEqual(["Amex", "HDFC"]);
+    expect(g.ccTotal).toBe(20000);
+    expect(g.categories.map(c => c.key)).toEqual(["HOUSE_MAINTENANCE"]);
+    expect(g.total).toBe(40000);
+  });
+
+  it("computes fixed/variable across every entry, CC included", () => {
+    const g = groupProjectedExpenses([
+      pe({ category: "HOUSE_MAINTENANCE", amount: 20000, isFixed: true }),
+      pe({ category: "CREDIT_CARD", amount: 5000, isFixed: true }),
+      pe({ category: "PERSONAL", amount: 3000, isFixed: false }),
+    ]);
+    expect(g.fixed).toBe(25000);
+    expect(g.variable).toBe(3000);
+    expect(g.fixed + g.variable).toBe(g.total);
   });
 });
