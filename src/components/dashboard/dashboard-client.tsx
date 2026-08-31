@@ -64,6 +64,12 @@ export type ProjectedEntry = {
   dueDateDay: number | null;
 };
 
+export type ProjectedIncomeSource = {
+  name: string;
+  amount: number;
+  kind: "template" | "receivable" | "adhoc";
+};
+
 type IncomeTemplate = {
   id: string;
   name: string;
@@ -107,6 +113,7 @@ interface DashboardClientProps {
   prevUrl?: string;
   nextUrl?: string;
   projectedIncome?: number;
+  projectedIncomeSources?: ProjectedIncomeSource[];
   projectedEntries?: ProjectedEntry[];
   gmailStatus?: GmailStatus;
   carriedOverEntries?: CarriedOverEntry[];
@@ -486,7 +493,7 @@ function CCCardBlock({
   );
 }
 
-export function DashboardClient({ currentMonth: initialMonth, recentMonths: initialRecentMonths, ccTemplates, customCategories, subCategorySuggestions, incomeTemplates, todayMonth, todayYear, targetMonth, targetYear, prevUrl, nextUrl, projectedIncome, projectedEntries, gmailStatus = "ok", carriedOverEntries: initialCarriedOver = [], settledCarryOverEntries = [] }: DashboardClientProps) {
+export function DashboardClient({ currentMonth: initialMonth, recentMonths: initialRecentMonths, ccTemplates, customCategories, subCategorySuggestions, incomeTemplates, todayMonth, todayYear, targetMonth, targetYear, prevUrl, nextUrl, projectedIncome, projectedIncomeSources, projectedEntries, gmailStatus = "ok", carriedOverEntries: initialCarriedOver = [], settledCarryOverEntries = [] }: DashboardClientProps) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const viewMonth = targetMonth ?? todayMonth;
@@ -496,6 +503,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   // fresh [] reference (and cascading useMemo recomputation) on every
   // render when projectedEntries is undefined.
   const projEntries = useMemo(() => projectedEntries ?? [], [projectedEntries]);
+  const projIncomeSources = useMemo(() => projectedIncomeSources ?? [], [projectedIncomeSources]);
   const isCurrentMonth = viewMonth === todayMonth && viewYear === todayYear;
   const todayDay = new Date().getDate();
   const router = useRouter();
@@ -520,6 +528,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   const [showSetup, setShowSetup] = useState(!initialMonth && !isProjected);
   const [showIncomeEdit, setShowIncomeEdit] = useState(false);
   const [showPendingDrilldown, setShowPendingDrilldown] = useState(false);
+  const [showIncomeDrilldown, setShowIncomeDrilldown] = useState(false);
   const [showCCBillDrilldown, setShowCCBillDrilldown] = useState(false);
   const [showCCNextMonthDrilldown, setShowCCNextMonthDrilldown] = useState(false);
   const [showExpenditureDrilldown, setShowExpenditureDrilldown] = useState(false);
@@ -1377,7 +1386,9 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             label: isProjected ? "Income" : <>Income<Pencil className="w-2.5 h-2.5 text-muted-foreground" /></>,
             value: isProjected ? fmt(dispIncome) : fmt(grandIncome),
             valueClass: "text-positive",
-            onClick: isProjected ? undefined : openIncomeEdit,
+            onClick: isProjected
+              ? (projIncomeSources.length > 0 ? () => setShowIncomeDrilldown(true) : undefined)
+              : openIncomeEdit,
             hint: isProjected
               ? <span className="text-xs text-muted-foreground">projected</span>
               : adHocIncome > 0
@@ -1996,6 +2007,45 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             </div>
             </>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Income drilldown — projected months only. The current month's
+          Income tile opens the editable Unified Income Dialog above instead. */}
+      <Dialog open={showIncomeDrilldown} onOpenChange={setShowIncomeDrilldown}>
+        <DialogContent className="max-w-sm max-h-[85vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="p-5 pb-3 border-b border-border/60 shrink-0">
+            <DialogTitle>Income: {formatMonthYear(viewMonth, viewYear)}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 p-5 pt-4 overflow-y-auto overscroll-contain">
+            <p className="text-xs text-muted-foreground">Projected for {formatMonthYear(viewMonth, viewYear)} from your income templates, scheduled changes, and expected receivables. Not yet received.</p>
+            {projIncomeSources.length === 0 && (
+              <p className="text-sm text-muted-foreground py-4 text-center">No projected income for this month.</p>
+            )}
+            {(["template", "receivable", "adhoc"] as const).map(kind => {
+              const items = projIncomeSources.filter(s => s.kind === kind);
+              if (items.length === 0) return null;
+              const label = kind === "template" ? "Recurring income" : kind === "receivable" ? "Expected receivables" : "One-time";
+              return (
+                <div key={kind} className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <p className="fin-label">{label}</p>
+                    <span className="text-xs font-semibold">{fmt(items.reduce((s, i) => s + i.amount, 0))}</span>
+                  </div>
+                  {items.map((it, i) => (
+                    <div key={i} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
+                      <span className="truncate">{it.name}</span>
+                      <span className="font-semibold shrink-0 ml-2">{fmt(it.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+            <div className="flex items-center justify-between pt-2 border-t border-border">
+              <p className="text-sm font-semibold">Total</p>
+              <span className="text-sm font-bold text-positive">{fmt(dispIncome)}</span>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

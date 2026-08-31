@@ -95,11 +95,11 @@ async function DashboardData({
         : Promise.resolve(null),
       db.month.findUnique({
         where: { userId_month_year: { userId, month: targetMonth, year: targetYear } },
-        select: { adHocItems: { select: { amount: true, type: true } } },
+        select: { adHocItems: { select: { name: true, amount: true, type: true } } },
       }),
       db.receivable.findMany({
         where: { userId, status: "PENDING", expectedDate: { not: null } },
-        select: { expectedAmount: true, expectedDate: true },
+        select: { description: true, expectedAmount: true, expectedDate: true },
       }),
     ]);
 
@@ -113,24 +113,27 @@ async function DashboardData({
     const incomeTemplates  = allTemplates.filter(t => t.templateType === "INCOME");
     const expenseTemplates = allTemplates.filter(t => t.templateType !== "INCOME");
 
-    const templateIncome = incomeTemplates.reduce((sum, t) => {
+    // Itemized so the Income tile's drilldown on a projected month can show
+    // where the number comes from, same as Payables. Mirrors the three
+    // components of projIncome below one-to-one.
+    const projectedIncomeSources: { name: string; amount: number; kind: "template" | "receivable" | "adhoc" }[] = [];
+
+    for (const t of incomeTemplates) {
       const kicks = t.pendingAmount != null && t.pendingFromYear != null && t.pendingFromMonth != null &&
         (targetYear > t.pendingFromYear || (targetYear === t.pendingFromYear && targetMonth >= t.pendingFromMonth));
-      return sum + (kicks ? t.pendingAmount! : t.amount);
-    }, 0);
+      projectedIncomeSources.push({ name: t.name, amount: kicks ? t.pendingAmount! : t.amount, kind: "template" });
+    }
+    for (const r of pendingReceivables) {
+      const d = new Date(r.expectedDate!);
+      if (d.getFullYear() === targetYear && d.getMonth() + 1 === targetMonth) {
+        projectedIncomeSources.push({ name: r.description, amount: r.expectedAmount, kind: "receivable" });
+      }
+    }
+    for (const i of futureMonthRecord?.adHocItems ?? []) {
+      if (i.type === "INCOME") projectedIncomeSources.push({ name: i.name, amount: i.amount, kind: "adhoc" });
+    }
 
-    const adHocIncomeInMonth = futureMonthRecord?.adHocItems
-      .filter(i => i.type === "INCOME")
-      .reduce((s, i) => s + i.amount, 0) ?? 0;
-
-    const receivableIncome = pendingReceivables
-      .filter(r => {
-        const d = new Date(r.expectedDate!);
-        return d.getFullYear() === targetYear && d.getMonth() + 1 === targetMonth;
-      })
-      .reduce((s, r) => s + r.expectedAmount, 0);
-
-    const projIncome = templateIncome + adHocIncomeInMonth + receivableIncome;
+    const projIncome = projectedIncomeSources.reduce((s, i) => s + i.amount, 0);
 
     const projExpenses = expenseTemplates
       .filter(t =>
@@ -166,6 +169,7 @@ async function DashboardData({
         prevUrl={prevUrl}
         nextUrl={nextUrl}
         projectedIncome={projIncome}
+        projectedIncomeSources={projectedIncomeSources}
         projectedEntries={projExpenses}
         gmailStatus={gmailStatus}
       />
