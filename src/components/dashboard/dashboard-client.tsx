@@ -872,6 +872,48 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   const dispRecurringNonCC  = isProjected ? projEntries.filter(e => e.category !== "CREDIT_CARD").reduce((s, e) => s + e.amount, 0) : recurringNonCC;
   const dispCCBills         = isProjected ? projEntries.filter(e => e.category === "CREDIT_CARD").reduce((s, e) => s + e.amount, 0) : ccBillsThisMonth;
 
+  // Projected-month drilldown data — the same projEntries the Payables tab
+  // already itemizes, regrouped into category totals + line items so the
+  // Payables / Pending / CC Bill tiles can answer "where did this number
+  // come from" on a future month too, not just the current one. Purely
+  // client-side: every figure here is already on this component in
+  // projected mode (see disp* above), just not itemized anywhere a tile
+  // click could reach.
+  const projectedBreakdown = useMemo(() => {
+    if (!isProjected) return null;
+    const byCat = new Map<string, { key: string; label: string; color: string; items: ProjectedEntry[]; total: number }>();
+    for (const e of projEntries) {
+      if (e.category === "CREDIT_CARD") continue;
+      const key = e.customCategory ?? e.category;
+      const g = byCat.get(key) ?? {
+        key,
+        label: getCategoryDisplay(e.category, e.customCategory),
+        color: getCategoryColor(e.category, e.customCategory),
+        items: [] as ProjectedEntry[],
+        total: 0,
+      };
+      g.items.push(e);
+      g.total += e.amount;
+      byCat.set(key, g);
+    }
+    const categories = [...byCat.values()]
+      .map(g => ({ ...g, items: [...g.items].sort((a, b) => b.amount - a.amount) }))
+      .sort((a, b) => b.total - a.total);
+    const cc = projEntries
+      .filter(e => e.category === "CREDIT_CARD")
+      .map(e => ({ name: e.name, amount: e.amount }))
+      .sort((a, b) => b.amount - a.amount);
+    return {
+      categories,
+      cc,
+      recurringNonCC: dispRecurringNonCC,
+      ccTotal: dispCCBills,
+      fixed: dispFixed,
+      variable: dispVariable,
+      total: dispCommitted,
+    };
+  }, [isProjected, projEntries, dispRecurringNonCC, dispCCBills, dispFixed, dispVariable, dispCommitted]);
+
   // Nearest unpaid items across both recurring bills and CC dues — a
   // single glanceable "what needs action" row instead of only surfacing
   // urgency after expanding every category accordion. CC bills that
@@ -1345,7 +1387,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
           {
             label: "Payables",
             value: fmt(dispCommitted + dispAdHoc + (isProjected ? 0 : settledCarryOverTotal)),
-            onClick: isProjected ? undefined : () => setShowExpenditureDrilldown(true),
+            onClick: () => setShowExpenditureDrilldown(true),
             hint: (() => {
               const payableTotal = dispCommitted + dispAdHoc + (isProjected ? 0 : settledCarryOverTotal);
               return payableTotal > dispIncome
@@ -1353,11 +1395,13 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
                 : undefined;
             })(),
           },
-          ...(hasCCCards ? [{
+          // Projected mode passes ccTemplates=[] (hasCCCards is false), so
+          // fall back to "has a projected CC amount" to keep the tile.
+          ...((hasCCCards || (isProjected && dispCCBills > 0)) ? [{
             label: "CC Bill",
             value: dispCCBills > 0 ? fmt(dispCCBills) : "-",
-            onClick: isProjected || dispCCBills <= 0 ? undefined : () => setShowCCBillDrilldown(true),
-            hint: <span className="text-xs text-muted-foreground">{isProjected ? "last month's bill" : dispCCBills > 0 ? "from last month" : "no CC bills"}</span>,
+            onClick: dispCCBills <= 0 ? undefined : () => setShowCCBillDrilldown(true),
+            hint: <span className="text-xs text-muted-foreground">{isProjected ? "projected" : dispCCBills > 0 ? "from last month" : "no CC bills"}</span>,
           }] : []),
           ...(hasCCCards && !isProjected ? [{
             label: "CC Next Month",
@@ -1369,7 +1413,7 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             label: "Pending",
             value: isProjected ? fmt(dispPending) : fmt(totalPendingWithCarryOver),
             valueClass: "text-negative",
-            onClick: isProjected ? undefined : () => setShowPendingDrilldown(true),
+            onClick: () => setShowPendingDrilldown(true),
             hint: isProjected
               ? <span className="text-xs text-muted-foreground">projected</span>
               : totalPendingWithCarryOver > grandIncome
@@ -1892,6 +1936,16 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             <DialogTitle>Pending: {formatMonthYear(currentMonth?.month ?? viewMonth, currentMonth?.year ?? viewYear)}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 p-5 pt-4 overflow-y-auto overscroll-contain">
+            {isProjected && projectedBreakdown ? (
+              <ProjectedBreakdownBody
+                data={projectedBreakdown}
+                month={viewMonth}
+                year={viewYear}
+                fmt={fmt}
+                note="Every projected item counts as pending until the month is set up and its bills are marked paid."
+              />
+            ) : (
+            <>
             <div className="space-y-1.5">
               <p className="fin-label">This month</p>
               <div className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
@@ -1940,6 +1994,8 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
               <p className="text-sm font-semibold">Total pending</p>
               <span className="text-sm font-bold text-negative">{fmt(totalPendingWithCarryOver)}</span>
             </div>
+            </>
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -1951,15 +2007,28 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             <DialogTitle>CC Bill: {formatMonthYear(currentMonth?.month ?? viewMonth, currentMonth?.year ?? viewYear)}</DialogTitle>
           </DialogHeader>
           <div className="space-y-1.5 pt-1">
-            {/* Only cards actually due this cycle — carried-over debt from
-                a not-yet-closed card lives under Pending instead, same
-                principle as Expenditure below. */}
-            {ccBillBreakdown.filter(c => !c.pending).map(c => (
-              <div key={c.id} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
-                <span>{c.name}</span>
-                <span className="font-semibold shrink-0 ml-2">{fmt(c.amount)}</span>
-              </div>
-            ))}
+            {isProjected && projectedBreakdown ? (
+              projectedBreakdown.cc.length > 0 ? (
+                projectedBreakdown.cc.map((c, i) => (
+                  <div key={i} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
+                    <span className="truncate">{c.name}</span>
+                    <span className="font-semibold shrink-0 ml-2">{fmt(c.amount)}</span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground py-4 text-center">No card bills projected for this month.</p>
+              )
+            ) : (
+              /* Only cards actually due this cycle — carried-over debt from
+                 a not-yet-closed card lives under Pending instead, same
+                 principle as Expenditure below. */
+              ccBillBreakdown.filter(c => !c.pending).map(c => (
+                <div key={c.id} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
+                  <span>{c.name}</span>
+                  <span className="font-semibold shrink-0 ml-2">{fmt(c.amount)}</span>
+                </div>
+              ))
+            )}
             <div className="flex items-center justify-between pt-2 border-t border-border">
               <p className="text-sm font-semibold">Total</p>
               <span className="text-sm font-bold">{fmt(dispCCBills)}</span>
@@ -1996,6 +2065,10 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
             <DialogTitle>Payables: {formatMonthYear(currentMonth?.month ?? viewMonth, currentMonth?.year ?? viewYear)}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 p-5 pt-4 overflow-y-auto overscroll-contain">
+            {isProjected && projectedBreakdown ? (
+              <ProjectedBreakdownBody data={projectedBreakdown} month={viewMonth} year={viewYear} fmt={fmt} />
+            ) : (
+            <>
             <p className="text-xs text-muted-foreground">This month&apos;s own bills, plus any older debt actually paid off this month.</p>
 
             {/* Recurring is already fully itemized in the Payables tab —
@@ -2059,6 +2132,8 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
               <p className="text-sm font-semibold">Total</p>
               <span className="text-sm font-bold">{fmt(dispCommitted + dispAdHoc + settledCarryOverTotal)}</span>
             </div>
+            </>
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -2134,6 +2209,86 @@ function ProjectedEntryRow({ entry }: { entry: ProjectedEntry }) {
         {fmt(entry.amount)}
       </span>
     </div>
+  );
+}
+
+type ProjectedBreakdown = {
+  categories: { key: string; label: string; color: string; items: ProjectedEntry[]; total: number }[];
+  cc: { name: string; amount: number }[];
+  recurringNonCC: number;
+  ccTotal: number;
+  fixed: number;
+  variable: number;
+  total: number;
+};
+
+// Shared body for the Payables / Pending / (projected) drilldown dialogs on
+// a future month. Everything shown here is derived client-side from the
+// projected entries the Payables tab already lists — this just itemizes it
+// per category so a tile click answers "where did this number come from".
+function ProjectedBreakdownBody({
+  data, month, year, fmt, note,
+}: {
+  data: ProjectedBreakdown;
+  month: number;
+  year: number;
+  fmt: (v: number) => string;
+  note?: string;
+}) {
+  const isEmpty = data.categories.length === 0 && data.cc.length === 0;
+  return (
+    <>
+      <p className="text-xs text-muted-foreground">
+        {note ?? `Projected from your active recurring items for ${formatMonthYear(month, year)}. Not yet real transactions.`}
+      </p>
+      {isEmpty && (
+        <p className="text-sm text-muted-foreground py-4 text-center">No projected items for this month.</p>
+      )}
+      {data.categories.map(c => (
+        <div key={c.key} className="space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c.color }} />
+              <p className="fin-label truncate">{c.label}</p>
+            </div>
+            <span className="text-xs font-semibold shrink-0">{fmt(c.total)}</span>
+          </div>
+          {c.items.map((it, i) => (
+            <div key={i} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
+              <div className="min-w-0">
+                <span className="truncate">{it.name}</span>
+                {it.dueDateDay != null && <p className="text-xs text-muted-foreground">due {ordinal(it.dueDateDay)}</p>}
+              </div>
+              <span className="font-semibold shrink-0 ml-2">{fmt(it.amount)}</span>
+            </div>
+          ))}
+        </div>
+      ))}
+      {data.cc.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <p className="fin-label">Credit cards</p>
+            <span className="text-xs font-semibold">{fmt(data.ccTotal)}</span>
+          </div>
+          {data.cc.map((c, i) => (
+            <div key={i} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
+              <span className="truncate">{c.name}</span>
+              <span className="font-semibold shrink-0 ml-2">{fmt(c.amount)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {!isEmpty && (
+        <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
+          <span>Fixed {fmt(data.fixed)}</span>
+          <span>Variable {fmt(data.variable)}</span>
+        </div>
+      )}
+      <div className="flex items-center justify-between pt-2 border-t border-border">
+        <p className="text-sm font-semibold">Total</p>
+        <span className="text-sm font-bold">{fmt(data.total)}</span>
+      </div>
+    </>
   );
 }
 
