@@ -9,6 +9,7 @@ import {
   isZeroCCBalance,
   computeMetrics,
   groupProjectedExpenses,
+  reconcileCard,
   type EntryBase,
 } from "./finance-utils";
 
@@ -276,5 +277,110 @@ describe("groupProjectedExpenses", () => {
     expect(g.fixed).toBe(25000);
     expect(g.variable).toBe(3000);
     expect(g.fixed + g.variable).toBe(g.total);
+  });
+});
+
+describe("reconcileCard", () => {
+  const txn = (date: string, amount: number, isCredit = false) => ({ date, amount, isCredit });
+
+  it("flags a generated bill whose captured charges exceed the billed amount", () => {
+    // Axis-shaped: statement day 1, bill generated, bank billed less than the
+    // itemised charges add up to (late-August spend the bank cut before).
+    const r = reconcileCard(
+      { amount: 63651, billedAmount: 63651, statementAmount: 245, carriedInAmount: 0, cashbackAmount: 0 },
+      1,
+      false,
+      [
+        txn("2026-08-10", 30000), txn("2026-08-20", 20000), txn("2026-08-31", 13931),
+        txn("2026-09-02", 245),
+      ],
+      new Date("2026-09-05T12:00:00"),
+    );
+    expect(r.bill).toBe(63651);
+    expect(r.accumulating).toBe(245);
+    expect(r.capturedBill).toBe(63931);
+    expect(r.capturedAccumulating).toBe(245);
+    expect(r.billGap).toBe(-280);
+    expect(r.hasBillGap).toBe(true);
+    expect(r.hasAccumulatingGap).toBe(false);
+  });
+
+  it("flags a pending cycle whose ledger amount is stale below the captured spend", () => {
+    // Amazon Pay-shaped: statement day 2, bill not generated, two late charges
+    // landed after the next month's opening balance was frozen.
+    const r = reconcileCard(
+      { amount: 3421, billedAmount: 3421, statementAmount: 0, carriedInAmount: 0, cashbackAmount: 0 },
+      2,
+      true,
+      [
+        txn("2026-08-13", 2399), txn("2026-08-23", 1022),
+        txn("2026-08-28", 550), txn("2026-08-28", 420),
+      ],
+      new Date("2026-09-01T12:00:00"),
+    );
+    expect(r.bill).toBe(0); // pending: only carried debt is owed
+    expect(r.accumulating).toBe(3421); // buildingThisCycle = amount - carriedIn
+    expect(r.capturedAccumulating).toBe(4391);
+    expect(r.billGap).toBe(0); // no generated bill to reconcile
+    expect(r.accumulatingGap).toBe(-970);
+    expect(r.hasAccumulatingGap).toBe(true);
+  });
+
+  it("reports no gap when the ledger and the captured charges agree", () => {
+    const r = reconcileCard(
+      { amount: 5000, billedAmount: 5000, statementAmount: 1200, carriedInAmount: 0, cashbackAmount: 0 },
+      5,
+      false,
+      [
+        txn("2026-08-15", 3000), txn("2026-08-28", 2000), // bill window [Aug 5, Sep 5)
+        txn("2026-09-06", 1200), // accumulating >= Sep 5
+      ],
+      new Date("2026-09-10T12:00:00"),
+    );
+    expect(r.capturedBill).toBe(5000);
+    expect(r.capturedAccumulating).toBe(1200);
+    expect(r.hasBillGap).toBe(false);
+    expect(r.hasAccumulatingGap).toBe(false);
+    expect(r.totalOutstanding).toBe(6200);
+  });
+
+  it("nets cashback out of the bill and utilization but compares gaps gross", () => {
+    const r = reconcileCard(
+      { amount: 10000, billedAmount: 10000, statementAmount: 0, carriedInAmount: 0, cashbackAmount: 300 },
+      1,
+      false,
+      [txn("2026-08-10", 10000)],
+      new Date("2026-09-05T12:00:00"),
+    );
+    expect(r.bill).toBe(9700); // 10000 - 300 cashback
+    expect(r.utilization).toBe(9700);
+    expect(r.capturedBill).toBe(10000);
+    expect(r.billGap).toBe(0); // (9700 + 300) - 10000
+    expect(r.hasBillGap).toBe(false);
+  });
+
+  it("treats a credit-note transaction as reducing the captured total", () => {
+    const r = reconcileCard(
+      { amount: 4000, billedAmount: 4000, statementAmount: 0, carriedInAmount: 0, cashbackAmount: 0 },
+      1,
+      false,
+      [txn("2026-08-10", 5000), txn("2026-08-15", 1000, true)],
+      new Date("2026-09-05T12:00:00"),
+    );
+    expect(r.capturedBill).toBe(4000); // 5000 - 1000 refund
+    expect(r.hasBillGap).toBe(false);
+  });
+
+  it("puts everything in the bill window when the card has no statement day", () => {
+    const r = reconcileCard(
+      { amount: 2000, billedAmount: null, statementAmount: null, carriedInAmount: 0, cashbackAmount: 0 },
+      null,
+      false,
+      [txn("2026-08-01", 1200), txn("2026-09-01", 800)],
+      new Date("2026-09-10T12:00:00"),
+    );
+    expect(r.capturedBill).toBe(2000);
+    expect(r.capturedAccumulating).toBe(0);
+    expect(r.hasBillGap).toBe(false);
   });
 });

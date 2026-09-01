@@ -476,3 +476,109 @@ export function groupProjectedExpenses<T extends ProjectedExpenseInput>(entries:
 
   return { categories, cc, ccTotal, fixed, variable: total - fixed, total };
 }
+
+// ── Credit-card reconciliation ──────────────────────────────────────────────
+
+export type CCReconEntry = {
+  amount: number;
+  billedAmount: number | null;
+  statementAmount: number | null;
+  carriedInAmount: number | null;
+  cashbackAmount: number | null;
+};
+
+export type CCReconTxn = { date: string | Date; amount: number; isCredit: boolean };
+
+export type CCReconciliation = {
+  // ── Engine figures (the stored ledger) ──
+  // What's owed on the statement that has already generated. 0 while the
+  // statement is still pending (only carried debt is owed then).
+  bill: number;
+  // New spend not yet on a generated bill: this cycle's own accumulation
+  // (statementAmount) once the bill has closed, or the pre-close build-up
+  // toward a not-yet-generated bill while it's still pending.
+  accumulating: number;
+  // bill + accumulating. Everything this card currently owes or will owe.
+  totalOutstanding: number;
+  // Against the credit limit: full billed amount + post-close spend, net of
+  // cashback. Same basis the card block's Utilization bar uses.
+  utilization: number;
+  billedTotal: number;
+  carriedIn: number;
+  cashback: number;
+
+  // ── Captured figures (summing the itemized transactions) ──
+  capturedBill: number;
+  capturedAccumulating: number;
+  capturedBillCount: number;
+  capturedAccumulatingCount: number;
+
+  // ── Gaps (engine − captured), gross of cashback so like compares to like ──
+  billGap: number;
+  accumulatingGap: number;
+  hasBillGap: boolean;
+  hasAccumulatingGap: boolean;
+};
+
+// One reconciliation for a credit-card entry: the stored ledger figures
+// (bill / accumulating / utilization — what the card block and tiles show)
+// alongside what the itemized transaction list actually sums to for the
+// same two cycle windows, and the gap between them. A non-zero gap is real
+// information (a bank statement that billed less than what was captured,
+// charges logged late that the ledger froze past) rather than something to
+// hide — the UI surfaces it instead of showing three different numbers.
+//
+// Cycle windows match CardStatementDialog exactly: "bill" is the single
+// cycle [prevClose, mostRecentClose); "accumulating" is everything on/after
+// mostRecentClose. `GAP_THRESHOLD` keeps sub-rupee float noise from
+// flagging.
+const CC_GAP_THRESHOLD = 1;
+
+export function reconcileCard(
+  entry: CCReconEntry,
+  statementDay: number | null,
+  isBillPending: boolean,
+  transactions: CCReconTxn[],
+  asOf: Date = new Date(),
+): CCReconciliation {
+  const cashback = entry.cashbackAmount ?? 0;
+  const carriedIn = Math.max(0, entry.carriedInAmount ?? 0);
+  const billedTotal = entry.billedAmount ?? entry.amount;
+  const stmt = entry.statementAmount ?? 0;
+
+  const buildingThisCycle = isBillPending ? Math.max(0, entry.amount - carriedIn) : 0;
+  const bill = isBillPending ? carriedIn : Math.max(0, billedTotal - cashback);
+  const accumulating = isBillPending ? buildingThisCycle : stmt;
+  const totalOutstanding = bill + accumulating;
+  const utilization = Math.max(0, billedTotal + stmt - cashback);
+
+  const cycleStart = statementDay != null ? mostRecentCloseDate(statementDay, asOf) : null;
+  const prevCycleStart = cycleStart
+    ? new Date(cycleStart.getFullYear(), cycleStart.getMonth() - 1, statementDay!)
+    : null;
+  const signed = (t: CCReconTxn) => (t.isCredit ? -t.amount : t.amount);
+
+  let capturedBill = 0, capturedAccumulating = 0, capturedBillCount = 0, capturedAccumulatingCount = 0;
+  for (const t of transactions) {
+    const d = new Date(t.date);
+    if (cycleStart && d >= cycleStart) {
+      capturedAccumulating += signed(t);
+      capturedAccumulatingCount++;
+    } else if (!cycleStart || !prevCycleStart || d >= prevCycleStart) {
+      capturedBill += signed(t);
+      capturedBillCount++;
+    }
+  }
+
+  // Compare gross-of-cashback: `bill` above is net, so add cashback back.
+  const billGap = isBillPending ? 0 : (bill + cashback) - capturedBill;
+  const accumulatingGap = accumulating - capturedAccumulating;
+
+  return {
+    bill, accumulating, totalOutstanding, utilization, billedTotal, carriedIn, cashback,
+    capturedBill, capturedAccumulating, capturedBillCount, capturedAccumulatingCount,
+    billGap, accumulatingGap,
+    hasBillGap: Math.abs(billGap) >= CC_GAP_THRESHOLD,
+    hasAccumulatingGap: Math.abs(accumulatingGap) >= CC_GAP_THRESHOLD,
+  };
+}
