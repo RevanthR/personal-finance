@@ -1,7 +1,8 @@
 import { db } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client";
 import { isZeroCCBalance, isPreCloseDate } from "@/lib/finance-utils";
-import { prevMonthYear, getCurrentMonthYear } from "@/lib/utils";
+import { computePrevCCState } from "@/lib/entry-amount";
+import { prevMonthYear, nextMonthYear, getCurrentMonthYear } from "@/lib/utils";
 
 export type EntryFields = { id: string; amount: number; statementAmount: number | null; billedAmount: number | null };
 
@@ -41,15 +42,40 @@ async function recomputeStatementAmount(
   });
 }
 
+// This month's opening CC balance, re-derived LIVE from the previous
+// month's CC entry every time, rather than trusted from the frozen
+// MonthlyEntry.openingAmount. openingAmount is frozen at month-open, so a
+// charge added to the PREVIOUS month afterwards (a Gmail sync backfilling
+// an older alert, a late manual entry) bumps that month's statementAmount
+// but never reflows into this month's opening — the current cycle's
+// `amount` then silently under-counts by whatever landed late. Deriving it
+// live closes that gap, same "always re-sum, never trust a frozen number"
+// principle the rest of this module already follows.
+async function resolveLiveOpening(
+  client: DbClient,
+  userId: string,
+  templateId: string,
+  month: number,
+  year: number,
+): Promise<number> {
+  const { month: pm, year: py } = prevMonthYear(month, year);
+  const prevEntry = await client.monthlyEntry.findFirst({
+    where: { templateId, month: { userId, month: pm, year: py } },
+    select: { statementAmount: true, isPaid: true, amount: true, billedAmount: true, paidAmount: true, cashbackAmount: true },
+  });
+  const s = computePrevCCState(prevEntry);
+  return Math.max(0, s.statement + s.outstanding);
+}
+
 // Recompute a CC card's pre-close `amount`/`billedAmount` from scratch:
-// openingAmount (the frozen starting balance from month-open — see
-// MonthlyEntry.openingAmount) plus every pre-close AdHocItem currently
-// linked to this card this cycle. Self-healing the same way
-// recomputeStatementAmount already is for next cycle's figure — replaces
-// the old approach of nudging `amount` up/down by hand on every charge and
-// repayment, which had no way to notice or correct drift once introduced
-// (found via a real card whose live balance had quietly drifted a few
-// rupees off from what its own transaction history actually added up to).
+// the live opening balance (resolveLiveOpening above) plus every pre-close
+// AdHocItem currently linked to this card this cycle. Self-healing the same
+// way recomputeStatementAmount already is for next cycle's figure —
+// replaces the old approach of nudging `amount` up/down by hand on every
+// charge and repayment, which had no way to notice or correct drift once
+// introduced. The freshly-resolved opening is also written back to
+// openingAmount so any reader that still consults the stored field stays
+// consistent.
 async function recomputePreCloseAmount(
   client: DbClient,
   entryId: string,
@@ -59,8 +85,15 @@ async function recomputePreCloseAmount(
 ): Promise<EntryFields> {
   const entry = await client.monthlyEntry.findUniqueOrThrow({
     where: { id: entryId },
-    select: { openingAmount: true, carriedInAmount: true, cashbackAmount: true, isPaid: true, billPaymentsAttributed: true },
+    select: {
+      openingAmount: true, carriedInAmount: true, cashbackAmount: true, isPaid: true, billPaymentsAttributed: true,
+      month: { select: { userId: true, month: true, year: true } },
+    },
   });
+
+  const liveOpening = entry.month
+    ? await resolveLiveOpening(client, entry.month.userId, ccTemplateId, entry.month.month, entry.month.year)
+    : entry.openingAmount; // no month relation available (older test fakes) — fall back to the frozen value
 
   const cardItems = await client.adHocItem.findMany({
     where: { monthId, type: "EXPENSE", ccTemplateId },
@@ -74,7 +107,7 @@ async function recomputePreCloseAmount(
   // applyBillPaymentToCard below) has no AdHocItem row of its own, so it
   // has to be folded in explicitly here or a resum-from-AdHocItems-only
   // approach would silently drop it entirely.
-  const newAmount = Math.max(0, entry.openingAmount + preCloseTotal + (entry.billPaymentsAttributed ?? 0));
+  const newAmount = Math.max(0, liveOpening + preCloseTotal + (entry.billPaymentsAttributed ?? 0));
   // Same self-heal as before: a card that lands back at zero owed this way
   // closes itself instead of sitting pending for a "paid" tap that would
   // settle nothing.
@@ -85,10 +118,37 @@ async function recomputePreCloseAmount(
     data: {
       amount: newAmount,
       billedAmount: newAmount,
+      openingAmount: liveOpening,
       ...(autoPaid && { isPaid: true, paidOn: new Date() }),
     },
     select: { id: true, amount: true, statementAmount: true, billedAmount: true },
   });
+}
+
+// After a charge lands in (or leaves) month N, every later month's CC entry
+// for the same card has a stale opening balance — its own `amount` was
+// derived from N's now-changed statementAmount/outstanding. Walk forward
+// re-deriving each until there are no more entries (or the safety cap).
+// Only pre-close `amount` depends on the previous month; a forward month's
+// own statementAmount is independent, so it isn't touched here.
+async function cascadeCardForward(
+  client: DbClient,
+  userId: string,
+  templateId: string,
+  fromMonth: number,
+  fromYear: number,
+  maxHops = 6,
+): Promise<void> {
+  let m = fromMonth, y = fromYear;
+  for (let i = 0; i < maxHops; i++) {
+    ({ month: m, year: y } = nextMonthYear(m, y));
+    const nextEntry = await client.monthlyEntry.findFirst({
+      where: { templateId, month: { userId, month: m, year: y } },
+      select: { id: true, monthId: true, template: { select: { statementDay: true } } },
+    });
+    if (!nextEntry) break;
+    await recomputePreCloseAmount(client, nextEntry.id, nextEntry.monthId, templateId, nextEntry.template?.statementDay ?? null);
+  }
 }
 
 // Apply a CC charge's effect onto its card's MonthlyEntry (creating the
@@ -125,10 +185,26 @@ export async function applyCCEffect(
   const statementDay = template.statementDay ?? null;
   const isPreClose = isPreCloseDate(date, statementDay);
 
-  if (isPreClose) {
-    return recomputePreCloseAmount(client, entry.id, monthId, ccTemplateId, statementDay);
-  }
-  return recomputeStatementAmount(client, entry.id, monthId, ccTemplateId, statementDay);
+  const result = isPreClose
+    ? await recomputePreCloseAmount(client, entry.id, monthId, ccTemplateId, statementDay)
+    : await recomputeStatementAmount(client, entry.id, monthId, ccTemplateId, statementDay);
+
+  await cascadeFromMonth(client, userId, ccTemplateId, monthId);
+  return result;
+}
+
+// Look up a monthId's month/year and reflow every later month's CC entry
+// for this card (see cascadeCardForward). A no-op when the month row can't
+// be resolved (some test fakes don't index months by id).
+async function cascadeFromMonth(
+  client: DbClient,
+  userId: string,
+  templateId: string,
+  monthId: string,
+): Promise<void> {
+  const monthRow = await client.month.findFirst({ where: { id: monthId } });
+  if (!monthRow) return;
+  await cascadeCardForward(client, userId, templateId, monthRow.month, monthRow.year);
 }
 
 // Paying down a card's carriedInAmount only ever touches the entry that's
@@ -229,6 +305,7 @@ export async function applyBillPaymentToCard(
   await (isPreClose
     ? recomputePreCloseAmount(client, entry.id, monthRow.id, cardTemplateId, statementDay)
     : recomputeStatementAmount(client, entry.id, monthRow.id, cardTemplateId, statementDay));
+  await cascadeCardForward(client, userId, cardTemplateId, month, year);
 }
 
 // Undo the above — un-marking a bill as "paid via card" removes the charge
@@ -262,6 +339,7 @@ export async function reverseBillPaymentFromCard(
   await (isPreClose
     ? recomputePreCloseAmount(client, existing.id, monthRow.id, cardTemplateId, statementDay)
     : recomputeStatementAmount(client, existing.id, monthRow.id, cardTemplateId, statementDay));
+  await cascadeCardForward(client, userId, cardTemplateId, month, year);
 }
 
 // Reverse a CC charge's effect off its card's MonthlyEntry. Both the pre-
@@ -293,8 +371,10 @@ export async function reverseCCEffect(
   const statementDay = entry.template.statementDay ?? null;
   const isPreClose = isPreCloseDate(date, statementDay);
 
-  if (isPreClose) {
-    return recomputePreCloseAmount(client, entry.id, monthId, ccTemplateId, statementDay);
-  }
-  return recomputeStatementAmount(client, entry.id, monthId, ccTemplateId, statementDay);
+  const result = isPreClose
+    ? await recomputePreCloseAmount(client, entry.id, monthId, ccTemplateId, statementDay)
+    : await recomputeStatementAmount(client, entry.id, monthId, ccTemplateId, statementDay);
+
+  await cascadeFromMonth(client, userId, ccTemplateId, monthId);
+  return result;
 }

@@ -49,7 +49,7 @@ function applyOps(row: Row, data: Row) {
 
 interface AdHocFindManyArgs { where: { monthId: string; type: string; ccTemplateId: string | null }; select?: Select }
 interface EntryFindUniqueArgs { where: { monthId_templateId?: { monthId: string; templateId: string }; id?: string } }
-interface EntryFindUniqueOrThrowArgs { where: { id: string }; select?: Select }
+interface EntryFindUniqueOrThrowArgs { where: { id: string }; select?: Select & { month?: { select: Select } } }
 interface EntryFindFirstArgs {
   where: {
     id?: string; templateId?: string; monthId?: string; isPaid?: boolean;
@@ -67,7 +67,7 @@ interface EntryUpsertArgs {
   select?: Select;
 }
 interface TemplateFindFirstArgs { where: { id?: string; userId?: string; category?: string } }
-interface MonthFindFirstArgs { where: { userId?: string; month?: number; year?: number } }
+interface MonthFindFirstArgs { where: { id?: string; userId?: string; month?: number; year?: number } }
 interface SettlementCreateArgs { data: Omit<FakeSettlement, "id"> }
 
 function makeFakeDb() {
@@ -97,7 +97,12 @@ function makeFakeDb() {
       findUniqueOrThrow: async ({ where, select }: EntryFindUniqueOrThrowArgs) => {
         const row = monthlyEntries.find(e => e.id === where.id);
         if (!row) throw new Error(`MonthlyEntry ${where.id} not found`);
-        return project(row, select);
+        const out = project(row as unknown as Row, select);
+        if (select?.month) {
+          const m = months.find(mm => mm.id === row.monthId);
+          out.month = m ? project(m as unknown as Row, select.month.select) : null;
+        }
+        return out;
       },
       findFirst: async ({ where, select }: EntryFindFirstArgs) => {
         const row = monthlyEntries.find(e => {
@@ -181,6 +186,7 @@ function makeFakeDb() {
     },
     month: {
       findFirst: async ({ where }: MonthFindFirstArgs) => months.find(m =>
+        (where.id === undefined || m.id === where.id) &&
         (where.userId === undefined || m.userId === where.userId) &&
         (where.month === undefined || m.month === where.month) &&
         (where.year === undefined || m.year === where.year)
@@ -296,6 +302,89 @@ describe("applyCCEffect", () => {
     await applyCCEffect(db, USER, "m1", "card1", new Date(2026, 2, 5), 0);
 
     expect(monthlyEntries[0].isPaid).toBe(false);
+  });
+
+  it("derives the opening balance live from the previous month, not the frozen openingAmount", async () => {
+    const { db, templates, months, monthlyEntries, adHocItems } = makeFakeDb();
+    templates.push({ id: "card1", userId: USER, category: "CREDIT_CARD", statementDay: 2 });
+    months.push({ id: "aug", userId: USER, month: 8, year: 2026 });
+    months.push({ id: "sep", userId: USER, month: 9, year: 2026 });
+    // Aug closed and was paid — its statementAmount is this cycle's carry.
+    monthlyEntries.push({
+      id: "augE", monthId: "aug", templateId: "card1", amount: 5000, billedAmount: 5000,
+      statementAmount: 4391, openingAmount: 5000, carriedInAmount: 0, cashbackAmount: null,
+      isPaid: true, paidOn: null, paidAmount: null, billPaymentsAttributed: 0,
+    });
+    // Sep's opening was frozen at 3421 (Aug's statementAmount back then);
+    // it's now stale by 970.
+    monthlyEntries.push({
+      id: "sepE", monthId: "sep", templateId: "card1", amount: 3421, billedAmount: 3421,
+      statementAmount: 0, openingAmount: 3421, carriedInAmount: 0, cashbackAmount: null,
+      isPaid: false, paidOn: null, paidAmount: null, billPaymentsAttributed: 0,
+    });
+    // A pre-close charge lands on Sep (day 1 < statement day 2).
+    adHocItems.push({ id: "s1", monthId: "sep", type: "EXPENSE", ccTemplateId: "card1", amount: 100, date: new Date(2026, 8, 1), isCredit: false });
+
+    const result = await applyCCEffect(db, USER, "sep", "card1", new Date(2026, 8, 1), 100);
+
+    // 4391 (live from Aug) + 100 (pre-close), not 3421 (stale) + 100.
+    expect(result!.amount).toBe(4491);
+    expect(monthlyEntries.find(e => e.id === "sepE")!.openingAmount).toBe(4391);
+  });
+
+  it("cascades forward: a late charge on last month reflows into this month's amount", async () => {
+    const { db, templates, months, monthlyEntries, adHocItems } = makeFakeDb();
+    templates.push({ id: "card1", userId: USER, category: "CREDIT_CARD", statementDay: 2 });
+    months.push({ id: "aug", userId: USER, month: 8, year: 2026 });
+    months.push({ id: "sep", userId: USER, month: 9, year: 2026 });
+    monthlyEntries.push({
+      id: "augE", monthId: "aug", templateId: "card1", amount: 5000, billedAmount: 5000,
+      statementAmount: 3421, openingAmount: 5000, carriedInAmount: 0, cashbackAmount: null,
+      isPaid: true, paidOn: null, paidAmount: null, billPaymentsAttributed: 0,
+    });
+    monthlyEntries.push({
+      id: "sepE", monthId: "sep", templateId: "card1", amount: 3421, billedAmount: 3421,
+      statementAmount: 0, openingAmount: 3421, carriedInAmount: 0, cashbackAmount: null,
+      isPaid: false, paidOn: null, paidAmount: null, billPaymentsAttributed: 0,
+    });
+    // Aug's two post-close charges that made its statementAmount 3421...
+    adHocItems.push(
+      { id: "au1", monthId: "aug", type: "EXPENSE", ccTemplateId: "card1", amount: 2399, date: new Date(2026, 7, 13), isCredit: false },
+      { id: "au2", monthId: "aug", type: "EXPENSE", ccTemplateId: "card1", amount: 1022, date: new Date(2026, 7, 23), isCredit: false },
+      // ...plus a third that landed late, after Sep's opening was frozen.
+      { id: "au3", monthId: "aug", type: "EXPENSE", ccTemplateId: "card1", amount: 970, date: new Date(2026, 7, 28), isCredit: false },
+    );
+
+    await applyCCEffect(db, USER, "aug", "card1", new Date(2026, 7, 28), 970);
+
+    const aug = monthlyEntries.find(e => e.id === "augE")!;
+    const sep = monthlyEntries.find(e => e.id === "sepE")!;
+    expect(aug.statementAmount).toBe(4391); // 2399 + 1022 + 970
+    expect(sep.amount).toBe(4391); // reflowed from Aug's new statementAmount
+    expect(sep.openingAmount).toBe(4391);
+  });
+
+  it("cascade stops at the first month with no entry for the card", async () => {
+    const { db, templates, months, monthlyEntries } = makeFakeDb();
+    templates.push({ id: "card1", userId: USER, category: "CREDIT_CARD", statementDay: 2 });
+    months.push({ id: "aug", userId: USER, month: 8, year: 2026 });
+    months.push({ id: "sep", userId: USER, month: 9, year: 2026 });
+    months.push({ id: "oct", userId: USER, month: 10, year: 2026 });
+    monthlyEntries.push({
+      id: "augE", monthId: "aug", templateId: "card1", amount: 0, billedAmount: 0,
+      statementAmount: 0, openingAmount: 0, carriedInAmount: 0, cashbackAmount: null,
+      isPaid: true, paidOn: null, paidAmount: null, billPaymentsAttributed: 0,
+    });
+    // No Sep entry — Oct exists but must not be reached.
+    monthlyEntries.push({
+      id: "octE", monthId: "oct", templateId: "card1", amount: 999, billedAmount: 999,
+      statementAmount: 0, openingAmount: 999, carriedInAmount: 0, cashbackAmount: null,
+      isPaid: false, paidOn: null, paidAmount: null, billPaymentsAttributed: 0,
+    });
+
+    await applyCCEffect(db, USER, "aug", "card1", new Date(2026, 7, 3), 0);
+
+    expect(monthlyEntries.find(e => e.id === "octE")!.amount).toBe(999); // untouched
   });
 });
 
