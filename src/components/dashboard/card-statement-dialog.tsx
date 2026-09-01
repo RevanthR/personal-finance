@@ -7,7 +7,7 @@ import { TabsUnderline } from "@/components/ui/tabs-underline";
 import { Button } from "@/components/ui/button";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { formatCurrency, cn } from "@/lib/utils";
-import { mostRecentCloseDate } from "@/lib/finance-utils";
+import { mostRecentCloseDate, type CCReconciliation } from "@/lib/finance-utils";
 import { Pencil, Trash2 } from "lucide-react";
 import type { AdHocItem } from "@/types/adhoc-item";
 
@@ -29,6 +29,11 @@ interface CardStatementDialogProps {
   // generated bill" in any meaningful sense even though real charges
   // exist there. See CCCardBlock's own carriedInAmount/isBillPending.
   hasOutstandingBill: boolean;
+  // Ledger figures + captured/gap for this card (see reconcileCard). When
+  // the itemised charges below don't add up to what the card block and
+  // tiles show, this dialog says so instead of leaving the reader to
+  // notice a silent mismatch.
+  reconciliation?: CCReconciliation;
   // Only offered for repayment rows (see the isCardRepayment check below) —
   // this dialog stays a read-only itemized view for normal charges, same as
   // before; repayments need SOME way to fix or remove a mistake now that
@@ -47,7 +52,7 @@ interface CardStatementDialogProps {
 // Date falls early in the month has most of its currently-owed bill's
 // transactions dated in the PREVIOUS calendar month, so day-of-month alone
 // (which only ever sees one month's items) can't place them correctly.
-export function CardStatementDialog({ open, onOpenChange, cardName, statementDay, transactions, hasOutstandingBill, onEditRequest, onDelete, removingIds }: CardStatementDialogProps) {
+export function CardStatementDialog({ open, onOpenChange, cardName, statementDay, transactions, hasOutstandingBill, reconciliation, onEditRequest, onDelete, removingIds }: CardStatementDialogProps) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const [tab, setTab] = useState<"current" | "upcoming">("current");
@@ -88,14 +93,45 @@ export function CardStatementDialog({ open, onOpenChange, cardName, statementDay
             ]}
           />
         </div>
-        {shown.length > 0 && (
-          <div className="flex items-center justify-between px-5 pt-3 pb-1 shrink-0">
-            <span className="text-xs text-muted-foreground">
-              {tab === "current" ? "Total billed" : "Total so far"}
-            </span>
-            <span className="text-sm font-semibold tabular-nums">{fmt(shownTotal)}</span>
-          </div>
-        )}
+        {shown.length > 0 && (() => {
+          const gap = reconciliation && tab === "current"
+            ? (reconciliation.hasBillGap ? reconciliation.billGap : 0)
+            : reconciliation && tab === "upcoming"
+              ? (reconciliation.hasAccumulatingGap ? reconciliation.accumulatingGap : 0)
+              : 0;
+          const ledgerFigure = reconciliation && tab === "current"
+            ? reconciliation.bill + reconciliation.cashback
+            : reconciliation?.accumulating ?? 0;
+          return (
+            <div className="px-5 pt-3 pb-1 shrink-0 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">
+                  {tab === "current" ? "These charges" : "Accumulated so far"}
+                </span>
+                <span className="text-sm font-semibold tabular-nums">{fmt(shownTotal)}</span>
+              </div>
+              {gap !== 0 && (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">
+                      {tab === "current" ? "On the statement" : "In this cycle's total"}
+                    </span>
+                    <span className="text-xs font-medium tabular-nums text-muted-foreground">{fmt(ledgerFigure)}</span>
+                  </div>
+                  <p className="text-[11px] leading-snug text-muted-foreground pt-0.5">
+                    {tab === "current"
+                      ? (gap < 0
+                          ? `${fmt(-gap)} of these charges isn't on the bank statement. It rolls into next cycle's bill.`
+                          : `${fmt(gap)} on the statement isn't itemised here yet.`)
+                      : (gap < 0
+                          ? `${fmt(-gap)} of these charges isn't in the running total yet.`
+                          : `${fmt(gap)} counted that isn't itemised here.`)}
+                  </p>
+                </>
+              )}
+            </div>
+          );
+        })()}
         <div className="px-5 pb-5 overflow-y-auto overscroll-contain">
           {shown.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-10">

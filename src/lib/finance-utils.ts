@@ -481,13 +481,13 @@ export function groupProjectedExpenses<T extends ProjectedExpenseInput>(entries:
 
 export type CCReconEntry = {
   amount: number;
-  billedAmount: number | null;
-  statementAmount: number | null;
-  carriedInAmount: number | null;
-  cashbackAmount: number | null;
+  billedAmount?: number | null;
+  statementAmount?: number | null;
+  carriedInAmount?: number | null;
+  cashbackAmount?: number | null;
 };
 
-export type CCReconTxn = { date: string | Date; amount: number; isCredit: boolean };
+export type CCReconTxn = { date: string | Date; amount: number; isCredit?: boolean | null };
 
 export type CCReconciliation = {
   // ── Engine figures (the stored ledger) ──
