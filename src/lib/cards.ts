@@ -84,6 +84,8 @@ export type CardStatusResult = {
   status: "unconfigured" | "open" | "awaiting" | "confirmed" | "paid" | "pastdue";
   /** Owed on the most recent statement, net of payments and cashback. Never negative. */
   statementBalance: number;
+  /** The full statement figure before payments/cashback: the confirmed amount, else the estimate. */
+  statementGross: number;
   /** True when statementBalance came from a confirmed bank figure rather than an estimate. */
   statementConfirmed: boolean;
   /** What the logged charges say the most recent statement is/was, always. Used for reconciliation. */
@@ -129,7 +131,7 @@ export function cardStatus(
     const total = Math.max(0, sumBetween(charges, null, null));
     return {
       status: "unconfigured",
-      statementBalance: 0, statementConfirmed: false, statementEstimated: 0,
+      statementBalance: 0, statementGross: 0, statementConfirmed: false, statementEstimated: 0,
       unbilledSpends: total, pastDue: 0, currentBalance: total,
       availableCredit: limit != null ? Math.max(0, limit - total) : null,
       utilisation: limit ? total / limit : null,
@@ -187,6 +189,7 @@ export function cardStatus(
   return {
     status,
     statementBalance,
+    statementGross: Math.round(gross * 100) / 100,
     statementConfirmed: confirmed,
     statementEstimated,
     unbilledSpends,

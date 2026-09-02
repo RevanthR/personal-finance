@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Calendar,
   CreditCard,
+  Wallet,
   SlidersHorizontal,
   ShieldCheck,
   IndianRupee,
@@ -21,7 +22,8 @@ import { useEffect, useState } from "react";
 const navItems = [
   { href: "/dashboard",   label: "Dashboard",  icon: LayoutDashboard,    iconClass: "bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400" },
   { href: "/months",      label: "Year View",  mobileLabel: "Year", icon: Calendar,       iconClass: "bg-orange-100 text-orange-600 dark:bg-orange-500/15 dark:text-orange-400" },
-  { href: "/receivables", label: "Vault",      icon: CreditCard,        iconClass: "bg-purple-100 text-purple-600 dark:bg-purple-500/15 dark:text-purple-400" },
+  { href: "/cards",       label: "Cards",      icon: CreditCard,        iconClass: "bg-purple-100 text-purple-600 dark:bg-purple-500/15 dark:text-purple-400" },
+  { href: "/receivables", label: "Vault",      icon: Wallet,            iconClass: "bg-fuchsia-100 text-fuchsia-600 dark:bg-fuchsia-500/15 dark:text-fuchsia-400" },
   { href: "/imports",     label: "Sync",       icon: Inbox, badge: true, iconClass: "bg-teal-100 text-teal-600 dark:bg-teal-500/15 dark:text-teal-400" },
   { href: "/templates",   label: "Recurring",  icon: SlidersHorizontal,  iconClass: "bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400" },
 ];
