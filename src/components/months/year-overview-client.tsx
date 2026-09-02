@@ -160,11 +160,9 @@ export function YearOverviewClient({
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const totalIncome   = months.reduce((s, m) => s + m.income, 0);
-  const totalExpenses = months.reduce((s, m) => s + m.expenses, 0);
-  // Starting cash carried in from before this FY + the full year's net,
-  // minus anything paid this month toward an older bill (carriedDebtPaid) —
-  // same shared formula the dashboard's own balance figures use, so this
-  // never silently disagrees about what a payment like that did to cash.
+  // The "Projected full year" card is a CASH view: opening cash + income −
+  // cash out. cashExpenses is the cash-basis monthly spend; carriedDebtPaid
+  // is anything paid this year toward an older carried-over bill.
   const totalCashExpenses = months.reduce((s, m) => s + m.cashExpenses, 0);
   const yearEndBalance = computeCashBalance({
     openingBalance: fyOpeningBalance,
@@ -172,6 +170,9 @@ export function YearOverviewClient({
     expense: totalCashExpenses,
     carriedDebtPaid,
   });
+  // Shown as the card's own "Cash out" stat, derived so the three numbers
+  // bridge exactly: Year-end cash = opening cash + Income − Cash out.
+  const totalCashOut = fyOpeningBalance + totalIncome - yearEndBalance;
   const actualCount   = months.filter(m => m.isPopulated).length;
   const projCount     = 12 - actualCount;
 
@@ -303,20 +304,19 @@ export function YearOverviewClient({
                 tag="Projected full year"
                 stats={[
                   {
-                    // Not Income − Expenses (that's the two stats beside
-                    // it) — this is the real cash position: whatever
-                    // carried in before this FY, plus actual cash in/out
-                    // since. Labeled "Cash balance" (matching the
-                    // dashboard's own "Cash/UPI Bal") instead of a bare
-                    // "Balance" that reads like it should reconcile with
-                    // the other two numbers right next to it.
-                    label: "Cash balance",
+                    // A cash view: opening cash + Income − Cash out. The two
+                    // stats beside it are the cash-basis in/out, so the
+                    // three numbers bridge exactly (unlike the accrual
+                    // Income/Expenses on the YTD and rest-of-year cards).
+                    label: "Year-end cash",
                     value: `${yearEndBalance >= 0 ? "+" : "−"}${fmt(Math.abs(yearEndBalance))}`,
                     valueClass: yearEndBalance >= 0 ? "text-positive" : "text-negative",
-                    hint: <span className="text-xs text-muted-foreground">incl. opening cash</span>,
+                    hint: fyOpeningBalance !== 0
+                      ? <span className="text-xs text-muted-foreground">{fyOpeningBalance > 0 ? "+" : "−"}{fmt(Math.abs(fyOpeningBalance))} opening cash</span>
+                      : <span className="text-xs text-muted-foreground">cash basis</span>,
                   },
                   { label: "Income", value: fmt(totalIncome), valueClass: "text-positive" },
-                  { label: "Expenses", value: fmt(totalExpenses), valueClass: "text-negative" },
+                  { label: "Cash out", value: fmt(totalCashOut), valueClass: "text-negative" },
                 ]}
               />
 

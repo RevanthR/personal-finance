@@ -731,10 +731,8 @@ export default async function MonthsPage() {
   const aprilMonth = allMonths.find(m => m.month === 4 && m.year === fyStart);
   const fyOpeningBalance = aprilMonth?.openingBalance ?? 0;
   // Real cash paid this month toward an older bill (see Month.carriedDebtPaid)
-  // — only ever non-zero on the current real month, but has to be subtracted
-  // here too, same as the dashboard's own balance figures, or a payment like
-  // paying off last cycle's carried CC debt would silently vanish from the
-  // FY-level ending balance despite genuinely leaving cash on hand.
+  // — subtracted from the FY-level ending cash the same way the dashboard's
+  // own balance figures subtract it, so the two never disagree.
   const carriedDebtPaidThisFY = currentMonthFull?.carriedDebtPaid ?? 0;
 
   return (
