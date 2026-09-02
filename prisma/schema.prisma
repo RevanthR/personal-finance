@@ -94,6 +94,7 @@ model User {
   templates         LineItemTemplate[]
   chitFunds         ChitFund[]
   creditCards       CreditCard[]
+  cardStatements    CardStatement[]
   receivables       Receivable[]
   pushSubscriptions PushSubscription[]
   payments          Payment[]
@@ -351,6 +352,38 @@ model CreditCard {
   network      String?          // "Visa" | "Mastercard" | "Rupay" | "Amex"
   last4        String?          // last 4 digits, used to auto-match Gmail-imported transactions
   createdAt    DateTime         @default(now())
+  statements   CardStatement[]
+}
+
+// One row per card per billing cycle. The only stored credit-card state
+// under the rework: what the bank actually billed (once confirmed), what
+// was paid against it, and any cashback. Everything else on screen
+// (unbilled spends, current balance, utilisation) is derived from these
+// rows plus the card's AdHocItem charges (see src/lib/cards.ts, cardStatus).
+model CardStatement {
+  id               String     @id @default(cuid())
+  cardId           String
+  card             CreditCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // The cycle this statement covers: [cycleStart, statementDate).
+  cycleStart       DateTime
+  statementDate    DateTime   // the day the bank cut the bill
+  paymentDueDate   DateTime
+  // The bank's figure. Null while the cycle is only estimated from logged
+  // charges; set (and thereafter never recomputed) once the user or a
+  // parsed statement email confirms the real amount.
+  statementBalance Float?
+  confirmedAt      DateTime?
+  confirmedVia     String?    // "manual" | "gmail"
+  paidAmount       Float      @default(0)
+  paidInFull       Boolean    @default(false)
+  cashback         Float      @default(0)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  @@unique([cardId, statementDate])
+  @@index([userId])
 }
 
 // One-off income or expense for a month
