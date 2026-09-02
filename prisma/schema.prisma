@@ -531,6 +531,15 @@ enum ParsedTransactionType {
   REFUND
 }
 
+// TRANSACTION: a card/UPI charge, refund, or bill payment, awaiting review
+// to become an AdHocItem (or a card-statement payment). STATEMENT: a
+// "your statement is generated" email, awaiting review to confirm the
+// CardStatement balance for that cycle (see /api/cards/[cardId]/confirm).
+enum ParsedTransactionKind {
+  TRANSACTION
+  STATEMENT
+}
+
 // A bank email Gemini identified as a transaction, awaiting the user's
 // review before it becomes a real AdHocItem (and, for credit cards, a
 // MonthlyEntry statement-math effect).
@@ -550,10 +559,13 @@ model ParsedTransaction {
   emailReceivedAt        DateTime?
   rawSnippet             String
   status                 ParsedTransactionStatus         @default(PENDING)
+  kind                   ParsedTransactionKind           @default(TRANSACTION)
   paymentMethod          ParsedTransactionPaymentMethod  @default(CREDIT_CARD)
   transactionType        ParsedTransactionType           @default(DEBIT)
   suggestedCcTemplateId  String?
   suggestedSubcategory   String?
+  // STATEMENT rows only: the payment due date parsed from the email.
+  statementDueDate       DateTime?
   createdAt              DateTime                        @default(now())
 
   @@unique([userId, gmailMessageId])
