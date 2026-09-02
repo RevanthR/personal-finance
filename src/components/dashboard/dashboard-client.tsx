@@ -5,7 +5,7 @@ import { flushSync } from "react-dom";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { formatCurrency, formatMonthYear, getCategoryDisplay, getCategoryColor, getCategoryIcon, MONTHS, pendingAmountKicks, ordinal, EXPENSE_CATEGORIES } from "@/lib/utils";
-import { netAmount as _net, effectivePaid as _effectivePaid, isBillPending as _isBillPending, isPreCloseDate, isPastDueDate, isDueDateNextMonth, mostRecentCloseDate, computeMetrics, computeMonthIncome, computeCashBalance, groupProjectedExpenses, reconcileCard } from "@/lib/finance-utils";
+import { netAmount as _net, effectivePaid as _effectivePaid, isBillPending as _isBillPending, isPreCloseDate, isPastDueDate, isDueDateNextMonth, mostRecentCloseDate, computeMetrics, computeMonthIncome, computeCashBalance, groupProjectedExpenses } from "@/lib/finance-utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -249,17 +249,11 @@ function CCCardBlock({
   // Single shared tick instance — used by both the collapsed header's tick
   // and the expanded EntryRow's tick, so they never fall out of sync.
   const tick = usePaymentTick(entry, onUpdate);
-  // One reconciliation drives every figure on this card AND the statement
-  // dialog, so the headline, the utilization bar, and the itemised list
-  // can't quietly disagree. cashback comes from the live tick (reflects an
-  // in-flight edit) rather than the stored entry.
-  const recon = reconcileCard(
-    { ...entry, cashbackAmount: tick.cashback },
-    statementDay,
-    isBillPending,
-    transactions,
-  );
-  const utilBalance = recon.utilization;
+  // Full billed amount + spend already posted after close, net of cashback
+  // (cashback from the live tick so an in-flight edit is reflected). Same
+  // basis the Vault card uses. This whole surface is being rebuilt around
+  // one shared cardStatus() function; see the CC rework note.
+  const utilBalance = Math.max(0, billedTotal + (entry.statementAmount ?? 0) - tick.cashback);
   const utilPct = creditLimit ? Math.round((utilBalance / creditLimit) * 100) : null;
 
   // While the statement hasn't closed yet, `amount` is a blend of real
@@ -294,9 +288,7 @@ function CCCardBlock({
   const hasExpandableContent = (entry.billedAmount != null && entry.billedAmount > entry.amount)
     || nextBillTotal > 0
     || (isBillPending && buildingThisCycle > 0)
-    || utilPct != null
-    || recon.hasBillGap
-    || recon.hasAccumulatingGap;
+    || utilPct != null;
 
   return (
     <div className={cn(
@@ -420,28 +412,6 @@ function CCCardBlock({
             </div>
           )}
 
-          {/* Reconciliation — the itemised charges don't add up to the
-              ledger figure. Surfaced rather than hidden: usually a bank
-              statement that billed a little less than everything captured
-              (the rest rolls to next cycle), or charges logged after this
-              cycle's total was frozen. Tap the statement icon to see them. */}
-          {(recon.hasBillGap || recon.hasAccumulatingGap) && (
-            <div className="px-3 py-1.5 border-b border-border">
-              <span className="text-xs text-muted-foreground">
-                {recon.hasBillGap && (
-                  recon.billGap < 0
-                    ? <>{fmt(-recon.billGap)} in charges here isn&apos;t on the statement, rolls to next bill. </>
-                    : <>{fmt(recon.billGap)} on the statement isn&apos;t itemised here yet. </>
-                )}
-                {recon.hasAccumulatingGap && (
-                  recon.accumulatingGap < 0
-                    ? <>{fmt(-recon.accumulatingGap)} in recent charges isn&apos;t in this cycle&apos;s total yet.</>
-                    : <>{fmt(recon.accumulatingGap)} counted that isn&apos;t itemised here.</>
-                )}
-              </span>
-            </div>
-          )}
-
           {/* Owed now vs still building — only while the statement hasn't
               closed and there's real carried debt to separate from new
               spend (see carriedInAmount/buildingThisCycle above). */}
@@ -510,7 +480,6 @@ function CCCardBlock({
         cardName={entry.template.name}
         statementDay={statementDay}
         transactions={transactions}
-        reconciliation={recon}
         onEditRequest={onEditRequest}
         onDelete={onDelete}
         removingIds={removingIds}
