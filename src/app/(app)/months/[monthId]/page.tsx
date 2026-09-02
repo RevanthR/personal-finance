@@ -94,6 +94,7 @@ export default async function MonthDetailPage({
   return (
     <DashboardClient
       currentMonth={JSON.parse(JSON.stringify(currentMonth))}
+      cards={null}
       recentMonths={JSON.parse(JSON.stringify(recentMonths))}
       ccTemplates={JSON.parse(JSON.stringify(ccTemplates))}
       customCategories={customCategories}

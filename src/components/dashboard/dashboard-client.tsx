@@ -30,6 +30,9 @@ import { CardStatementDialog, type CardTransaction } from "./card-statement-dial
 import { usePaymentTick } from "@/hooks/use-payment-tick";
 import { DashboardTour } from "@/components/coach/dashboard-tour";
 import { GmailReconnectBanner, type GmailStatus } from "./gmail-reconnect-banner";
+import { DashboardCards } from "./dashboard-cards";
+import { cardCashPaidBetween } from "@/lib/cards";
+import type { CardOverview } from "@/components/cards/cards-client";
 import type { CCCard, AdHocSubmitFields } from "./adhoc-dialog";
 import type { AdHocItem } from "@/types/adhoc-item";
 import { format } from "date-fns";
@@ -100,6 +103,8 @@ type SettledCarryOverEntry = {
 
 interface DashboardClientProps {
   currentMonth: MonthWithDetails | null;
+  /** cardStatus() overview for every card, on the real current month only. Null on a past/projected month. */
+  cards: CardOverview[] | null;
   recentMonths: RecentMonthSummary[];
   ccTemplates: { id: string; name: string; statementDay: number | null; dueDateDay: number | null }[];
   customCategories: { id: string; name: string }[];
@@ -492,7 +497,7 @@ function CCCardBlock({
   );
 }
 
-export function DashboardClient({ currentMonth: initialMonth, recentMonths: initialRecentMonths, ccTemplates, customCategories, subCategorySuggestions, incomeTemplates, todayMonth, todayYear, targetMonth, targetYear, prevUrl, nextUrl, projectedIncome, projectedIncomeSources, projectedEntries, gmailStatus = "ok", carriedOverEntries: initialCarriedOver = [], settledCarryOverEntries = [] }: DashboardClientProps) {
+export function DashboardClient({ currentMonth: initialMonth, cards, recentMonths: initialRecentMonths, ccTemplates, customCategories, subCategorySuggestions, incomeTemplates, todayMonth, todayYear, targetMonth, targetYear, prevUrl, nextUrl, projectedIncome, projectedIncomeSources, projectedEntries, gmailStatus = "ok", carriedOverEntries: initialCarriedOver = [], settledCarryOverEntries = [] }: DashboardClientProps) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const viewMonth = targetMonth ?? todayMonth;
@@ -584,8 +589,40 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   // every downstream useMemo depending on entries/adHocItems see a
   // "changed" dependency and recompute on every render instead of only
   // when the underlying data actually changed.
-  const entries = useMemo(() => currentMonth?.entries ?? [], [currentMonth]);
+  const allEntries = useMemo(() => currentMonth?.entries ?? [], [currentMonth]);
   const adHocItems = useMemo(() => currentMonth?.adHocItems ?? [], [currentMonth]);
+
+  // Credit cards run on cardStatus() now (the current month only). Keep
+  // them out of the recurring-entry views and computeMetrics; they render
+  // in their own section from `cards` and feed the tiles as explicit
+  // figures. On a past/projected month `cards` is null and CC keeps the
+  // old MonthlyEntry path.
+  const useNewCards = !!cards;
+  const entries = useMemo(
+    () => (useNewCards ? allEntries.filter(e => e.template.category !== "CREDIT_CARD") : allEntries),
+    [allEntries, useNewCards],
+  );
+
+  const cc = useMemo(() => {
+    if (!cards) return null;
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    let owed = 0, pastDue = 0, unbilled = 0, cashThisMonth = 0, pendingCards = 0;
+    for (const c of cards) {
+      if (!c.isActive) continue;
+      owed += c.status.statementBalance;
+      pastDue += c.status.pastDue;
+      unbilled += c.status.unbilledSpends;
+      cashThisMonth += cardCashPaidBetween(c.statements, monthStart, monthEnd);
+      if (c.status.statementBalance > 0 || c.status.pastDue > 0) pendingCards++;
+    }
+    return {
+      owed: Math.round(owed), pastDue: Math.round(pastDue), unbilled: Math.round(unbilled),
+      cashThisMonth: Math.round(cashThisMonth), pendingCards,
+      totalOwed: Math.round(owed + pastDue),
+    };
+  }, [cards]);
 
   // Cross-month pool for the Daily Spends "Custom" date filter — recentMonths
   // (last 6 real months, always fetched for the dashboard's own trend/carry
@@ -657,9 +694,16 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     [entries, isCurrentMonth, todayDay],
   );
   const {
-    totalCommitted, totalPaid, totalPending, paidPercent, pendingCount,
-    ccBillsThisMonth, recurringNonCC, ccNextMonth, cashCommitted, cashPaid,
+    totalCommitted, totalPaid, paidPercent,
+    recurringNonCC, cashCommitted, cashPaid,
   } = metrics;
+  // When cards run on cardStatus() (current month), metrics is non-CC; add
+  // the derived card figures back on top. On a past month `cc` is null and
+  // metrics still blends CC in the old way.
+  const ccBillsThisMonth = cc ? cc.owed : metrics.ccBillsThisMonth;
+  const ccNextMonth       = cc ? cc.unbilled : metrics.ccNextMonth;
+  const totalPending      = cc ? metrics.totalPending + cc.totalOwed : metrics.totalPending;
+  const pendingCount      = cc ? metrics.pendingCount + cc.pendingCards : metrics.pendingCount;
 
   const openingBalance = currentMonth?.openingBalance ?? 0;
   // Real cash paid this month toward a bill from an earlier month — kept
@@ -667,11 +711,13 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
   // snapshot) so that snapshot never gets silently overwritten by a later
   // payment. Still has to reduce the actual cash totals below.
   const carriedDebtPaid = currentMonth?.carriedDebtPaid ?? 0;
-  // cashCommitted/cashPaid (not totalCommitted/totalPaid) — a bill settled
-  // via a card is fully "committed"/"paid" for Expenditure/Pending purposes,
-  // but no actual cash moves for it until that card's own bill gets paid off.
-  const balance   = computeCashBalance({ openingBalance, income: grandIncome, expense: cashCommitted + adHocExpense, carriedDebtPaid });
-  const inHandNow = computeCashBalance({ openingBalance, income: grandIncome, expense: cashPaid + adHocExpense, carriedDebtPaid });
+  // cashCommitted/cashPaid are non-CC when `cc` is set. A card's committed
+  // cash is what it currently owes; its actual cash-out this month is what
+  // was paid against it (cc.cashThisMonth, via paidAt).
+  const ccCommittedCash = cc ? cc.totalOwed : 0;
+  const ccPaidCash      = cc ? cc.cashThisMonth : 0;
+  const balance   = computeCashBalance({ openingBalance, income: grandIncome, expense: cashCommitted + adHocExpense + ccCommittedCash, carriedDebtPaid });
+  const inHandNow = computeCashBalance({ openingBalance, income: grandIncome, expense: cashPaid + adHocExpense + ccPaidCash, carriedDebtPaid });
 
   // Still-unpaid bills from earlier months are real pending money — they
   // belong in the headline Pending total, not just tucked away in their own
@@ -866,11 +912,13 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
     () => entries.filter(e => e.template.isFixed && !isBillPending(e, isCurrentMonth, todayDay)).reduce((s, e) => s + net(e), 0),
     [entries, isCurrentMonth, todayDay]
   );
-  const variableAmount = totalCommitted - fixedAmount + adHocExpense;
+  // Non-CC committed spend plus what the cards currently owe (current month).
+  const committedInclCC = totalCommitted + (cc ? cc.totalOwed : 0);
+  const variableAmount = committedInclCC - fixedAmount + adHocExpense;
 
   // Projected-mode display overrides — shadow the actual values when viewing a future month
   const dispIncome          = isProjected ? (projectedIncome ?? 0) : grandIncome;
-  const dispCommitted       = isProjected ? projEntries.reduce((s, e) => s + e.amount, 0) : totalCommitted;
+  const dispCommitted       = isProjected ? projEntries.reduce((s, e) => s + e.amount, 0) : committedInclCC;
   const dispAdHoc           = isProjected ? 0 : adHocExpense;
   const dispPaidPct         = isProjected ? 0 : paidPercent;
   const dispPending         = isProjected ? dispCommitted : totalPending;
@@ -1393,16 +1441,16 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
           // Projected mode passes ccTemplates=[] (hasCCCards is false), so
           // fall back to "has a projected CC amount" to keep the tile.
           ...((hasCCCards || (isProjected && dispCCBills > 0)) ? [{
-            label: "CC Bill",
+            label: "Card bills",
             value: dispCCBills > 0 ? fmt(dispCCBills) : "-",
-            onClick: dispCCBills <= 0 ? undefined : () => setShowCCBillDrilldown(true),
-            hint: <span className="text-xs text-muted-foreground">{isProjected ? "projected" : dispCCBills > 0 ? "from last month" : "no CC bills"}</span>,
+            onClick: (useNewCards || dispCCBills <= 0) ? undefined : () => setShowCCBillDrilldown(true),
+            hint: <span className="text-xs text-muted-foreground">{isProjected ? "projected" : dispCCBills > 0 ? "owed now" : "nothing due"}</span>,
           }] : []),
           ...(hasCCCards && !isProjected ? [{
-            label: "CC Next Month",
+            label: "Spent on cards",
             value: ccNextMonth > 0 ? fmt(ccNextMonth) : "-",
-            onClick: ccNextMonth <= 0 ? undefined : () => setShowCCNextMonthDrilldown(true),
-            hint: <span className="text-xs text-muted-foreground">{ccNextMonth > 0 ? `building for ${nextMonthName}` : "nothing yet"}</span>,
+            onClick: (useNewCards || ccNextMonth <= 0) ? undefined : () => setShowCCNextMonthDrilldown(true),
+            hint: <span className="text-xs text-muted-foreground">{ccNextMonth > 0 ? "this cycle, unbilled" : "nothing yet"}</span>,
           }] : []),
           {
             label: "Pending",
@@ -1663,18 +1711,20 @@ export function DashboardClient({ currentMonth: initialMonth, recentMonths: init
           </div>
         );
 
-        const ccSection = unsettledCC.length > 0 && (
-          <div className="space-y-2.5" key="cc">
-            <p className="fin-label px-0.5">Pending Card Payments</p>
-            {unsettledCC.map(renderCCItem)}
-          </div>
-        );
+        const ccSection = useNewCards
+          ? (cards && cards.some(c => c.isActive) ? <DashboardCards key="cc" cards={cards} fmt={fmt} /> : null)
+          : unsettledCC.length > 0 && (
+            <div className="space-y-2.5" key="cc">
+              <p className="fin-label px-0.5">Pending Card Payments</p>
+              {unsettledCC.map(renderCCItem)}
+            </div>
+          );
 
-        const paidSection = (settledGroups.length > 0 || settledCC.length > 0) && (
+        const paidSection = (settledGroups.length > 0 || (!useNewCards && settledCC.length > 0)) && (
           <div className="space-y-2.5" key="paid">
             <p className="fin-label px-0.5">Paid</p>
             {settledGroups.map(([groupKey, items]) => renderCategoryCard(groupKey, items))}
-            {settledCC.map(renderCCItem)}
+            {!useNewCards && settledCC.map(renderCCItem)}
           </div>
         );
 

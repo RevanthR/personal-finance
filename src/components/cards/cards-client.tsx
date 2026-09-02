@@ -50,7 +50,7 @@ export type CardOverview = {
   status: Status;
   statements: {
     statementDate: string; paymentDueDate: string; statementBalance: number | null;
-    confirmedAt: string | null; paidAmount: number; paidInFull: boolean; cashback: number;
+    confirmedAt: string | null; paidAmount: number; paidInFull: boolean; paidAt: string | null; cashback: number;
   }[];
   charges: CardChargeRow[];
 };

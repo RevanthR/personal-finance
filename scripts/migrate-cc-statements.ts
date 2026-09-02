@@ -120,6 +120,9 @@ async function main() {
         const paidAmount = paidInFull
           ? (statementBalance ?? oldBill ?? estimate)
           : (e?.paidAmount ?? 0);
+        // Best available proxy for when it was paid: the recorded paidOn,
+        // else the payment due date for that cycle.
+        const paidAt = paidInFull ? (e?.paidOn ?? due) : (e?.paidAmount ? due : null);
         const cashback = e?.cashbackAmount ?? 0;
 
         const label = confirmedVia === "manual" ? "confirmed(set)" : confirmedVia === "migration" ? "confirmed(paid)" : "estimated";
@@ -135,9 +138,9 @@ async function main() {
             where: { cardId_statementDate: { cardId: c.id, statementDate: stDate } },
             create: {
               cardId: c.id, userId: u.id, cycleStart, statementDate: stDate, paymentDueDate: due,
-              statementBalance, confirmedAt, confirmedVia, paidAmount, paidInFull, cashback,
+              statementBalance, confirmedAt, confirmedVia, paidAmount, paidInFull, paidAt, cashback,
             },
-            update: { cycleStart, paymentDueDate: due, statementBalance, confirmedAt, confirmedVia, paidAmount, paidInFull, cashback },
+            update: { cycleStart, paymentDueDate: due, statementBalance, confirmedAt, confirmedVia, paidAmount, paidInFull, paidAt, cashback },
           });
         }
 

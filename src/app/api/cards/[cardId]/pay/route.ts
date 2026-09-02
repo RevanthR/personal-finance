@@ -48,18 +48,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ car
     if (!stmt) throw new Error("no cycle to pay");
 
     if (unpay) {
-      return tx.cardStatement.update({ where: { id: stmt.id }, data: { paidAmount: 0, paidInFull: false } });
+      return tx.cardStatement.update({ where: { id: stmt.id }, data: { paidAmount: 0, paidInFull: false, paidAt: null } });
     }
     if (full) {
       return tx.cardStatement.update({
         where: { id: stmt.id },
-        data: { paidAmount: stmt.paidAmount + remaining, paidInFull: true },
+        data: { paidAmount: stmt.paidAmount + remaining, paidInFull: true, paidAt: new Date() },
       });
     }
     const newPaid = stmt.paidAmount + (amount ?? 0);
     return tx.cardStatement.update({
       where: { id: stmt.id },
-      data: { paidAmount: newPaid, paidInFull: newPaid + stmt.cashback >= gross - 0.5 },
+      data: { paidAmount: newPaid, paidInFull: newPaid + stmt.cashback >= gross - 0.5, paidAt: new Date() },
     });
   });
 

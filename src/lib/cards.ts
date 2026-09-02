@@ -71,6 +71,7 @@ export type CardStatementRow = {
   confirmedAt: string | Date | null;
   paidAmount: number;
   paidInFull: boolean;
+  paidAt: string | Date | null;
   cashback: number;
 };
 
@@ -103,6 +104,21 @@ export type CardStatusResult = {
   lastStatementDate: Date | null;
   paymentDueDate: Date | null;
 };
+
+/**
+ * Cash that actually left toward this card's bills inside [from, to). Uses
+ * paidAt, so it only counts payments recorded in that window rather than
+ * the whole cumulative paidAmount.
+ */
+export function cardCashPaidBetween(statements: CardStatementRow[], from: Date, to: Date): number {
+  let total = 0;
+  for (const s of statements) {
+    if (!s.paidAt) continue;
+    const t = new Date(s.paidAt).getTime();
+    if (t >= from.getTime() && t < to.getTime()) total += s.paidAmount;
+  }
+  return Math.round(total * 100) / 100;
+}
 
 const signed = (c: CardCharge) => (c.isCredit ? -c.amount : c.amount);
 

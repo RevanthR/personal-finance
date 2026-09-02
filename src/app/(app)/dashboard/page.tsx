@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { setupMonth } from "@/lib/months/setup-month";
 import { redirect } from "next/navigation";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
+import { getCardsOverview } from "@/lib/cards-db";
 import { getCurrentMonthYear, prevMonthYear, nextMonthYear } from "@/lib/utils";
 import { isTemplateActiveInMonth } from "@/lib/loan-utils";
 import { chitMonthlyAmount } from "@/lib/entry-amount";
@@ -156,6 +157,7 @@ async function DashboardData({
     return (
       <DashboardClient
         currentMonth={null}
+        cards={null}
         recentMonths={[]}
         ccTemplates={[]}
         customCategories={[]}
@@ -304,9 +306,14 @@ async function DashboardData({
       pendingFromYear: t.pendingFromYear,
     }));
 
+  // Credit cards run on cardStatus() now (see the CC rework). Only the real
+  // current month uses it; a past month keeps the historical MonthlyEntry view.
+  const cards = isRealCurrentMonth ? await getCardsOverview(userId) : [];
+
   return (
     <DashboardClient
       currentMonth={resolvedMonth ? JSON.parse(JSON.stringify(resolvedMonth)) : null}
+      cards={isRealCurrentMonth ? JSON.parse(JSON.stringify(cards)) : null}
       recentMonths={JSON.parse(JSON.stringify(recentMonths))}
       ccTemplates={JSON.parse(JSON.stringify(ccTemplates))}
       customCategories={customCategories}

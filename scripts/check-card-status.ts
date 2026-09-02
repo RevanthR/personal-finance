@@ -31,7 +31,7 @@ async function main() {
       { statementDay: c.template.statementDay, dueDateDay: c.template.dueDateDay, creditLimit: c.template.creditLimit },
       c.statements.map(s => ({
         statementDate: s.statementDate, paymentDueDate: s.paymentDueDate, statementBalance: s.statementBalance,
-        confirmedAt: s.confirmedAt, paidAmount: s.paidAmount, paidInFull: s.paidInFull, cashback: s.cashback,
+        confirmedAt: s.confirmedAt, paidAmount: s.paidAmount, paidInFull: s.paidInFull, paidAt: s.paidAt, cashback: s.cashback,
       })),
       ch,
     );

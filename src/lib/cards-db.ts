@@ -32,7 +32,7 @@ export type CardOverview = {
 
 function toRow(s: {
   statementDate: Date; paymentDueDate: Date; statementBalance: number | null;
-  confirmedAt: Date | null; paidAmount: number; paidInFull: boolean; cashback: number;
+  confirmedAt: Date | null; paidAmount: number; paidInFull: boolean; paidAt: Date | null; cashback: number;
 }): CardStatementRow {
   return {
     statementDate: s.statementDate,
@@ -41,9 +41,11 @@ function toRow(s: {
     confirmedAt: s.confirmedAt,
     paidAmount: s.paidAmount,
     paidInFull: s.paidInFull,
+    paidAt: s.paidAt,
     cashback: s.cashback,
   };
 }
+
 
 /** Every card for a user with its derived status. One query set. */
 export async function getCardsOverview(userId: string, asOf: Date = new Date()): Promise<CardOverview[]> {

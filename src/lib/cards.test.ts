@@ -48,6 +48,7 @@ function row(overrides: Partial<CardStatementRow> & { statementDate: string }): 
     confirmedAt: null,
     paidAmount: 0,
     paidInFull: false,
+    paidAt: null,
     cashback: 0,
     ...overrides,
   };

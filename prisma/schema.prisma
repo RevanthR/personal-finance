@@ -378,6 +378,8 @@ model CardStatement {
   confirmedVia     String?    // "manual" | "gmail"
   paidAmount       Float      @default(0)
   paidInFull       Boolean    @default(false)
+  // When the payment was made, for the cash-balance view. Cleared on undo.
+  paidAt           DateTime?
   cashback         Float      @default(0)
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
