@@ -5,7 +5,7 @@ import { flushSync } from "react-dom";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { formatCurrency, formatMonthYear, getCategoryDisplay, getCategoryColor, getCategoryIcon, MONTHS, pendingAmountKicks, ordinal, EXPENSE_CATEGORIES } from "@/lib/utils";
-import { netAmount as _net, effectivePaid as _effectivePaid, isBillPending as _isBillPending, isPreCloseDate, isPastDueDate, isDueDateNextMonth, mostRecentCloseDate, computeMetrics, computeMonthIncome, computeCashBalance, groupProjectedExpenses } from "@/lib/finance-utils";
+import { netAmount as _net, effectivePaid as _effectivePaid, isBillPending as _isBillPending, isPastDueDate, computeMetrics, computeMonthIncome, computeCashBalance, groupProjectedExpenses } from "@/lib/finance-utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Plus, Pencil, ChevronDown, Trash2, ChevronLeft, ChevronRight, Check, Calendar, Loader2, RotateCcw, ScrollText,
+  Plus, Pencil, ChevronDown, Trash2, ChevronLeft, ChevronRight, Calendar, Loader2, RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { EntryRow } from "./entry-row";
@@ -25,9 +25,6 @@ import { SummaryCard } from "@/components/ui/summary-card";
 import { PageHeader } from "@/components/ui/page-header";
 import { TabsUnderline } from "@/components/ui/tabs-underline";
 import { CategoryBadge } from "@/components/ui/category-badge";
-import { PaymentDialog } from "./payment-dialog";
-import { CardStatementDialog, type CardTransaction } from "./card-statement-dialog";
-import { usePaymentTick } from "@/hooks/use-payment-tick";
 import { DashboardTour } from "@/components/coach/dashboard-tour";
 import { GmailReconnectBanner, type GmailStatus } from "./gmail-reconnect-banner";
 import { DashboardCards } from "./dashboard-cards";
@@ -105,6 +102,8 @@ interface DashboardClientProps {
   currentMonth: MonthWithDetails | null;
   /** cardStatus() overview for every card, on the real current month only. Null on a past/projected month. */
   cards: CardOverview[] | null;
+  /** Read-only credit-card cost for the viewed month (statements that cut that month), for a past month. Null on the current or a projected month. */
+  ccMonth: { total: number; byCard: { templateId: string; name: string; amount: number }[] } | null;
   recentMonths: RecentMonthSummary[];
   ccTemplates: { id: string; name: string; statementDay: number | null; dueDateDay: number | null }[];
   customCategories: { id: string; name: string }[];
@@ -214,290 +213,7 @@ function net(e: EntryWithTemplate)                                              
 function effectivePaid(e: EntryWithTemplate)                                    { return _effectivePaid(e); }
 function isBillPending(e: EntryWithTemplate, isCurrent: boolean, day: number)   { return _isBillPending(e, isCurrent, day); }
 
-// Bill/dues view only — the individual purchases that built this bill live
-// in Daily/Regular Spends instead, so this card no longer needs a nested
-// transaction list, only whether next cycle already has spend against it
-// (hasPostCloseSpend) to guard the "Clear" action.
-function CCCardBlock({
-  entry, hasPostCloseSpend, nextMonthName, isBillPending, onUpdate, onClearStatement, collapsed, onToggle, transactions, onEditRequest, onDelete, removingIds,
-}: {
-  entry: EntryWithTemplate;
-  hasPostCloseSpend: boolean;
-  nextMonthName: string;
-  isBillPending: boolean;
-  onUpdate: (id: string, updates: { isPaid?: boolean; amount?: number; notes?: string; paidAmount?: number; cashbackAmount?: number; payCarriedAmount?: number }) => Promise<void>;
-  onClearStatement: (entryId: string) => Promise<void>;
-  collapsed: boolean;
-  onToggle: () => void;
-  transactions: CardTransaction[];
-  onEditRequest: (item: AdHocItem) => void;
-  onDelete: (id: string) => void;
-  removingIds: Set<string>;
-}) {
-  const { hidden } = usePrivacy();
-  const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
-  const [showStatement, setShowStatement] = useState(false);
-  const [payingCarried, setPayingCarried] = useState(false);
-  const statementDay = entry.template.statementDay;
-  const nextBillTotal = entry.statementAmount ?? 0;
-  // The currently-accumulating cycle's real start date, not "next month" —
-  // for a card that generates early in the month (e.g. the 1st), spend
-  // building toward that bill is mostly dated THIS month, not next.
-  const cycleStartLabel = statementDay != null
-    ? `${ordinal(mostRecentCloseDate(statementDay).getDate())} ${format(mostRecentCloseDate(statementDay), "MMM")} – ongoing`
-    : null;
-  const billedTotal = entry.billedAmount ?? entry.amount;
-  const creditLimit = entry.template.creditLimit ?? null;
-  const isDueNextMonth = isDueDateNextMonth(statementDay, entry.template.dueDateDay);
-  const ccColor = getCategoryColor(entry.template.category, entry.template.customCategory);
-  const ccIcon  = getCategoryIcon(entry.template.category, entry.template.customCategory);
-  // Single shared tick instance — used by both the collapsed header's tick
-  // and the expanded EntryRow's tick, so they never fall out of sync.
-  const tick = usePaymentTick(entry, onUpdate);
-  // Full billed amount + spend already posted after close, net of cashback
-  // (cashback from the live tick so an in-flight edit is reflected). Same
-  // basis the Vault card uses. This whole surface is being rebuilt around
-  // one shared cardStatus() function; see the CC rework note.
-  const utilBalance = Math.max(0, billedTotal + (entry.statementAmount ?? 0) - tick.cashback);
-  const utilPct = creditLimit ? Math.round((utilBalance / creditLimit) * 100) : null;
-
-  // While the statement hasn't closed yet, `amount` is a blend of real
-  // already-owed debt (carriedInAmount) and new spend still accumulating
-  // toward this cycle's own bill (not owed yet). Showing the blended total
-  // as "the bill" makes it look like more is due than actually is —
-  // headline shows just what's really owed, the rest shows separately.
-  const carriedInAmount = Math.max(0, entry.carriedInAmount ?? 0);
-  const buildingThisCycle = isBillPending ? Math.max(0, entry.amount - carriedInAmount) : 0;
-
-  // One secondary status at a time instead of stacking multiple colored
-  // hints — partial payment (informational) takes priority over a due
-  // date (urgent, the only thing that earns the warning color) over a
-  // "building for next month" hint (informational, collapsed-only so it
-  // doesn't repeat the expanded breakdown below).
-  const rightStatus = tick.isPartial
-    ? { text: `${fmt(tick.paidAmount!)} paid so far`, warn: false }
-    : isBillPending && buildingThisCycle > 0
-      ? { text: `+${fmt(buildingThisCycle)} current outstanding`, warn: false }
-      : entry.template.dueDateDay && !tick.isPaid
-        ? { text: `due ${ordinal(entry.template.dueDateDay)}${isDueNextMonth ? ` ${nextMonthName}` : ""}`, warn: true }
-        : collapsed && nextBillTotal > 0
-          ? { text: `+${fmt(nextBillTotal)} for ${nextMonthName}`, warn: false }
-          : null;
-
-  // The expanded section only ever renders the "billed vs paying" rollover
-  // note, the still-accumulating-this-cycle breakdown, or the next-cycle
-  // bill total — if none apply there's nothing to reveal, so the
-  // chevron/expand affordance would be a dead control that visibly does
-  // nothing on tap. Render a plain, non-interactive header in that case
-  // instead of a collapsible one.
-  const hasExpandableContent = (entry.billedAmount != null && entry.billedAmount > entry.amount)
-    || nextBillTotal > 0
-    || (isBillPending && buildingThisCycle > 0)
-    || utilPct != null;
-
-  return (
-    <div className={cn(
-      "rounded-xl border overflow-hidden transition-colors",
-      tick.isPaid ? "border-border/60 bg-muted/20" : "border-border bg-card"
-    )}>
-      {/* Card header — click to expand/collapse the whole card, only when
-          there's something below to reveal (see hasExpandableContent).
-          A plain div (not a button) since it hosts the nested tick button below.
-          Split across two lines so name/badge and amount/due-date each get
-          their own row instead of competing for space on one crowded line. */}
-      <div
-        role={hasExpandableContent ? "button" : undefined}
-        tabIndex={hasExpandableContent ? 0 : undefined}
-        onClick={hasExpandableContent ? onToggle : undefined}
-        onKeyDown={hasExpandableContent ? (e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); } }) : undefined}
-        className={cn(
-          "w-full px-3 py-2.5 bg-muted/30 transition-colors",
-          hasExpandableContent && "hover:bg-muted/50 cursor-pointer",
-          hasExpandableContent && !collapsed && "border-b border-border"
-        )}
-      >
-        <div className="flex items-center gap-2 min-w-0">
-          {/* Tap to tick — opens the same pay dialog as before, right from the header.
-              Same 44px-target / visible-circle pattern as every other tick in the app. */}
-          <button
-            type="button"
-            disabled={isBillPending}
-            onClick={e => { e.stopPropagation(); tick.handleTickClick(); }}
-            className="shrink-0 flex items-center justify-center w-9 h-9 -m-2 rounded-full disabled:cursor-default"
-          >
-            <div className={cn(
-              "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all pointer-events-none",
-              tick.isPaid
-                ? "bg-positive border-positive"
-                : isBillPending
-                  ? "border-primary/40 bg-accent"
-                  : tick.isPartial
-                    ? "border-warning bg-warning-bg"
-                    : "border-warning/70 bg-warning-bg/40"
-            )}>
-              {tick.isPaid && <Check className="w-3 h-3 text-white" />}
-              {tick.isPartial && <span className="w-1.5 h-1.5 rounded-full bg-warning" />}
-            </div>
-          </button>
-          <CategoryBadge icon={ccIcon} color={ccColor} size="sm" />
-          <span className={cn("text-sm font-semibold truncate flex-1 min-w-0 text-left", tick.isPaid && "text-muted-foreground")}>{entry.template.name}</span>
-          {transactions.length > 0 && (
-            <button
-              type="button"
-              onClick={e => { e.stopPropagation(); setShowStatement(true); }}
-              title="View statement"
-              className="shrink-0 flex items-center justify-center w-7 h-7 -mx-1 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-            >
-              <ScrollText className="w-3.5 h-3.5" />
-            </button>
-          )}
-          {/* A still-open card with nothing carried in shows ₹0 here — true,
-              but bold black next to a tick, sitting inside "Pending Card
-              Payments", reads as "you owe ₹0, nothing to do" when the real
-              story is "nothing's due yet, spend is still accumulating" (see
-              the "current outstanding" line below). Muted instead of bold
-              signals "not actually a due amount" without changing the
-              number itself. */}
-          <span className={cn(
-            "text-sm font-semibold tabular-nums shrink-0",
-            tick.isPaid && "text-muted-foreground line-through",
-            isBillPending && carriedInAmount <= 0 && "text-muted-foreground font-medium"
-          )}>
-            {tick.isPartial ? fmt(tick.outstanding) : tick.cashback > 0 && !tick.isPaid ? fmt(tick.netBill) : isBillPending ? fmt(carriedInAmount) : fmt(billedTotal)}
-          </span>
-          {hasExpandableContent && (
-            <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/60 transition-transform duration-200 shrink-0", !collapsed && "rotate-180")} />
-          )}
-        </div>
-
-        {/* Secondary line — one status at a time (see rightStatus above),
-            not several colored hints competing for attention. */}
-        {(statementDay || rightStatus) && (
-          <div className="flex items-center justify-between mt-1 pl-11">
-            <span className="text-xs text-muted-foreground">
-              {statementDay ? `generates ${ordinal(statementDay)}` : ""}
-            </span>
-            {rightStatus && (
-              <span className={cn("text-xs", rightStatus.warn ? "text-warning" : "text-muted-foreground")}>
-                {rightStatus.text}
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-
-      {!collapsed && (
-        <>
-          {/* Utilization — only when a Credit Limit is set on this card (Vault). */}
-          {utilPct != null && (
-            <div className="px-3 py-2 border-b border-border space-y-1">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Utilization</span>
-                <span className="font-medium">{fmt(utilBalance)} / {fmt(creditLimit!)}</span>
-              </div>
-              <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                <div
-                  className={cn(
-                    "h-full rounded-full transition-all",
-                    utilPct >= 90 ? "bg-negative" : utilPct >= 70 ? "bg-warning" : "bg-primary"
-                  )}
-                  style={{ width: `${Math.min(100, utilPct)}%` }}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Billed vs paying indicator — only when they differ */}
-          {entry.billedAmount != null && entry.billedAmount > entry.amount && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border">
-              <span className="text-xs text-warning">
-                Statement <span className="font-semibold">{fmt(entry.billedAmount)}</span>
-                {" · "}Rolling <span className="font-semibold">{fmt(entry.billedAmount - entry.amount)}</span> to next month
-              </span>
-            </div>
-          )}
-
-          {/* Owed now vs still building — only while the statement hasn't
-              closed and there's real carried debt to separate from new
-              spend (see carriedInAmount/buildingThisCycle above). */}
-          {isBillPending && carriedInAmount > 0 && buildingThisCycle > 0 && (
-            <div className="px-3 py-2 border-b border-border space-y-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Overdue amount (last month)</span>
-                <span className="font-semibold">{fmt(carriedInAmount)}</span>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Current outstanding</span>
-                <span className="font-semibold text-muted-foreground">{fmt(buildingThisCycle)}</span>
-              </div>
-              {/* Real debt shouldn't have to wait for this cycle's own
-                  statement to close before it can be paid off. */}
-              <button
-                disabled={payingCarried}
-                onClick={async () => {
-                  setPayingCarried(true);
-                  await onUpdate(entry.id, { payCarriedAmount: carriedInAmount });
-                  setPayingCarried(false);
-                }}
-                className="w-full mt-1 text-xs font-medium text-primary border border-primary/30 bg-primary/5 px-2.5 py-1.5 rounded-md hover:bg-primary/10 transition-colors disabled:opacity-50"
-              >
-                {payingCarried ? "Paying…" : `Pay ${fmt(carriedInAmount)} overdue amount`}
-              </button>
-            </div>
-          )}
-
-          {/* Spend building toward a bill that hasn't generated yet —
-              "building" makes clear this is spend already made that hasn't
-              turned into its own bill yet, not an action or a due date.
-              Two different cards land here for two different reasons: a
-              card whose statement already closed this month is building
-              toward NEXT month's bill (nextBillTotal, from statementAmount);
-              a still-open card with nothing carried in from before (so
-              block above doesn't apply) is building toward THIS month's own
-              not-yet-generated bill (buildingThisCycle, from amount) — same
-              label, different source field, never both at once. */}
-          {(nextBillTotal > 0 || (isBillPending && carriedInAmount <= 0 && buildingThisCycle > 0)) && (
-            <div className="border-t border-border px-3 py-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-muted-foreground">
-                  {cycleStartLabel}
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold tracking-tight">{fmt(nextBillTotal > 0 ? nextBillTotal : buildingThisCycle)}</span>
-                  {nextBillTotal > 0 && !hasPostCloseSpend && (
-                    <button
-                      onClick={() => onClearStatement(entry.id)}
-                      className="text-xs font-medium text-muted-foreground border border-border bg-card px-2.5 py-1 rounded-md hover:border-foreground/30 transition-colors"
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
-      <CardStatementDialog
-        open={showStatement}
-        onOpenChange={setShowStatement}
-        cardName={entry.template.name}
-        statementDay={statementDay}
-        transactions={transactions}
-        onEditRequest={onEditRequest}
-        onDelete={onDelete}
-        removingIds={removingIds}
-        hasOutstandingBill={!isBillPending || carriedInAmount > 0}
-      />
-
-      {/* Owned here (not by EntryRow) so it works from the collapsed tick too */}
-      <PaymentDialog tick={tick} entryName={entry.template.name} amount={entry.amount} fmt={fmt} />
-    </div>
-  );
-}
-
-export function DashboardClient({ currentMonth: initialMonth, cards, recentMonths: initialRecentMonths, ccTemplates, customCategories, subCategorySuggestions, incomeTemplates, todayMonth, todayYear, targetMonth, targetYear, prevUrl, nextUrl, projectedIncome, projectedIncomeSources, projectedEntries, gmailStatus = "ok", carriedOverEntries: initialCarriedOver = [], settledCarryOverEntries = [] }: DashboardClientProps) {
+export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, recentMonths: initialRecentMonths, ccTemplates, customCategories, subCategorySuggestions, incomeTemplates, todayMonth, todayYear, targetMonth, targetYear, prevUrl, nextUrl, projectedIncome, projectedIncomeSources, projectedEntries, gmailStatus = "ok", carriedOverEntries: initialCarriedOver = [], settledCarryOverEntries = [] }: DashboardClientProps) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const viewMonth = targetMonth ?? todayMonth;
@@ -534,7 +250,7 @@ export function DashboardClient({ currentMonth: initialMonth, cards, recentMonth
   const [showPendingDrilldown, setShowPendingDrilldown] = useState(false);
   const [showIncomeDrilldown, setShowIncomeDrilldown] = useState(false);
   const [showCCBillDrilldown, setShowCCBillDrilldown] = useState(false);
-  const [showCCNextMonthDrilldown, setShowCCNextMonthDrilldown] = useState(false);
+  const [showCCSpendDrilldown, setShowCCSpendDrilldown] = useState(false);
   const [showExpenditureDrilldown, setShowExpenditureDrilldown] = useState(false);
   const [showCashDrilldown, setShowCashDrilldown] = useState(false);
   // Payables (recurring bills + card dues, both action-oriented) vs Daily
@@ -592,15 +308,13 @@ export function DashboardClient({ currentMonth: initialMonth, cards, recentMonth
   const allEntries = useMemo(() => currentMonth?.entries ?? [], [currentMonth]);
   const adHocItems = useMemo(() => currentMonth?.adHocItems ?? [], [currentMonth]);
 
-  // Credit cards run on cardStatus() now (the current month only). Keep
-  // them out of the recurring-entry views and computeMetrics; they render
-  // in their own section from `cards` and feed the tiles as explicit
-  // figures. On a past/projected month `cards` is null and CC keeps the
-  // old MonthlyEntry path.
-  const useNewCards = !!cards;
+  // Credit cards never live in the recurring-entry views or computeMetrics.
+  // The current month renders them from `cards` (interactive cardStatus);
+  // a past month from `ccMonth` (read-only cycle-expense snapshot); a
+  // projected month from projectedEntries. `entries` below is always non-CC.
   const entries = useMemo(
-    () => (useNewCards ? allEntries.filter(e => e.template.category !== "CREDIT_CARD") : allEntries),
-    [allEntries, useNewCards],
+    () => allEntries.filter(e => e.template.category !== "CREDIT_CARD"),
+    [allEntries],
   );
 
   const cc = useMemo(() => {
@@ -624,6 +338,37 @@ export function DashboardClient({ currentMonth: initialMonth, cards, recentMonth
     };
   }, [cards]);
 
+  // Single per-card view of what the cards cost this month, for every tile
+  // and drilldown. Current month: live cardStatus (owed = statement balance
+  // still due + past due; unbilled = this cycle's spend so far). Past month:
+  // the read-only cycle-expense snapshot (ccMonth). Projected month: null
+  // (that path uses projectedEntries instead).
+  const ccView = useMemo(() => {
+    if (cards && cc) {
+      const lines = cards
+        .filter(c => c.isActive)
+        .map(c => ({
+          templateId: c.templateId,
+          name: c.name,
+          owed: Math.round(c.status.statementBalance + c.status.pastDue),
+          pastDue: Math.round(c.status.pastDue),
+          unbilled: Math.round(c.status.unbilledSpends),
+        }))
+        .filter(c => c.owed > 0 || c.unbilled > 0)
+        .sort((a, b) => b.owed - a.owed);
+      return { lines, owed: cc.owed, totalOwed: cc.totalOwed, unbilled: cc.unbilled, pendingCards: cc.pendingCards };
+    }
+    if (ccMonth) {
+      const lines = ccMonth.byCard
+        .map(c => ({ templateId: c.templateId, name: c.name, owed: Math.round(c.amount), pastDue: 0, unbilled: 0 }))
+        .filter(c => c.owed > 0)
+        .sort((a, b) => b.owed - a.owed);
+      const total = Math.round(ccMonth.total);
+      return { lines, owed: total, totalOwed: total, unbilled: 0, pendingCards: lines.length };
+    }
+    return null;
+  }, [cards, cc, ccMonth]);
+
   // Cross-month pool for the Daily Spends "Custom" date filter — recentMonths
   // (last 6 real months, always fetched for the dashboard's own trend/carry
   // logic) already carries every month's adHocItems, so a custom range isn't
@@ -638,34 +383,6 @@ export function DashboardClient({ currentMonth: initialMonth, cards, recentMonth
     }
     for (const item of adHocItems) byId.set(item.id, item);
     return [...byId.values()];
-  }, [recentMonths, adHocItems]);
-
-  // A card's statement popup needs every charge that could still belong to
-  // its currently-outstanding bill or its accumulating one — for a card
-  // whose Bill Generation Date falls early in the month (e.g. the 1st),
-  // that bill's own charges are almost entirely dated in the PREVIOUS
-  // calendar month, not this one. recentMonths already carries adHocItems
-  // for the last 6 months; merge those with this month's live state
-  // (which wins on id collision, since it reflects any just-made edit
-  // recentMonths' cached snapshot wouldn't yet have) instead of only ever
-  // looking at the single month currently being viewed.
-  const ccTransactionsByCard = useMemo(() => {
-    const byId = new Map<string, AdHocItem>();
-    for (const m of recentMonths) {
-      for (const item of m.adHocItems) {
-        if (item.type === "EXPENSE" && item.ccTemplateId) byId.set(item.id, item);
-      }
-    }
-    for (const item of adHocItems) {
-      if (item.type === "EXPENSE" && item.ccTemplateId) byId.set(item.id, item);
-    }
-    const byCard = new Map<string, AdHocItem[]>();
-    for (const item of byId.values()) {
-      const list = byCard.get(item.ccTemplateId!) ?? [];
-      list.push(item);
-      byCard.set(item.ccTemplateId!, list);
-    }
-    return byCard;
   }, [recentMonths, adHocItems]);
 
   const templateIncome = useMemo(() => {
@@ -695,15 +412,15 @@ export function DashboardClient({ currentMonth: initialMonth, cards, recentMonth
   );
   const {
     totalCommitted, totalPaid, paidPercent,
-    recurringNonCC, cashCommitted, cashPaid,
+    recurringNonCC, cashPaid,
   } = metrics;
-  // When cards run on cardStatus() (current month), metrics is non-CC; add
-  // the derived card figures back on top. On a past month `cc` is null and
-  // metrics still blends CC in the old way.
-  const ccBillsThisMonth = cc ? cc.owed : metrics.ccBillsThisMonth;
-  const ccNextMonth       = cc ? cc.unbilled : metrics.ccNextMonth;
-  const totalPending      = cc ? metrics.totalPending + cc.totalOwed : metrics.totalPending;
-  const pendingCount      = cc ? metrics.pendingCount + cc.pendingCards : metrics.pendingCount;
+  // metrics is always non-CC now. Cards feed the tiles as explicit figures
+  // via ccView (current + past months); a projected month has no ccView and
+  // takes its card figure from projectedEntries instead (dispCCBills below).
+  const ccBillsThisMonth = ccView?.owed ?? 0;
+  const ccNextMonth       = ccView?.unbilled ?? 0;
+  const totalPending      = metrics.totalPending + (ccView?.totalOwed ?? 0);
+  const pendingCount      = metrics.pendingCount + (ccView?.pendingCards ?? 0);
 
   const openingBalance = currentMonth?.openingBalance ?? 0;
   // Real cash paid this month toward a bill from an earlier month — kept
@@ -711,12 +428,11 @@ export function DashboardClient({ currentMonth: initialMonth, cards, recentMonth
   // snapshot) so that snapshot never gets silently overwritten by a later
   // payment. Still has to reduce the actual cash totals below.
   const carriedDebtPaid = currentMonth?.carriedDebtPaid ?? 0;
-  // cashCommitted/cashPaid are non-CC when `cc` is set. A card's committed
-  // cash is what it currently owes; its actual cash-out this month is what
-  // was paid against it (cc.cashThisMonth, via paidAt).
-  const ccCommittedCash = cc ? cc.totalOwed : 0;
-  const ccPaidCash      = cc ? cc.cashThisMonth : 0;
-  const balance   = computeCashBalance({ openingBalance, income: grandIncome, expense: cashCommitted + adHocExpense + ccCommittedCash, carriedDebtPaid });
+  // cashPaid is non-CC. A card's cash-out this month is what was actually
+  // paid against its statement (cc.cashThisMonth, via CardStatement.paidAt).
+  // Only the interactive current month has this; a past month's card cash
+  // is already baked into its frozen opening balance.
+  const ccPaidCash = cc ? cc.cashThisMonth : 0;
   const inHandNow = computeCashBalance({ openingBalance, income: grandIncome, expense: cashPaid + adHocExpense + ccPaidCash, carriedDebtPaid });
 
   // Still-unpaid bills from earlier months are real pending money — they
@@ -738,8 +454,6 @@ export function DashboardClient({ currentMonth: initialMonth, cards, recentMonth
     () => settledCarryOverEntries.reduce((s, e) => s + e.amount, 0),
     [settledCarryOverEntries]
   );
-
-  const nextMonthName  = MONTHS[todayMonth % 12]; // todayMonth is 1-12; % 12 maps Dec→Jan correctly
 
   type GroupedItem =
     | { kind: "entry"; data: EntryWithTemplate }
@@ -833,36 +547,6 @@ export function DashboardClient({ currentMonth: initialMonth, cards, recentMonth
       .reduce((s, e) => s + (_net(e) - _effectivePaid(e)), 0);
   }, [entries]);
 
-  const ccBillBreakdown = useMemo(() => {
-    return ccEntries
-      .filter((i): i is { kind: "entry"; data: EntryWithTemplate } => i.kind === "entry")
-      .map(({ data: e }) => {
-        const pending = _isBillPending(e, isCurrentMonth, todayDay);
-        const amount = pending ? Math.max(0, (e.carriedInAmount ?? 0) - (e.cashbackAmount ?? 0)) : _net(e);
-        // `amount` above is the full committed bill — right for Expenditure/CC
-        // Bill (spend happened regardless of payment). Pending needs what's
-        // actually still owed, which is 0 once the entry is paid — otherwise
-        // a settled bill keeps showing its full original amount there forever.
-        const outstanding = pending ? amount : Math.max(0, _net(e) - _effectivePaid(e));
-        return { id: e.id, name: e.template.name, amount, pending, outstanding, isPaid: e.isPaid, isPartial: !e.isPaid && _effectivePaid(e) > 0 };
-      })
-      .filter(c => c.amount > 0);
-  }, [ccEntries, isCurrentMonth, todayDay]);
-
-  // Same figure as ccNextMonth in computeMetrics (finance-utils.ts) — next
-  // cycle's building statementAmount, plus any unpaid rolling overflow
-  // between billedAmount and amount — itemized per card instead of summed.
-  const ccNextMonthBreakdown = useMemo(() => {
-    return ccEntries
-      .filter((i): i is { kind: "entry"; data: EntryWithTemplate } => i.kind === "entry")
-      .map(({ data: e }) => {
-        const rolling = !e.isPaid ? Math.max(0, (e.billedAmount ?? e.amount) - e.amount) : 0;
-        const amount = (e.statementAmount ?? 0) + rolling;
-        return { id: e.id, name: e.template.name, amount };
-      })
-      .filter(c => c.amount > 0);
-  }, [ccEntries]);
-
   const { fyIncome, fyExpenses, fyBalance, trendData } = useMemo(() => {
     const ccStatementDayById = new Map(ccTemplates.map(t => [t.id, t.statementDay]));
     const monthIncome = (m: typeof recentMonths[0]) =>
@@ -913,7 +597,7 @@ export function DashboardClient({ currentMonth: initialMonth, cards, recentMonth
     [entries, isCurrentMonth, todayDay]
   );
   // Non-CC committed spend plus what the cards currently owe (current month).
-  const committedInclCC = totalCommitted + (cc ? cc.totalOwed : 0);
+  const committedInclCC = totalCommitted + (ccView?.totalOwed ?? 0);
   const variableAmount = committedInclCC - fixedAmount + adHocExpense;
 
   // Projected-mode display overrides — shadow the actual values when viewing a future month
@@ -992,14 +676,6 @@ export function DashboardClient({ currentMonth: initialMonth, cards, recentMonth
     setGroupToggled(prev => ({ ...prev, [key]: !isGroupCollapsed(key) }));
   }
 
-  // Collapsible per-card body (current bill + next-cycle bill) within the CC category
-  const [ccCardToggled, setCcCardToggled] = useState<Record<string, boolean>>({});
-  function isCCCardCollapsed(entryId: string): boolean {
-    return entryId in ccCardToggled ? ccCardToggled[entryId] : true;
-  }
-  function toggleCCCard(entryId: string) {
-    setCcCardToggled(prev => ({ ...prev, [entryId]: !isCCCardCollapsed(entryId) }));
-  }
 
   function openIncomeEdit() {
     if (!currentMonth) return;
@@ -1246,21 +922,6 @@ export function DashboardClient({ currentMonth: initialMonth, cards, recentMonth
     setEditingItem(item);
   }
 
-  async function handleClearStatement(entryId: string) {
-    if (!currentMonth) return;
-    const res = await fetch(`/api/months/${currentMonth.id}/entries`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ entryId, statementAmount: 0 }),
-    });
-    if (!res.ok) { toast.error("Failed to clear"); return; }
-    setCurrentMonth(prev => prev ? {
-      ...prev,
-      entries: prev.entries.map(e => e.id === entryId ? { ...e, statementAmount: 0 } : e),
-    } : prev);
-    toast.success("Cleared");
-  }
-
   async function handleSetupMonth(salaryIncome: number) {
     const res = await fetch("/api/months", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -1443,13 +1104,13 @@ export function DashboardClient({ currentMonth: initialMonth, cards, recentMonth
           ...((hasCCCards || (isProjected && dispCCBills > 0)) ? [{
             label: "Card bills",
             value: dispCCBills > 0 ? fmt(dispCCBills) : "-",
-            onClick: (useNewCards || dispCCBills <= 0) ? undefined : () => setShowCCBillDrilldown(true),
+            onClick: (isProjected || !ccView || ccView.lines.length === 0) ? undefined : () => setShowCCBillDrilldown(true),
             hint: <span className="text-xs text-muted-foreground">{isProjected ? "projected" : dispCCBills > 0 ? "owed now" : "nothing due"}</span>,
           }] : []),
-          ...(hasCCCards && !isProjected ? [{
+          ...(hasCCCards && !isProjected && cc ? [{
             label: "Spent on cards",
             value: ccNextMonth > 0 ? fmt(ccNextMonth) : "-",
-            onClick: (useNewCards || ccNextMonth <= 0) ? undefined : () => setShowCCNextMonthDrilldown(true),
+            onClick: (ccNextMonth <= 0) ? undefined : () => setShowCCSpendDrilldown(true),
             hint: <span className="text-xs text-muted-foreground">{ccNextMonth > 0 ? "this cycle, unbilled" : "nothing yet"}</span>,
           }] : []),
           {
@@ -1663,36 +1324,8 @@ export function DashboardClient({ currentMonth: initialMonth, cards, recentMonth
             );
         };
 
-        const renderCCItem = (item: GroupedItem) => {
-          if (item.kind === "projected") return <ProjectedEntryRow key={item.data.name} entry={item.data} />;
-          const entry = item.data;
-          const statementDay = entry.template.statementDay;
-          const hasPostCloseSpend = adHocItems.some(t =>
-            t.type === "EXPENSE" && t.ccTemplateId === entry.templateId &&
-            !isPreCloseDate(new Date(t.date), statementDay)
-          );
-          const cardTransactions = ccTransactionsByCard.get(entry.templateId) ?? [];
-          return (
-            <CCCardBlock
-              key={entry.id}
-              entry={entry}
-              hasPostCloseSpend={hasPostCloseSpend}
-              nextMonthName={nextMonthName}
-              isBillPending={isBillPending(entry, isCurrentMonth, todayDay)}
-              onUpdate={handleEntryUpdate}
-              onClearStatement={handleClearStatement}
-              collapsed={isCCCardCollapsed(entry.id)}
-              onToggle={() => toggleCCCard(entry.id)}
-              transactions={cardTransactions}
-              onEditRequest={handleEditRequest}
-              onDelete={handleAdHocDelete}
-              removingIds={removingIds}
-            />
-          );
-        };
-
-        // grouped/ccEntries are already sorted unsettled-first — just split
-        // on that boundary instead of re-deriving isSettled from scratch.
+        // grouped is already sorted unsettled-first — just split on that
+        // boundary instead of re-deriving isSettled from scratch.
         const groupedEntries = Object.entries(grouped);
         const isGroupSettled = ([, items]: [string, GroupedItem[]]) => {
           const entryItems = items.filter(i => i.kind === "entry");
@@ -1701,9 +1334,6 @@ export function DashboardClient({ currentMonth: initialMonth, cards, recentMonth
         const unsettledGroups = groupedEntries.filter(g => !isGroupSettled(g));
         const settledGroups   = groupedEntries.filter(isGroupSettled);
 
-        const unsettledCC = ccEntries.filter(item => item.kind === "projected" || !item.data.isPaid);
-        const settledCC   = ccEntries.filter(item => item.kind === "entry" && item.data.isPaid);
-
         const recurringSection = unsettledGroups.length > 0 && (
           <div className="space-y-2.5" key="recurring">
             <p className="fin-label px-0.5">Recurring Payments</p>
@@ -1711,20 +1341,36 @@ export function DashboardClient({ currentMonth: initialMonth, cards, recentMonth
           </div>
         );
 
-        const ccSection = useNewCards
-          ? (cards && cards.some(c => c.isActive) ? <DashboardCards key="cc" cards={cards} fmt={fmt} /> : null)
-          : unsettledCC.length > 0 && (
-            <div className="space-y-2.5" key="cc">
-              <p className="fin-label px-0.5">Pending Card Payments</p>
-              {unsettledCC.map(renderCCItem)}
-            </div>
-          );
+        // Cards: interactive per-card status on the current month; a plain
+        // read-only list on a past month; the projected CC entries on a
+        // future month.
+        const ccSection = cards
+          ? (cards.some(c => c.isActive) ? <DashboardCards key="cc" cards={cards} fmt={fmt} /> : null)
+          : ccView && ccView.lines.length > 0
+            ? (
+              <div className="space-y-2.5" key="cc">
+                <p className="fin-label px-0.5">Card bills</p>
+                {ccView.lines.map(c => (
+                  <div key={c.templateId} className="flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2.5">
+                    <span className="text-sm font-medium truncate">{c.name}</span>
+                    <span className="text-sm font-semibold tabular-nums">{fmt(c.owed)}</span>
+                  </div>
+                ))}
+              </div>
+            )
+            : ccEntries.length > 0 && (
+              <div className="space-y-2.5" key="cc">
+                <p className="fin-label px-0.5">Card bills</p>
+                {ccEntries
+                  .filter((i): i is { kind: "projected"; data: ProjectedEntry } => i.kind === "projected")
+                  .map(item => <ProjectedEntryRow key={item.data.name} entry={item.data} />)}
+              </div>
+            );
 
-        const paidSection = (settledGroups.length > 0 || (!useNewCards && settledCC.length > 0)) && (
+        const paidSection = settledGroups.length > 0 && (
           <div className="space-y-2.5" key="paid">
             <p className="fin-label px-0.5">Paid</p>
             {settledGroups.map(([groupKey, items]) => renderCategoryCard(groupKey, items))}
-            {!useNewCards && settledCC.map(renderCCItem)}
           </div>
         );
 
@@ -1997,23 +1643,21 @@ export function DashboardClient({ currentMonth: initialMonth, cards, recentMonth
                 <span>Recurring</span>
                 <span className="font-semibold">{fmt(recurringPendingTotal)}</span>
               </div>
-              {ccBillBreakdown.filter(c => !c.pending && c.outstanding > 0).map(c => (
-                <div key={c.id} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
+              {(ccView?.lines ?? []).filter(c => c.owed > 0).map(c => (
+                <div key={c.templateId} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
                   <div className="min-w-0">
                     <span className="truncate">{c.name}</span>
-                    {c.isPartial && <p className="text-xs text-muted-foreground">{fmt(c.amount - c.outstanding)} of {fmt(c.amount)} paid</p>}
+                    {c.pastDue > 0 && <p className="text-xs text-warning">{fmt(c.pastDue)} past due</p>}
                   </div>
-                  <span className="font-semibold shrink-0 ml-2">{fmt(c.outstanding)}</span>
+                  <span className="font-semibold shrink-0 ml-2">{fmt(c.owed)}</span>
                 </div>
               ))}
             </div>
-            {(carriedOver.length > 0 || ccBillBreakdown.some(c => c.pending)) && (
+            {carriedOver.length > 0 && (
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <p className="fin-label">Carried over from earlier months</p>
-                  <span className="text-xs font-semibold">
-                    {fmt(carriedOverPending + ccBillBreakdown.filter(c => c.pending).reduce((s, c) => s + c.amount, 0))}
-                  </span>
+                  <span className="text-xs font-semibold">{fmt(carriedOverPending)}</span>
                 </div>
                 {carriedOver.map(item => (
                   <div key={item.id} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
@@ -2022,15 +1666,6 @@ export function DashboardClient({ currentMonth: initialMonth, cards, recentMonth
                       <p className="text-xs text-muted-foreground">{formatMonthYear(item.month.month, item.month.year)}</p>
                     </div>
                     <span className="font-semibold shrink-0 ml-2">{fmt(_net(item) - (item.paidAmount ?? 0))}</span>
-                  </div>
-                ))}
-                {ccBillBreakdown.filter(c => c.pending).map(c => (
-                  <div key={c.id} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
-                    <div className="min-w-0">
-                      <p className="truncate">{c.name}</p>
-                      <p className="text-xs text-muted-foreground">carried, statement not closed yet</p>
-                    </div>
-                    <span className="font-semibold shrink-0 ml-2">{fmt(c.amount)}</span>
                   </div>
                 ))}
               </div>
@@ -2084,60 +1719,48 @@ export function DashboardClient({ currentMonth: initialMonth, cards, recentMonth
         </DialogContent>
       </Dialog>
 
-      {/* CC Bill drilldown */}
+      {/* Card bills drilldown */}
       <Dialog open={showCCBillDrilldown} onOpenChange={setShowCCBillDrilldown}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>CC Bill: {formatMonthYear(currentMonth?.month ?? viewMonth, currentMonth?.year ?? viewYear)}</DialogTitle>
+            <DialogTitle>Card bills: {formatMonthYear(currentMonth?.month ?? viewMonth, currentMonth?.year ?? viewYear)}</DialogTitle>
           </DialogHeader>
           <div className="space-y-1.5 pt-1">
-            {isProjected && projectedBreakdown ? (
-              projectedBreakdown.cc.length > 0 ? (
-                projectedBreakdown.cc.map((c, i) => (
-                  <div key={i} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
-                    <span className="truncate">{c.name}</span>
-                    <span className="font-semibold shrink-0 ml-2">{fmt(c.amount)}</span>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground py-4 text-center">No card bills projected for this month.</p>
-              )
-            ) : (
-              /* Only cards actually due this cycle — carried-over debt from
-                 a not-yet-closed card lives under Pending instead, same
-                 principle as Expenditure below. */
-              ccBillBreakdown.filter(c => !c.pending).map(c => (
-                <div key={c.id} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
-                  <span>{c.name}</span>
-                  <span className="font-semibold shrink-0 ml-2">{fmt(c.amount)}</span>
+            {(ccView?.lines ?? []).filter(c => c.owed > 0).map(c => (
+              <div key={c.templateId} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
+                <div className="min-w-0">
+                  <span className="truncate">{c.name}</span>
+                  {c.pastDue > 0 && <p className="text-xs text-warning">{fmt(c.pastDue)} past due</p>}
                 </div>
-              ))
-            )}
+                <span className="font-semibold shrink-0 ml-2">{fmt(c.owed)}</span>
+              </div>
+            ))}
             <div className="flex items-center justify-between pt-2 border-t border-border">
-              <p className="text-sm font-semibold">Total</p>
+              <p className="text-sm font-semibold">Total owed now</p>
               <span className="text-sm font-bold">{fmt(dispCCBills)}</span>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* CC Next Month drilldown */}
-      <Dialog open={showCCNextMonthDrilldown} onOpenChange={setShowCCNextMonthDrilldown}>
+      {/* Spent on cards (this cycle, unbilled) drilldown */}
+      <Dialog open={showCCSpendDrilldown} onOpenChange={setShowCCSpendDrilldown}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>CC Next Month: {nextMonthName}</DialogTitle>
+            <DialogTitle>Spent on cards: this cycle</DialogTitle>
           </DialogHeader>
           <div className="space-y-1.5 pt-1">
-            {ccNextMonthBreakdown.map(c => (
-              <div key={c.id} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
+            {(ccView?.lines ?? []).filter(c => c.unbilled > 0).map(c => (
+              <div key={c.templateId} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
                 <span>{c.name}</span>
-                <span className="font-semibold shrink-0 ml-2">{fmt(c.amount)}</span>
+                <span className="font-semibold shrink-0 ml-2">{fmt(c.unbilled)}</span>
               </div>
             ))}
             <div className="flex items-center justify-between pt-2 border-t border-border">
-              <p className="text-sm font-semibold">Total</p>
+              <p className="text-sm font-semibold">Total this cycle</p>
               <span className="text-sm font-bold">{fmt(ccNextMonth)}</span>
             </div>
+            <p className="text-xs text-muted-foreground pt-1">Not billed yet, so not in Payables or Pending. Becomes a bill when the statement closes.</p>
           </div>
         </DialogContent>
       </Dialog>
@@ -2164,19 +1787,16 @@ export function DashboardClient({ currentMonth: initialMonth, cards, recentMonth
 
             {/* Credit cards and one-time spends aren't listed anywhere else
                 this compactly, so show the actual items, not just a total. */}
-            {ccBillBreakdown.filter(c => !c.pending).length > 0 && (
+            {(ccView?.lines ?? []).filter(c => c.owed > 0).length > 0 && (
               <div className="space-y-1.5">
                 <p className="fin-label">Credit cards</p>
-                {ccBillBreakdown.filter(c => !c.pending).map(c => (
-                  <div key={c.id} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
+                {(ccView?.lines ?? []).filter(c => c.owed > 0).map(c => (
+                  <div key={c.templateId} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
                     <div className="min-w-0">
                       <span className="truncate">{c.name}</span>
-                      {c.isPartial && <p className="text-xs text-muted-foreground">{fmt(c.amount - c.outstanding)} of {fmt(c.amount)} paid</p>}
+                      {c.pastDue > 0 && <p className="text-xs text-warning">{fmt(c.pastDue)} past due</p>}
                     </div>
-                    <div className="flex items-center gap-2 shrink-0 ml-2">
-                      <span className={cn("text-xs", c.isPaid ? "text-positive" : "text-muted-foreground")}>{c.isPaid ? "Paid" : "Pending"}</span>
-                      <span className="font-semibold">{fmt(c.amount)}</span>
-                    </div>
+                    <span className="font-semibold shrink-0 ml-2">{fmt(c.owed)}</span>
                   </div>
                 ))}
               </div>
@@ -2241,8 +1861,14 @@ export function DashboardClient({ currentMonth: initialMonth, cards, recentMonth
             </div>
             <div className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
               <span>Paid out this month</span>
-              <span className="font-semibold text-negative">-{fmt(totalPaid + adHocExpense)}</span>
+              <span className="font-semibold text-negative">-{fmt(cashPaid + adHocExpense)}</span>
             </div>
+            {ccPaidCash > 0 && (
+              <div className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
+                <span>Paid toward card bills this month</span>
+                <span className="font-semibold text-negative">-{fmt(ccPaidCash)}</span>
+              </div>
+            )}
             {carriedDebtPaid > 0 && (
               <div className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
                 <span>Paid toward old debts this month</span>

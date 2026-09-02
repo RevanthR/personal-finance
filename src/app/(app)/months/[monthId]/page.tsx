@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect, notFound } from "next/navigation";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
+import { getCardCycleExpenseByMonth } from "@/lib/cards-db";
 import { getCurrentMonthYear, nextMonthYear } from "@/lib/utils";
 
 export default async function MonthDetailPage({
@@ -91,10 +92,14 @@ export default async function MonthDetailPage({
 
   const { month: todayMonth, year: todayYear } = getCurrentMonthYear();
 
+  const ccByMonth = await getCardCycleExpenseByMonth(session.user.id);
+  const ccMonth = ccByMonth.byMonth.get(`${currentMonth.year}-${currentMonth.month}`) ?? { total: 0, byCard: [] };
+
   return (
     <DashboardClient
       currentMonth={JSON.parse(JSON.stringify(currentMonth))}
       cards={null}
+      ccMonth={JSON.parse(JSON.stringify(ccMonth))}
       recentMonths={JSON.parse(JSON.stringify(recentMonths))}
       ccTemplates={JSON.parse(JSON.stringify(ccTemplates))}
       customCategories={customCategories}

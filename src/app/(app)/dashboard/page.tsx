@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { setupMonth } from "@/lib/months/setup-month";
 import { redirect } from "next/navigation";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
-import { getCardsOverview } from "@/lib/cards-db";
+import { getCardsOverview, getCardCycleExpenseByMonth } from "@/lib/cards-db";
 import { getCurrentMonthYear, prevMonthYear, nextMonthYear } from "@/lib/utils";
 import { isTemplateActiveInMonth } from "@/lib/loan-utils";
 import { chitMonthlyAmount } from "@/lib/entry-amount";
@@ -158,6 +158,7 @@ async function DashboardData({
       <DashboardClient
         currentMonth={null}
         cards={null}
+        ccMonth={null}
         recentMonths={[]}
         ccTemplates={[]}
         customCategories={[]}
@@ -306,14 +307,22 @@ async function DashboardData({
       pendingFromYear: t.pendingFromYear,
     }));
 
-  // Credit cards run on cardStatus() now (see the CC rework). Only the real
-  // current month uses it; a past month keeps the historical MonthlyEntry view.
-  const cards = isRealCurrentMonth ? await getCardsOverview(userId) : [];
+  // Credit cards run on cardStatus() now (see the CC rework). The real
+  // current month gets the interactive per-card status; a past month gets
+  // the read-only cycle-expense snapshot (same source as the Year View).
+  const [cards, ccByMonth] = await Promise.all([
+    isRealCurrentMonth ? getCardsOverview(userId) : Promise.resolve([]),
+    getCardCycleExpenseByMonth(userId),
+  ]);
+  const ccMonth = isRealCurrentMonth
+    ? null
+    : ccByMonth.byMonth.get(`${targetYear}-${targetMonth}`) ?? { total: 0, byCard: [] };
 
   return (
     <DashboardClient
       currentMonth={resolvedMonth ? JSON.parse(JSON.stringify(resolvedMonth)) : null}
       cards={isRealCurrentMonth ? JSON.parse(JSON.stringify(cards)) : null}
+      ccMonth={ccMonth ? JSON.parse(JSON.stringify(ccMonth)) : null}
       recentMonths={JSON.parse(JSON.stringify(recentMonths))}
       ccTemplates={JSON.parse(JSON.stringify(ccTemplates))}
       customCategories={customCategories}

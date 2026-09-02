@@ -154,9 +154,13 @@ export async function getCardCycleExpenseByMonth(userId: string): Promise<{
       byMonth.set(key, bucket);
       cardMonthly.push(amount);
     }
-    // trailing 3 statements for this card's projection
-    const last3 = cardMonthly.slice(-3);
-    if (last3.length) recentPerCard.push(last3.reduce((a, b) => a + b, 0) / last3.length);
+    // Projection basis for this card: the lower-median of its last four
+    // statements. A plain mean lets one outlier month (a large one-off
+    // purchase, an EMI conversion) drag the whole forecast up for the rest
+    // of the year; the lower-median ignores a single spike and, with only
+    // two data points, takes the lower of the two.
+    const recent = cardMonthly.slice(-4).slice().sort((a, b) => a - b);
+    if (recent.length) recentPerCard.push(recent[Math.floor((recent.length - 1) / 2)]);
   }
 
   return { byMonth, projectedMonthly: Math.round(recentPerCard.reduce((a, b) => a + b, 0)) };
