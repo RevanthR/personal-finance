@@ -103,6 +103,14 @@ export type CardStatusResult = {
   cycleOpenDate: Date | null;
   lastStatementDate: Date | null;
   paymentDueDate: Date | null;
+  /**
+   * Set only when the last statement is confirmed and the logged charges
+   * for that cycle don't add up to it. delta > 0 means the statement is
+   * higher than what was logged (fees, GST, interest, an EMI instalment, a
+   * cashback that wasn't captured); delta < 0 means more was logged than
+   * billed (a charge after the cut, or a duplicate).
+   */
+  reconciliation: { logged: number; statement: number; delta: number } | null;
 };
 
 /**
@@ -151,7 +159,7 @@ export function cardStatus(
       unbilledSpends: total, pastDue: 0, currentBalance: total,
       availableCredit: limit != null ? Math.max(0, limit - total) : null,
       utilisation: limit ? total / limit : null,
-      cycleOpenDate: null, lastStatementDate: null, paymentDueDate: null,
+      cycleOpenDate: null, lastStatementDate: null, paymentDueDate: null, reconciliation: null,
     };
   }
 
@@ -202,10 +210,13 @@ export function cardStatus(
   else if (paidInFull || statementBalance <= 0) status = "paid";
   else status = "confirmed";
 
+  const grossRounded = Math.round(gross * 100) / 100;
+  const delta = Math.round((grossRounded - statementEstimated) * 100) / 100;
+
   return {
     status,
     statementBalance,
-    statementGross: Math.round(gross * 100) / 100,
+    statementGross: grossRounded,
     statementConfirmed: confirmed,
     statementEstimated,
     unbilledSpends,
@@ -216,5 +227,8 @@ export function cardStatus(
     cycleOpenDate: cycleOpen,
     lastStatementDate: cycleOpen,
     paymentDueDate: card.dueDateDay != null ? dueDateFor(cycleOpen, sd, card.dueDateDay) : null,
+    reconciliation: confirmed && Math.abs(delta) >= 1
+      ? { logged: statementEstimated, statement: grossRounded, delta }
+      : null,
   };
 }

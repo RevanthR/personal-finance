@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { cn } from "@/lib/utils";
 import { currentCycleOpen, nextCycleClose, prevStatementDate } from "@/lib/cards";
 import { ChevronRight } from "lucide-react";
-import type { CardOverview, CardChargeRow } from "./cards-client";
+import { reconciliationText, type CardOverview, type CardChargeRow } from "./cards-client";
 
 const d = (iso: string) => new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "UTC" });
 
@@ -92,9 +92,8 @@ export function CardStatementSheet({
                 {isOpen && (
                   <div className="px-3 pb-3 pt-1 space-y-1 border-t border-border">
                     {confirmed && Math.abs(st.statementBalance! - sum(rows)) > 1 && (
-                      <p className="text-[11px] text-muted-foreground pb-1">
-                        Logged charges total {fmt(Math.round(sum(rows)))}, {fmt(Math.abs(Math.round(st.statementBalance! - sum(rows))))}{" "}
-                        {st.statementBalance! > sum(rows) ? "less than the statement" : "over the statement (likely dated after the cut)"}.
+                      <p className="text-[11px] text-muted-foreground pb-1 leading-snug">
+                        Logged {fmt(Math.round(sum(rows)))} · statement {fmt(Math.round(st.statementBalance!))}. {reconciliationText({ delta: st.statementBalance! - sum(rows) }, fmt)}
                       </p>
                     )}
                     {rows.length === 0 && <p className="text-xs text-muted-foreground py-2 text-center">No logged charges in this cycle.</p>}

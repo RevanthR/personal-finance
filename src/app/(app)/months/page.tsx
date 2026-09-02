@@ -4,9 +4,12 @@ import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { isTemplateActiveInMonth, computeLoanAmortization, computeLoanEndDate, type LoanAmortization } from "@/lib/loan-utils";
 import { chitMonthlyAmount } from "@/lib/entry-amount";
+import { getCardCycleExpenseByMonth } from "@/lib/cards-db";
 import { computeMonthIncome, effectiveEntryAmount, cashEntryAmount, isBillPending, isPastDueDate, netAmount, effectivePaid, type EntryBase } from "@/lib/finance-utils";
+
+const isCC = (e: { template: { category: string } }) => e.template.category === "CREDIT_CARD";
 import { YearOverviewClient, type MonthData } from "@/components/months/year-overview-client";
-import { CATEGORY_LABELS, CATEGORY_COLORS, MONTHS, pendingAmountKicks, getCurrentMonthYear, prevMonthYear, nextMonthYear } from "@/lib/utils";
+import { CATEGORY_LABELS, CATEGORY_COLORS, MONTHS, pendingAmountKicks, getCurrentMonthYear, prevMonthYear } from "@/lib/utils";
 import type { AnalyticsData } from "@/components/months/stats-breakdown";
 import { clusterByName } from "@/lib/gmail/text-similarity";
 
@@ -56,7 +59,6 @@ export default async function MonthsPage() {
 
   const { month: todayMonth, year: todayYear } = getCurrentMonthYear();
   const { fyStart, fyKey } = getFY(todayMonth, todayYear);
-  const { month: nextM, year: nextY } = nextMonthYear(todayMonth, todayYear);
 
   // All 12 months of the current FY: Apr(fyStart)→Mar(fyStart+1)
   const fyMonths = [
@@ -97,30 +99,28 @@ export default async function MonthsPage() {
     foreclosureByMonthKey.set(key, (foreclosureByMonthKey.get(key) ?? 0) + f.foreCloseAmount);
   }
 
+  // Credit-card cost per calendar month comes from CardStatement now, not
+  // the MonthlyEntry the FY grid used to read. A card's cost in month M is
+  // the statement cut in M (confirmed figure, or the cycle's charge sum).
+  const { byMonth: ccByMonth, projectedMonthly: ccProjectedMonthly } = await getCardCycleExpenseByMonth(userId);
+  const ccFor = (m: number, y: number) => ccByMonth.get(`${y}-${m}`) ?? { total: 0, byCard: [] as { templateId: string; name: string; amount: number }[] };
+
   const currentMonthFull = allMonths.find(m => m.month === todayMonth && m.year === todayYear) ?? null;
   const analyticsMonths = allMonths.filter(m => m.isPopulated);
 
   // CC statement amounts from current month — used to make the next-month projection more accurate
-  // (statementAmount reflects actual post-close charges, not the template default)
-  const ccStatements = new Map<string, number>();
   const todayDay = new Date().getDate();
-  if (currentMonthFull?.isPopulated) {
-    for (const e of currentMonthFull.entries) {
-      if (e.template.category === "CREDIT_CARD" && e.statementAmount != null && e.statementAmount > 0) {
-        ccStatements.set(e.templateId, e.statementAmount);
-      }
-    }
-  }
-  // isCurrentMonth-gated wrapper around the shared finance-utils rule —
-  // every "what does this entry contribute right now" computation below
-  // goes through this instead of a locally reimplemented version, so this
-  // page can't quietly disagree with the dashboard's Expenditure/CC Bill
-  // tiles about what counts as this month's own spend vs. carried debt.
+  // Credit cards are handled separately (ccByMonth, above), so they
+  // contribute 0 through these per-entry helpers — every `m.entries` sum
+  // below is non-CC, and the card cost is added back where the total needs it.
   function entryExpense(e: EntryBase, isCurrentM: boolean): number {
-    return effectiveEntryAmount(e, isCurrentM, todayDay);
+    return isCC(e) ? 0 : effectiveEntryAmount(e, isCurrentM, todayDay);
   }
   function entryCash(e: EntryBase, isCurrentM: boolean): number {
-    return cashEntryAmount(e, isCurrentM, todayDay);
+    return isCC(e) ? 0 : cashEntryAmount(e, isCurrentM, todayDay);
+  }
+  function entryNet(e: { template: { category: string }; amount: number; cashbackAmount: number | null }): number {
+    return isCC(e) ? 0 : netAmount(e);
   }
 
   // templateType may be null for pre-existing rows (DB DEFAULT not backfilled by Prisma 7)
@@ -157,29 +157,22 @@ export default async function MonthsPage() {
     if (actual) {
       const isCurrentM = month === todayMonth && year === todayYear;
       const income = computeMonthIncome(actual.adHocItems, incomeTemplates, month, year, actual.salaryIncome);
-      const expenses = actual.entries.reduce((s, e) => s + entryExpense(e, isCurrentM), 0)
-        + actual.adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0);
-      // Cash view for the year's ending balance only — a bill settled via
-      // a card contributes 0 here (no cash moves until that card's own
-      // bill is paid off), unlike `expenses` above which still counts it
-      // as committed spend. See finance-utils.ts's cashEntryAmount.
-      const cashExpenses = actual.entries.reduce((s, e) => s + entryCash(e, isCurrentM), 0)
-        + actual.adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0);
-      const ccEntries = actual.entries.filter(e => e.template.category === "CREDIT_CARD" && entryExpense(e, isCurrentM) > 0);
-      const ccTotal = ccEntries.reduce((s, e) => s + entryExpense(e, isCurrentM), 0);
-      const ccByCardMap = new Map<string, { name: string; amount: number }>();
-      for (const e of ccEntries) {
-        const amt = entryExpense(e, isCurrentM);
-        const existing = ccByCardMap.get(e.templateId);
-        if (existing) existing.amount += amt;
-        else ccByCardMap.set(e.templateId, { name: e.template.name, amount: amt });
-      }
-      const ccByCard = [...ccByCardMap.entries()].map(([templateId, v]) => ({ templateId, ...v }));
+      const cc = ccFor(month, year);
+      const nonCcEntries = actual.entries.filter(e => !isCC(e));
+      const expenses = nonCcEntries.reduce((s, e) => s + entryExpense(e, isCurrentM), 0)
+        + actual.adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0)
+        + cc.total;
+      // Cash view for the year's ending balance. A card statement counts as
+      // cash out in the month it was cut (close enough for an FY-level
+      // ending balance; the exact pay date is tracked per statement).
+      const cashExpenses = nonCcEntries.reduce((s, e) => s + entryCash(e, isCurrentM), 0)
+        + actual.adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0)
+        + cc.total;
       return {
-        id: actual.id, month, year, income, expenses, cashExpenses, ccTotal, ccByCard,
+        id: actual.id, month, year, income, expenses, cashExpenses, ccTotal: cc.total, ccByCard: cc.byCard,
         balance: income - expenses,
-        paid: actual.entries.filter(e => e.isPaid).length,
-        total: actual.entries.length,
+        paid: nonCcEntries.filter(e => e.isPaid).length,
+        total: nonCcEntries.length,
         isPopulated: true,
         isCurrent: month === todayMonth && year === todayYear,
         hasIncomeChange: false,
@@ -187,27 +180,18 @@ export default async function MonthsPage() {
         foreclosureAmount: foreclosureByMonthKey.get(`${year}-${month}`) ?? 0,
       };
     }
-    // Projected: sum active expense templates that haven't ended yet
+    // Projected: sum active non-CC expense templates; CC projects from a
+    // 3-month rolling average of the cards' recent statements.
     const activeThisMonth = expenseTemplates.filter(t =>
+      t.category !== "CREDIT_CARD" &&
       (t.frequency === "MONTHLY" || (t.frequency === "YEARLY" && t.dueMonth === month)) &&
       isTemplateActiveInMonth(t, month, year)
     );
-    const isImmediateNext = month === nextM && year === nextY;
-    let projCCTotal = 0;
+    const projCCTotal = ccProjectedMonthly;
     const projCCByCard: { templateId: string; name: string; amount: number }[] = [];
     const projExpenses = activeThisMonth.reduce((s, t) => {
-      let amount = t.amount;
-      if (t.chitFund) {
-        amount = chitMonthlyAmount(t.chitFund, t.amount);
-      } else if (t.category === "CREDIT_CARD" && isImmediateNext && ccStatements.has(t.id)) {
-        amount = ccStatements.get(t.id)!;
-      }
-      if (t.category === "CREDIT_CARD") {
-        projCCTotal += amount;
-        projCCByCard.push({ templateId: t.id, name: t.name, amount });
-      }
-      return s + amount;
-    }, 0);
+      return s + (t.chitFund ? chitMonthlyAmount(t.chitFund, t.amount) : t.amount);
+    }, 0) + projCCTotal;
     // Pending receivables whose expectedDate falls in this projected month
     const receivableIncome = pendingReceivables
       .filter((r) => {
@@ -252,8 +236,9 @@ export default async function MonthsPage() {
     if (mFYStart === fyStart) continue; // skip current FY
     if (!pastFYMap[mFY]) pastFYMap[mFY] = { income: 0, expenses: 0, count: 0 };
     const income = computeMonthIncome(m.adHocItems, incomeTemplates, m.month, m.year, m.salaryIncome);
-    const expenses = m.entries.reduce((s, e) => s + netAmount(e), 0)
-      + m.adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0);
+    const expenses = m.entries.reduce((s, e) => s + entryNet(e), 0)
+      + m.adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0)
+      + ccFor(m.month, m.year).total;
     pastFYMap[mFY].income += income;
     pastFYMap[mFY].expenses += expenses;
     pastFYMap[mFY].count++;
@@ -404,7 +389,9 @@ export default async function MonthsPage() {
       if (a.type === "EXPENSE" && !a.ccTemplateId) adHocExpenseTotal += a.amount;
     }
   }
-  const fyExpenses = recurringTotal + adHocExpenseTotal;
+  // Card statements cut in the current FY's actual months.
+  const fyCcTotal = Math.round(fyActual.reduce((s, m) => s + ccFor(m.month, m.year).total, 0));
+  const fyExpenses = recurringTotal + adHocExpenseTotal + fyCcTotal;
   const fyIncomeTotal = fyActual.reduce((s, m) => s + computeMonthIncome(m.adHocItems, incomeTemplates, m.month, m.year, m.salaryIncome), 0);
   // Full-year total including projected (not-yet-populated) months — same
   // basis as the Overview tab's total, so the two tabs no longer disagree.
@@ -428,6 +415,17 @@ export default async function MonthsPage() {
         else catMap.set(key, { total: a.amount, items: [] });
       }
     }
+  }
+  if (fyCcTotal > 0) {
+    const cardItems: TEntry[] = [];
+    const perCard = new Map<string, TEntry>();
+    for (const m of fyActual) for (const c of ccFor(m.month, m.year).byCard) {
+      const ex = perCard.get(c.templateId);
+      if (ex) { ex.total += c.amount; ex.months++; }
+      else perCard.set(c.templateId, { name: c.name, category: "CREDIT_CARD", customCategory: null, total: c.amount, months: 1 });
+    }
+    cardItems.push(...perCard.values());
+    catMap.set("CREDIT_CARD", { total: fyCcTotal, items: cardItems });
   }
   const spendByCategory = [...catMap.entries()]
     .sort((a, b) => b[1].total - a[1].total)
@@ -472,7 +470,8 @@ export default async function MonthsPage() {
     const income = computeMonthIncome(m.adHocItems, incomeTemplates, m.month, m.year, m.salaryIncome);
     const expenses = m.entries
       .reduce((s, e) => s + entryExpense(e, isCurrentM), 0)
-      + m.adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0);
+      + m.adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0)
+      + ccFor(m.month, m.year).total;
     return {
       label: MONTHS[m.month - 1],
       income,
@@ -673,7 +672,8 @@ export default async function MonthsPage() {
     const income = computeMonthIncome(m.adHocItems, incomeTemplates, m.month, m.year, m.salaryIncome);
     const expenses = m.entries
       .reduce((s, e) => s + entryExpense(e, isCurrentM), 0)
-      + m.adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0);
+      + m.adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0)
+      + ccFor(m.month, m.year).total;
     return { label: `${MONTHS[m.month - 1]} ${m.year}`, income, expenses, balance: income - expenses, savingsRate: income > 0 ? Math.round(((income - expenses) / income) * 100) : 0 };
   });
   const bestMonth = allTimeStats.length ? [...allTimeStats].sort((a, b) => b.savingsRate - a.savingsRate)[0] : null;
@@ -688,6 +688,7 @@ export default async function MonthsPage() {
   const prevCatMap = new Map<string, number>();
   for (const m of prevFYMonths) {
     for (const e of m.entries) {
+      if (isCC(e)) continue;
       const key = e.template.customCategory ?? e.template.category;
       prevCatMap.set(key, (prevCatMap.get(key) ?? 0) + netAmount(e));
     }
@@ -697,6 +698,8 @@ export default async function MonthsPage() {
         prevCatMap.set(key, (prevCatMap.get(key) ?? 0) + a.amount);
       }
     }
+    const ccT = ccFor(m.month, m.year).total;
+    if (ccT > 0) prevCatMap.set("CREDIT_CARD", (prevCatMap.get("CREDIT_CARD") ?? 0) + ccT);
   }
   const prevFYSpendByCategory = [...prevCatMap.entries()].map(([key, total]) => ({ key, name: CATEGORY_LABELS[key] ?? key, total }));
 

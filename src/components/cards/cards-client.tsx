@@ -32,6 +32,7 @@ type Status = {
   cycleOpenDate: string | null;
   lastStatementDate: string | null;
   paymentDueDate: string | null;
+  reconciliation: { logged: number; statement: number; delta: number } | null;
 };
 
 export type CardChargeRow = { id: string; date: string; amount: number; isCredit: boolean; name: string };
@@ -60,6 +61,12 @@ export type CardOverview = {
 function fmtDate(iso: string | null): string {
   if (!iso) return "";
   return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "UTC" });
+}
+
+export function reconciliationText(r: { delta: number }, fmt: (v: number) => string): string {
+  return r.delta > 0
+    ? `${fmt(Math.round(r.delta))} on the statement beyond your logged charges. Usually fees, GST, interest, an EMI instalment, or a cashback that wasn't captured.`
+    : `${fmt(Math.round(-r.delta))} more in logged charges than the statement. A charge dated after the cut (on next month's bill), or a duplicate.`;
 }
 function daysUntil(iso: string | null): number | null {
   if (!iso) return null;
@@ -180,6 +187,10 @@ function CardTile({
             <span className="text-negative font-medium">Past due from an earlier statement</span>
             <span className="font-semibold tabular-nums text-negative">{fmt(Math.round(s.pastDue))}</span>
           </div>
+        )}
+
+        {s.reconciliation && (
+          <p className="text-[11px] leading-snug text-muted-foreground">{reconciliationText(s.reconciliation, fmt)}</p>
         )}
 
         {/* This cycle's spend */}

@@ -93,6 +93,19 @@ describe("cardStatus", () => {
     expect(r.statementConfirmed).toBe(true);
     expect(r.statementBalance).toBe(4050);       // bank
     expect(r.statementEstimated).toBe(4391);     // charges, kept for reconciliation
+    expect(r.reconciliation).toEqual({ logged: 4391, statement: 4050, delta: -341 });
+  });
+
+  it("no reconciliation while a statement is only estimated", () => {
+    const r = cardStatus(card, [], [charge("2026-08-13", 2399)], new Date("2026-09-03"));
+    expect(r.reconciliation).toBeNull();
+  });
+
+  it("reconciliation flags a statement higher than the logged charges (fees, EMI, GST)", () => {
+    const charges = [charge("2026-08-10", 60000)];
+    const statements = [row({ statementDate: "2026-09-02", statementBalance: 63000, confirmedAt: "2026-09-03" })];
+    const r = cardStatus(card, statements, charges, new Date("2026-09-05"));
+    expect(r.reconciliation).toEqual({ logged: 60000, statement: 63000, delta: 3000 });
   });
 
   it("nets payment and cashback out of the statement balance", () => {
