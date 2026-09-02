@@ -44,9 +44,9 @@ Type-check with `npx tsc --noEmit`. See `DEFERRED.md` for parked work.
 
 ## Test coverage
 
-vitest covers the pure functions in `src/lib/finance-utils.ts`, plus `src/lib/cc-effects.ts`'s
-self-healing CC ledger recompute (`cc-effects.test.ts` fakes the small slice of the Prisma client it
-calls rather than hitting a real DB). Most other modules are not covered.
+vitest covers the pure functions in `src/lib/finance-utils.ts` and the credit-card status engine in
+`src/lib/cards.ts` (`cards.test.ts` — cycle date math and `cardStatus()`). Most other modules are
+not covered.
 
 ## Architecture
 
@@ -63,8 +63,10 @@ lives in the client component; API routes handle mutations.
 ### Data model (key tables)
 - **`LineItemTemplate`**: recurring budget items. `templateType` = `EXPENSE` or `INCOME`. Income templates do not create `MonthlyEntry` rows; they inform projections and pre-fill income on month setup. `pendingAmount` / `pendingFromMonth` / `pendingFromYear` store a scheduled future amount change that auto-promotes when a new month is opened.
 - **`Month`**: one row per calendar month per user. Stores `salaryIncome`, `freelanceIncome`, `otherIncome` as flat fields. `isPopulated` flips true after entries are auto-created from active templates.
-- **`MonthlyEntry`**: instance of an expense template for a specific month (unique on `monthId + templateId`). `statementAmount` tracks next-month CC carry-forward.
-- **`AdHocItem`**: one-off income or expense attached to a month.
+- **`MonthlyEntry`**: instance of an expense template for a specific month (unique on `monthId + templateId`). Credit-card templates do NOT create these (see Credit card logic below); the `statementAmount` / `billedAmount` / `carriedInAmount` / `openingAmount` fields are legacy CC carry-forward, still read for historical months but no longer written.
+- **`AdHocItem`**: one-off income or expense attached to a month. `ccTemplateId` tags it as a charge on that card.
+- **`CreditCard`**: 1:1 with a `LineItemTemplate` of category `CREDIT_CARD`; holds bank/network/last4.
+- **`CardStatement`**: one row per card per closed billing cycle (`cardId + statementDate` unique). Holds the bank-confirmed `statementBalance`, `paidAmount` / `paidInFull` / `paidAt`, `cashback`. The source of truth for what a card owes.
 - **`ChitFund`**: 1:1 with a `LineItemTemplate` of category `CHIT_FUND`; tracks accumulated savings and lift state.
 
 ### Category enum
@@ -74,10 +76,22 @@ lives in the client component; API routes handle mutations.
 `src/lib/utils.ts` keep them separated in the UI.
 
 ### Credit card logic
-CC entries work differently from every other category:
-- `statementDay` on the template is the statement close date.
-- Ad-hoc CC charges added before the close date bump `entry.amount` (current bill); charges after go into `statementAmount` (next month's bill) via `src/app/api/months/[monthId]/adhoc/route.ts`.
-- When a new month is opened: the previous month's `statementAmount` becomes the new entry's opening `amount`.
+Credit cards run on one pure function, `cardStatus()` in `src/lib/cards.ts`, that every screen reads
+from. Nothing per-card is stored per-render.
+- A CC template creates NO `MonthlyEntry` rows. Charges are plain `AdHocItem` rows tagged with
+  `ccTemplateId` (added manually or via the Gmail pipeline).
+- `statementDay` on the template is the billing-cycle close day; `dueDateDay` the payment due day.
+  All cycle date math is UTC (`Date.UTC()`), to align with stored `AdHocItem.date` values.
+- `cardStatus(card, statements, charges, asOf)` derives everything: statement balance (bank-confirmed
+  `CardStatement.statementBalance` once set, else a charge-sum estimate), unbilled spends, past due,
+  current balance, utilisation, reconciliation. States: `open` → `awaiting` → `confirmed` →
+  `paid` / `pastdue`.
+- `src/lib/cards-db.ts` wraps it: `getCardsOverview()` (per-card status for the dashboard + /cards),
+  `getCardCycleExpenseByMonth()` (CC cost per calendar month, for the Year View), `ensureCurrentStatement()`.
+- Confirm a statement: `POST /api/cards/[cardId]/confirm`. Record a payment: `POST /api/cards/[cardId]/pay`.
+  A Gmail-detected card bill payment routes to the same pay path via the Sync review screen.
+- The old `cc-effects.ts` blended-`MonthlyEntry` engine is gone. Legacy CC `MonthlyEntry` rows from
+  before the rework still exist and are read for historical-month dashboards, never written.
 
 ### Year projections (`/months`)
 `src/app/(app)/months/page.tsx` builds the 12-month FY view. Unpopulated months are projected:

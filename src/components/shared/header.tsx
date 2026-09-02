@@ -10,11 +10,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, IndianRupee, Eye, EyeOff, BookOpen, Sparkles } from "lucide-react";
+import { LogOut, Settings, IndianRupee, Eye, EyeOff, BookOpen, Sparkles, Inbox } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { useState } from "react";
 import { GuidePanel } from "./guide-sheet";
+import { useImportsBadge } from "@/lib/use-imports-badge";
 
 interface HeaderProps {
   user: {
@@ -27,6 +29,9 @@ interface HeaderProps {
 export function Header({ user }: HeaderProps) {
   const { hidden, toggleHidden } = usePrivacy();
   const [guideOpen, setGuideOpen] = useState(false);
+  const pathname = usePathname();
+  const importsBadge = useImportsBadge();
+  const syncActive = pathname === "/imports" || pathname.startsWith("/imports/");
   const initials = user.name
     ?.split(" ")
     .map((n) => n[0])
@@ -47,6 +52,21 @@ export function Header({ user }: HeaderProps) {
         <div className="hidden md:block" />
 
         <div className="flex items-center gap-2">
+          {/* Sync — mobile only (desktop has it in the sidebar). Kept out of
+              the mobile bottom nav to leave that bar uncluttered. */}
+          <Link
+            href="/imports"
+            title="Sync"
+            className={`md:hidden relative p-2 rounded-xl transition-colors ${syncActive ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
+          >
+            <Inbox className="w-4 h-4" />
+            {importsBadge > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold flex items-center justify-center">
+                {importsBadge > 9 ? "9+" : importsBadge}
+              </span>
+            )}
+          </Link>
+
           {/* Privacy toggle — stays in header bar */}
           <button
             onClick={toggleHidden}

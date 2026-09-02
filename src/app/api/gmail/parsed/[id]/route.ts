@@ -2,23 +2,21 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { validate, ParsedTransactionPatchSchema } from "@/lib/validation";
-import { applyCCEffect, reverseCCEffect, settleCarriedDebtBackward } from "@/lib/cc-effects";
+import { ensureCurrentStatement, getCardsOverview } from "@/lib/cards-db";
 import { resolveCustomCategory } from "@/lib/custom-category";
 import { resolveSubCategory } from "@/lib/sub-category";
 import { rememberMerchantCategory } from "@/lib/merchant-memory";
 import { computePaymentUpdate } from "@/lib/entry-payment";
-import { isBillPending } from "@/lib/finance-utils";
-import { getCurrentMonthYear } from "@/lib/utils";
 import { notifyReviewProgress } from "@/lib/gmail/sync";
 import { closePushForUser, PAYMENT_REMINDER_PUSH_TAG } from "@/lib/push";
 import type { Category } from "@/generated/prisma/client";
 
-// PATCH /api/gmail/parsed/[id] — approve (creates the real AdHocItem via
-// the same cc-effects path the manual ad-hoc dialog uses), settle (pays
-// down an existing recurring/CC entry instead of creating a new expense —
-// see src/lib/gmail/entry-match.ts), or reject a pending suggestion.
-// Nothing here is reachable without the user acting on a specific
-// review-queue row.
+// PATCH /api/gmail/parsed/[id] — approve (creates the real AdHocItem, the
+// same as the manual ad-hoc dialog), settle (pays down an existing
+// recurring entry, or marks a card's open statement paid, instead of
+// creating a new expense — see src/lib/gmail/entry-match.ts), or reject a
+// pending suggestion. Nothing here is reachable without the user acting on
+// a specific review-queue row.
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -45,63 +43,69 @@ export async function PATCH(
   }
 
   if (body.action === "settle") {
+    const settleAmount = body.amount ?? existing.amount;
+
+    // Card bill payment: mark the card's most recently closed CardStatement
+    // paid (the same target as the manual /cards Pay button), not a
+    // MonthlyEntry — cards don't have those any more (src/lib/cards.ts).
+    if (body.cardId) {
+      const card = await db.creditCard.findFirst({
+        where: { id: body.cardId, userId },
+        select: { id: true, userId: true, template: { select: { statementDay: true, dueDateDay: true } } },
+      });
+      if (!card) return NextResponse.json({ error: "Card not found" }, { status: 404 });
+      if (card.template.statementDay == null) {
+        return NextResponse.json({ error: "Set a statement date on this card first" }, { status: 400 });
+      }
+
+      const overview = (await getCardsOverview(userId)).find(c => c.cardId === card.id);
+      const remaining = overview?.status.statementBalance ?? 0;
+      const gross = overview?.status.statementGross ?? 0;
+
+      await db.$transaction(async (tx) => {
+        const stmt = await ensureCurrentStatement(tx, {
+          id: card.id, userId: card.userId,
+          statementDay: card.template.statementDay, dueDateDay: card.template.dueDateDay,
+        });
+        if (!stmt) throw new Error("no cycle to pay");
+        const newPaid = stmt.paidAmount + settleAmount;
+        // Treat a payment that clears (or overpays) the outstanding balance
+        // as paid-in-full — a card bill payment often rounds up or pays
+        // slightly ahead, and the extra just carries against next cycle.
+        const clearsIt = settleAmount + 0.5 >= remaining || newPaid + stmt.cashback + 0.5 >= gross;
+        await tx.cardStatement.update({
+          where: { id: stmt.id },
+          data: { paidAmount: newPaid, paidInFull: clearsIt, paidAt: new Date() },
+        });
+        await tx.parsedTransaction.update({ where: { id }, data: { status: "APPROVED" } });
+      });
+
+      await notifyReviewProgress(userId);
+      await closePushForUser(userId, PAYMENT_REMINDER_PUSH_TAG, "/dashboard").catch(() => {});
+      return NextResponse.json({ item: null, updatedEntry: null });
+    }
+
     if (!body.entryId) return NextResponse.json({ error: "Missing entryId" }, { status: 400 });
 
     const entry = await db.monthlyEntry.findFirst({
       where: { id: body.entryId, month: { userId } },
       select: {
-        id: true, templateId: true, amount: true, billedAmount: true, carriedInAmount: true, cashbackAmount: true, paidAmount: true, isPaid: true,
+        id: true, templateId: true, amount: true, cashbackAmount: true, paidAmount: true, isPaid: true,
         month: { select: { id: true, month: true, year: true } },
-        template: { select: { category: true, statementDay: true } },
       },
     });
     if (!entry) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
 
-    const settleAmount = body.amount ?? existing.amount;
-
-    // Re-derive fresh (never trust a client-supplied flag for a financial
-    // branch) whether this is a still-open CC bill with real carried-over
-    // debt — same "amount is a blended running total, only carriedInAmount
-    // is actually owed right now" distinction as the dashboard's own "pay
-    // overdue amount" button (src/app/api/months/[monthId]/entries/route.ts,
-    // payCarriedAmount) and entry-match.ts's match-suggestion logic. Without
-    // this, a real payment toward last cycle's bill gets checked against the
-    // WHOLE running total (including this cycle's new, still-unbilled
-    // spend) and shows up as a much bigger "partial payment" than it is.
-    const { month: todayMonth, year: todayYear } = getCurrentMonthYear();
-    const isCurrentMonthReal = entry.month.year === todayYear && entry.month.month === todayMonth;
-    const billPending = isBillPending(entry, isCurrentMonthReal, new Date().getDate());
-    const carried = Math.max(0, entry.carriedInAmount ?? 0);
-
     const updatedEntry = await db.$transaction(async (tx) => {
-      let updatedEntry;
-      if (billPending && carried > 0) {
-        const pay = Math.min(settleAmount, carried);
-        updatedEntry = await tx.monthlyEntry.update({
-          where: { id: entry.id },
-          data: {
-            amount: Math.max(0, entry.amount - settleAmount),
-            ...(entry.billedAmount != null && { billedAmount: Math.max(0, entry.billedAmount - settleAmount) }),
-            carriedInAmount: carried - pay,
-          },
-        });
-        await tx.month.update({ where: { id: entry.month.id }, data: { carriedDebtPaid: { increment: settleAmount } } });
-        // Same reasoning as the manual "pay overdue amount" flow — this
-        // settles carriedInAmount on THIS entry, but the debt originally
-        // belonged to an earlier month's own bill, which never otherwise
-        // hears that it's been paid.
-        await settleCarriedDebtBackward(tx, userId, entry.templateId, entry.month.month, entry.month.year, settleAmount);
-      } else {
-        const netAmount = entry.amount - (entry.cashbackAmount ?? 0);
-        // Accumulate onto whatever's already been paid this month — two
-        // partial payments toward the same bill (e.g. a part-payment now, the
-        // rest later) both need to count, not overwrite each other.
-        const newPaidAmount = (entry.paidAmount ?? 0) + settleAmount;
-        updatedEntry = await tx.monthlyEntry.update({
-          where: { id: entry.id },
-          data: computePaymentUpdate(netAmount, newPaidAmount),
-        });
-      }
+      const netAmount = entry.amount - (entry.cashbackAmount ?? 0);
+      // Accumulate onto whatever's already been paid this month — two
+      // partial payments toward the same bill (a part-payment now, the rest
+      // later) both need to count, not overwrite each other.
+      const newPaidAmount = (entry.paidAmount ?? 0) + settleAmount;
+      const updatedEntry = await tx.monthlyEntry.update({
+        where: { id: entry.id },
+        data: computePaymentUpdate(netAmount, newPaidAmount),
+      });
       await tx.parsedTransaction.update({ where: { id }, data: { status: "APPROVED" } });
       return updatedEntry;
     });
@@ -138,9 +142,7 @@ export async function PATCH(
   const isCC = !!ccTemplateId;
 
   // Reject a foreign/bad ccTemplateId outright instead of letting it persist
-  // on the AdHocItem row unverified — applyCCEffect/reverseCCEffect already
-  // scope their own lookup by userId, but that only skipped the statement
-  // effect, not the stored reference itself.
+  // on the AdHocItem row unverified.
   if (ccTemplateId) {
     const ccTemplate = await db.lineItemTemplate.findFirst({
       where: { id: ccTemplateId, userId, category: "CREDIT_CARD" },
@@ -153,11 +155,11 @@ export async function PATCH(
   // logged a refund as if it were a new charge.
   const isIncome = existing.transactionType === "CREDIT" || existing.transactionType === "REFUND";
 
-  // Every terminal branch below writes an AdHocItem (or a CC effect) and
-  // marks the ParsedTransaction APPROVED together, inside one transaction
-  // — previously separate calls, so a failure partway through could create
-  // the expense (or reverse a CC effect) while leaving the review-queue row
-  // stuck PENDING, or vice versa.
+  // Every terminal branch below writes an AdHocItem and marks the
+  // ParsedTransaction APPROVED together, inside one transaction — separate
+  // calls could create the expense while leaving the review-queue row stuck
+  // PENDING, or vice versa. A CC charge is just an AdHocItem tagged with
+  // ccTemplateId; the card's bill is derived from those (src/lib/cards.ts).
   if (isCC) {
     if (isIncome) {
       // Two different things both show up as "isCC && isIncome": a merchant
@@ -188,7 +190,7 @@ export async function PATCH(
         ? await resolveSubCategory(userId, { category: resolvedCategory, customCategoryId: customCat?.id ?? null }, body.subCategory)
         : null;
 
-      const { item, updatedEntry } = await db.$transaction(async (tx) => {
+      const item = await db.$transaction(async (tx) => {
         const item = await tx.adHocItem.create({
           data: {
             monthId: monthRow.id,
@@ -206,12 +208,11 @@ export async function PATCH(
             notes: isCardRepayment ? "Card repayment imported from Gmail" : "Refund/credit imported from Gmail",
           },
         });
-        const updatedEntry = await reverseCCEffect(tx, userId, monthRow.id, ccTemplateId, finalDate, finalAmount);
         await tx.parsedTransaction.update({ where: { id }, data: { status: "APPROVED" } });
-        return { item, updatedEntry };
+        return item;
       });
       await notifyReviewProgress(userId);
-      return NextResponse.json({ item, updatedEntry });
+      return NextResponse.json({ item, updatedEntry: null });
     }
 
     const customCat = body.customCategory ? await resolveCustomCategory(userId, body.customCategory) : null;
@@ -220,7 +221,7 @@ export async function PATCH(
       ? await resolveSubCategory(userId, { category: resolvedCategory, customCategoryId: customCat?.id ?? null }, body.subCategory)
       : null;
 
-    const { item, updatedEntry } = await db.$transaction(async (tx) => {
+    const item = await db.$transaction(async (tx) => {
       const item = await tx.adHocItem.create({
         data: {
           monthId: monthRow.id,
@@ -236,14 +237,13 @@ export async function PATCH(
           notes: "Imported from Gmail",
         },
       });
-      const updatedEntry = await applyCCEffect(tx, userId, monthRow.id, ccTemplateId, finalDate, finalAmount);
       await tx.parsedTransaction.update({ where: { id }, data: { status: "APPROVED" } });
-      return { item, updatedEntry };
+      return item;
     });
     await rememberMerchantCategory(userId, finalName, { category: resolvedCategory, customCategoryId: customCat?.id ?? null, subCategory });
     await notifyReviewProgress(userId);
 
-    return NextResponse.json({ item, updatedEntry });
+    return NextResponse.json({ item, updatedEntry: null });
   }
 
   // Cash/UPI/debit — a plain ad-hoc item, no CC statement math.

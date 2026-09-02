@@ -14,17 +14,30 @@ import {
   Sparkles,
   Inbox,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useImportsBadge } from "@/lib/use-imports-badge";
+import type { LucideIcon } from "lucide-react";
+
+type NavEntry = {
+  href: string;
+  label: string;
+  mobileLabel?: string;
+  icon: LucideIcon;
+  badge?: boolean;
+  desktopOnly?: boolean;
+  iconClass: string;
+};
 
 // Each destination gets its own icon-circle color — Coin by Zerodha gives
 // every sidebar item a distinct hue rather than tinting all of them with
 // one accent, a playful touch against an otherwise monochrome+blue system.
-const navItems = [
+const navItems: NavEntry[] = [
   { href: "/dashboard",   label: "Dashboard",  icon: LayoutDashboard,    iconClass: "bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400" },
   { href: "/months",      label: "Year View",  mobileLabel: "Year", icon: Calendar,       iconClass: "bg-orange-100 text-orange-600 dark:bg-orange-500/15 dark:text-orange-400" },
   { href: "/cards",       label: "Cards",      icon: CreditCard,        iconClass: "bg-purple-100 text-purple-600 dark:bg-purple-500/15 dark:text-purple-400" },
   { href: "/receivables", label: "Vault",      icon: Wallet,            iconClass: "bg-fuchsia-100 text-fuchsia-600 dark:bg-fuchsia-500/15 dark:text-fuchsia-400" },
-  { href: "/imports",     label: "Sync",       icon: Inbox, badge: true, iconClass: "bg-teal-100 text-teal-600 dark:bg-teal-500/15 dark:text-teal-400" },
+  // Sync is desktop-sidebar only — on mobile it lives in the header bar to
+  // keep the bottom nav uncluttered (see Header).
+  { href: "/imports",     label: "Sync",       icon: Inbox, badge: true, desktopOnly: true, iconClass: "bg-teal-100 text-teal-600 dark:bg-teal-500/15 dark:text-teal-400" },
   { href: "/templates",   label: "Recurring",  icon: SlidersHorizontal,  iconClass: "bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400" },
 ];
 
@@ -35,38 +48,7 @@ interface SidebarProps {
 
 export function Sidebar({ isAdmin, importsBadge = 0 }: SidebarProps) {
   const pathname = usePathname();
-  const [liveImportsBadge, setLiveImportsBadge] = useState(importsBadge);
-
-  // Keep in sync with real navigations (the layout recomputes importsBadge
-  // server-side on every route change).
-  useEffect(() => { setLiveImportsBadge(importsBadge); }, [importsBadge]);
-
-  // The sidebar (and its badge count) is present on every authenticated
-  // page, but sync now happens silently in the background via push
-  // notifications — nothing tells the client it happened. Present here
-  // (not just on /imports) so the badge stays live regardless of which
-  // page you're on when a background sync lands. Polls a single cheap
-  // count endpoint instead of router.refresh() — that used to re-run the
-  // entire server-component tree (layout + whatever page you're on) every
-  // 20s and on every tab focus, which on a remote DB meant real network
-  // round trips competing with actual user interactions.
-  useEffect(() => {
-    const poll = () => {
-      fetch("/api/gmail/parsed/count")
-        .then(r => r.ok ? r.json() : null)
-        .then(d => { if (d) setLiveImportsBadge(d.count); })
-        .catch(() => {});
-    };
-    const interval = setInterval(poll, 20_000);
-    const onVisibilityChange = () => { if (document.visibilityState === "visible") poll(); };
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    window.addEventListener("focus", poll);
-    return () => {
-      clearInterval(interval);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-      window.removeEventListener("focus", poll);
-    };
-  }, []);
+  const liveImportsBadge = useImportsBadge(importsBadge);
 
   return (
     <>
@@ -125,7 +107,7 @@ export function Sidebar({ isAdmin, importsBadge = 0 }: SidebarProps) {
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         <div className="flex items-center justify-around px-1 py-2">
-          {navItems.map(({ href, label, mobileLabel, icon, badge }) => (
+          {navItems.filter(i => !i.desktopOnly).map(({ href, label, mobileLabel, icon }) => (
             <NavItem
               key={href}
               href={href}
@@ -133,7 +115,6 @@ export function Sidebar({ isAdmin, importsBadge = 0 }: SidebarProps) {
               icon={icon}
               variant="mobile"
               active={pathname === href || pathname.startsWith(href + "/")}
-              badge={badge ? liveImportsBadge : undefined}
             />
           ))}
         </div>

@@ -1,8 +1,8 @@
 import { db } from "@/lib/db";
 import { isTemplateActiveInMonth } from "@/lib/loan-utils";
-import { computeTemplateEntryAmount, computePrevCCState, type PrevCCState } from "@/lib/entry-amount";
+import { computeTemplateEntryAmount } from "@/lib/entry-amount";
 import { pendingAmountKicks, prevMonthYear } from "@/lib/utils";
-import { computeMonthIncome, computeMetrics, isZeroCCBalance } from "@/lib/finance-utils";
+import { computeMonthIncome, computeMetrics } from "@/lib/finance-utils";
 import type { Month } from "@/generated/prisma/client";
 
 // Shared by POST /api/months (the user explicitly clicking "Start Month")
@@ -26,7 +26,7 @@ export async function setupMonth(userId: string, month: number, year: number, sa
       include: { chitFund: true },
     });
 
-    // Find previous month to carry CC statement amounts + cash balance forward
+    // Find previous month to carry the cash balance forward.
     const { month: prevMonthNum, year: prevYear } = prevMonthYear(month, year);
     const prevMonth = await db.month.findUnique({
       where: { userId_month_year: { userId, month: prevMonthNum, year: prevYear } },
@@ -41,12 +41,6 @@ export async function setupMonth(userId: string, month: number, year: number, sa
         adHocItems: true,
       },
     });
-    // templateId → last statement + any unpaid/overpaid carry, for CC templates
-    const prevCCState = new Map<string, PrevCCState>(
-      (prevMonth?.entries ?? [])
-        .filter(e => e.template.category === "CREDIT_CARD")
-        .map(e => [e.templateId, computePrevCCState(e)])
-    );
 
     // Carry forward actual leftover cash: previous month's real net cash
     // flow (income actually received minus what was actually paid out —
@@ -78,9 +72,11 @@ export async function setupMonth(userId: string, month: number, year: number, sa
     // AdHocItems) whatever had already gone through.
     await db.$transaction(async (tx) => {
       for (const t of templates) {
-        // Income templates don't create entries — they just inform income pre-fill.
-        // Still promote pending amounts so the template.amount stays current.
-        if (t.templateType === "INCOME") {
+        // Income and credit-card templates don't create entries. Income just
+        // informs income pre-fill; cards run off CardStatement + logged
+        // charges (src/lib/cards.ts). Both still promote pending amounts so
+        // template.amount stays current.
+        if (t.templateType === "INCOME" || t.category === "CREDIT_CARD") {
           if (pendingAmountKicks(t, month, year)) {
             await tx.lineItemTemplate.update({
               where: { id: t.id },
@@ -109,21 +105,11 @@ export async function setupMonth(userId: string, month: number, year: number, sa
           });
         }
 
-        const { amount, billedAmount, carriedInAmount, openingAmount } = computeTemplateEntryAmount(t, baseAmount, prevCCState.get(t.id));
-        // A card that rolls in with nothing carried and nothing billed yet
-        // owes nothing this cycle — close it immediately instead of making
-        // the user tap "paid" on a bill that was never going to have one.
-        const autoPaid = t.category === "CREDIT_CARD" && isZeroCCBalance(amount, carriedInAmount);
+        const { amount } = computeTemplateEntryAmount(t, baseAmount);
 
         await tx.monthlyEntry.upsert({
           where: { monthId_templateId: { monthId: monthRecord.id, templateId: t.id } },
-          create: {
-            monthId: monthRecord.id, templateId: t.id, amount,
-            ...(billedAmount !== undefined && { billedAmount }),
-            ...(carriedInAmount !== undefined && { carriedInAmount }),
-            ...(openingAmount !== undefined && { openingAmount }),
-            ...(autoPaid && { isPaid: true, paidOn: new Date() }),
-          },
+          create: { monthId: monthRecord.id, templateId: t.id, amount },
           update: {},
         });
       }

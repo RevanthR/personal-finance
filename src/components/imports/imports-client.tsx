@@ -18,7 +18,7 @@ import { format } from "date-fns";
 export type CCCard = { templateId: string; name: string };
 export type CustomCat = { id: string; name: string };
 export type PossibleMatch = { id: string; name: string; amount: number; date: string };
-export type MatchedEntry = { kind: "cc" | "recurring"; entryId: string; templateId: string; templateName: string; owed: number; alreadyPaid: number };
+export type MatchedEntry = { kind: "cc" | "recurring"; entryId: string | null; cardId: string | null; templateId: string; templateName: string; owed: number; alreadyPaid: number };
 export type PaymentMethod = "CREDIT_CARD" | "UPI" | "DEBIT_CARD" | "OTHER";
 export type TransactionType = "DEBIT" | "CREDIT" | "REFUND";
 
@@ -331,7 +331,7 @@ function TransactionRow({ item, ccCards, customCategories, subCategorySuggestion
       const res = await fetch(`/api/gmail/parsed/${item.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "settle", entryId: item.matchedEntry.entryId, amount: item.amount }),
+        body: JSON.stringify({ action: "settle", entryId: item.matchedEntry.entryId ?? undefined, cardId: item.matchedEntry.cardId ?? undefined, amount: item.amount }),
       });
       const data = await res.json();
       if (!res.ok) {

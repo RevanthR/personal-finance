@@ -2,22 +2,21 @@
 
 Things considered and intentionally skipped during a fix, with why and what would change the call. Not a bug list — see git history/issues for those.
 
-## Auto-mark-paid doesn't reverse itself (2026-08-02)
+## Historical-month dashboards still render legacy CC MonthlyEntry data (2026-09-02)
 
-When a CC entry auto-closes as paid because it owes nothing (`isZeroCCBalance`
-in `finance-utils.ts`), a later charge landing on that same card is **not**
-auto-un-paid. Only the zero→owed direction is silent; owed→zero is handled
-(creation time in `setup-month.ts`/`templates/route.ts`, and mid-month
-self-heal in `cc-effects.ts`'s `reverseCCEffect`).
+The credit-card rework moved every screen onto `cardStatus()` / `CardStatement`
+and deleted `cc-effects.ts`. The current-month dashboard, `/cards`, the Year
+View and Vault are all on the new engine. The dashboard's `CCCardBlock` +
+its drilldowns still render for **past and projected** months, off the frozen
+legacy `MonthlyEntry` CC fields.
 
-**Why:** there's no field distinguishing "the system closed this at zero"
-from "the user deliberately tapped paid." Auto-reversing `isPaid` on a
-manually-confirmed entry risks silently undoing a real user action just
-because a late charge arrived. Doing this safely needs a new `autoPaid`
-boolean on `MonthlyEntry` to gate the reversal — a schema change, not just
-a logic change — so it was left out of the initial pass.
+**Why:** wiring those months onto the derived `getCardCycleExpenseByMonth`
+figure (as the Year View already does) means rewiring ~10 interdependent
+metric values (committed, pending, cash-in-hand, the tile drilldowns) in a
+2,400-line client component, with no way to integration-test a historical
+snapshot. Left for a focused pass. New CC `MonthlyEntry` rows are no longer
+created or written, so the legacy path goes dormant on its own as months roll
+forward.
 
-**What would change the call:** a real instance of a charge landing on an
-already-auto-closed card (rare — would need a charge dated pre-statement-day
-after the card already rolled in/settled at zero). If that happens, add the
-`autoPaid` flag and gate the reversal on it.
+**What would change the call:** a wrong CC number on a past-month dashboard,
+or once the current-month path has been verified in production.

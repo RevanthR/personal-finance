@@ -5,7 +5,6 @@ import { validate, EntryPatchSchema } from "@/lib/validation";
 import { computePaymentUpdate } from "@/lib/entry-payment";
 import { effectivePaid } from "@/lib/finance-utils";
 import { getCurrentMonthYear } from "@/lib/utils";
-import { settleCarriedDebtBackward, applyBillPaymentToCard, reverseBillPaymentFromCard } from "@/lib/cc-effects";
 import { closePushForUser, PAYMENT_REMINDER_PUSH_TAG } from "@/lib/push";
 
 // PATCH /api/months/[monthId]/entries — update a single entry (mark paid, change amount)
@@ -81,10 +80,6 @@ export async function PATCH(
         where: { userId: session.user.id, month: entry.month.month, year: entry.month.year },
         data: { carriedDebtPaid: { increment: pay } },
       });
-      // The debt being paid down here originally belonged to an earlier
-      // month's own bill — settle that bill's own record too, or it stays
-      // looking perpetually unpaid even after the money's actually moved.
-      await settleCarriedDebtBackward(tx, session.user.id, entry.templateId, entry.month.month, entry.month.year, pay);
       return updatedEntry;
     });
 
@@ -146,21 +141,11 @@ export async function PATCH(
       }
     }
 
-    // Settling (or un-settling) this bill against a card: apply the charge
-    // to the new card, reverse it off the old one — same net amount either
-    // way, using the entry's own values (possibly just-updated above) since
-    // this is always a full payment (v1 scope, enforced above).
-    const netAmt = (amount ?? entry.amount) - (cashbackAmount ?? entry.cashbackAmount ?? 0);
-    if (isPaid === true && paidViaCardTemplateId) {
-      if (wasPaidViaCard && wasPaidViaCard !== paidViaCardTemplateId) {
-        await reverseBillPaymentFromCard(tx, session.user.id, wasPaidViaCard, netAmt);
-        await applyBillPaymentToCard(tx, session.user.id, paidViaCardTemplateId, netAmt);
-      } else if (!wasPaidViaCard) {
-        await applyBillPaymentToCard(tx, session.user.id, paidViaCardTemplateId, netAmt);
-      }
-    } else if (wasPaidViaCard) {
-      await reverseBillPaymentFromCard(tx, session.user.id, wasPaidViaCard, netAmt);
-    }
+    // Paying a bill "via card" now just records the attribution
+    // (paidViaCardTemplateId) — the card spend itself lands as a normal
+    // AdHocItem charge through Gmail sync, so creating one here too would
+    // double it. The attribution still keeps this bill out of cash totals
+    // (finance-utils.ts) until that card's own statement is paid off.
 
     // Paying (or unpaying) a carried-over bill from an earlier month moves
     // real cash today — track it via carriedDebtPaid (today's month), not

@@ -1,11 +1,14 @@
 import { db } from "@/lib/db";
 import { tokenOverlapScore } from "./text-similarity";
-import { getCurrentMonthYear } from "@/lib/utils";
-import { isBillPending, netAmount, effectivePaid, carriedDebtAmount } from "@/lib/finance-utils";
+import { netAmount, effectivePaid } from "@/lib/finance-utils";
+import { getCardsOverview } from "@/lib/cards-db";
 
 export type EntryMatch = {
   kind: "cc" | "recurring";
-  entryId: string;
+  // recurring: the MonthlyEntry id being paid down. cc: null.
+  entryId: string | null;
+  // cc: the CreditCard id whose statement is being paid. recurring: null.
+  cardId: string | null;
   templateId: string;
   templateName: string;
   owed: number;
@@ -49,8 +52,9 @@ type PendingTx = {
 //   - No genuine purchase is ever "from Axis Bank Credit Card" — that
 //     merchant text only shows up on a bill-payment alert. So for any
 //     transaction NOT paid using the card itself (paymentMethod !=
-//     CREDIT_CARD), a name match against one of the user's own CC
-//     templates is a near-certain bill-payment signal.
+//     CREDIT_CARD), a name match against one of the user's own cards is a
+//     near-certain bill-payment signal — the settle then marks that card's
+//     open CardStatement paid (src/lib/cards.ts).
 //   - A recurring bill (rent, EMI, insurance) paid to an individual payee
 //     often shares zero vocabulary with however the user named the
 //     template ("House Rent" vs "Ramesh Kumar"), so an exact amount match
@@ -59,11 +63,11 @@ type PendingTx = {
 //     bill's exact rupee amount, in the month it's due, is unlikely.
 //
 // Every match here is only ever a suggestion the review UI shows for
-// confirmation — approving it pays down the matched entry instead of
+// confirmation — approving it pays down the matched entry/card instead of
 // creating a new AdHocItem; declining it falls through to today's normal
-// "add as new expense" flow. Matches are 1:1 per batch: once an entry is
-// claimed by one pending transaction, it's removed from the pool so a
-// second unrelated transaction can't also claim it.
+// "add as new expense" flow. Matches are 1:1 per batch: once an entry or
+// card is claimed by one pending transaction, it's removed from the pool
+// so a second unrelated transaction can't also claim it.
 export async function findEntryMatches(userId: string, transactions: PendingTx[]): Promise<Map<string, EntryMatch>> {
   if (transactions.length === 0) return new Map();
 
@@ -83,93 +87,58 @@ export async function findEntryMatches(userId: string, transactions: PendingTx[]
     },
   });
 
-  const { month: todayMonth, year: todayYear } = getCurrentMonthYear();
-  const todayDay = new Date().getDate();
-
-  const ccCards = await db.creditCard.findMany({
-    where: { userId, template: { isActive: true } },
-    select: { templateId: true, bank: true, network: true },
-  });
-  const ccTemplateIds = new Set(ccCards.map(c => c.templateId));
+  // Cards with a bill currently owed — statement balance (net of any
+  // partial payment already recorded) plus any past-due amount.
+  const cards = (await getCardsOverview(userId))
+    .filter(c => c.isActive && (c.status.statementBalance > 0 || c.status.pastDue > 0));
 
   const usedEntryIds = new Set<string>();
+  const usedCardIds = new Set<string>();
   const result = new Map<string, EntryMatch>();
 
   for (const t of transactions) {
-    const month = months.find(m => m.year === t.date.getFullYear() && m.month === t.date.getMonth() + 1);
-    if (!month) continue;
-
     const searchText = t.merchant ?? t.bank;
-    const candidates = month.entries.filter(e => !usedEntryIds.has(e.id));
 
     // A swipe alert's merchant is the shop, never the card issuer's own
-    // name — so a card-issuer name match only makes sense here when the
-    // charge wasn't made using the card itself.
+    // name — so a card-issuer name match only makes sense when the charge
+    // wasn't made using the card itself.
     if (t.paymentMethod !== "CREDIT_CARD") {
-      const isCurrentMonthReal = month.year === todayYear && month.month === todayMonth;
-      let best: { entry: typeof candidates[number]; score: number } | null = null;
+      let best: { card: typeof cards[number]; score: number } | null = null;
       let tied = false;
-      for (const entry of candidates) {
-        if (!ccTemplateIds.has(entry.templateId)) continue;
-        const card = ccCards.find(c => c.templateId === entry.templateId);
-        const cardText = `${entry.template.name} ${card?.bank ?? ""} ${card?.network ?? ""}`;
-        // While the statement hasn't closed yet, entry.amount is a blended
-        // running total (real prior-cycle debt + this cycle's new, still-
-        // unbilled spend) — a payment should be checked against just the
-        // carried debt, the only part that's actually owed right now, same
-        // distinction the dashboard's "pay overdue amount" already makes.
-        // Once the statement closes, the whole amount is one real bill again.
-        const billPending = isBillPending(entry, isCurrentMonthReal, todayDay);
-        const outstanding = billPending
-          ? carriedDebtAmount(entry, isCurrentMonthReal, todayDay)
-          : netAmount(entry) - effectivePaid(entry);
-        // No amount ceiling here, unlike the recurring path below — a CC
-        // bill payment can legitimately overpay (rounding up, paying ahead
-        // of next month's charges), and the name/bank match against one of
-        // the user's own cards is specific enough on its own that this
-        // doesn't risk the false positives an unbounded amount-only match
-        // would (see the recurring-entry loop's amount ceiling).
-        if (outstanding <= 0) continue;
+      for (const card of cards) {
+        if (usedCardIds.has(card.cardId)) continue;
+        const cardText = `${card.name} ${card.bank ?? ""} ${card.network ?? ""}`;
         const score = nameSimilarity(searchText, cardText);
         if (score < NAME_SIMILARITY_THRESHOLD) continue;
-        if (!best || score > best.score) { best = { entry, score }; tied = false; }
+        if (!best || score > best.score) { best = { card, score }; tied = false; }
         else if (score === best.score) { tied = true; }
       }
-      // An ambiguous tie between two different cards (e.g. both score
-      // purely on generic overlap) is worse than no suggestion at all —
-      // silently paying down the wrong card's bill is real harm.
+      // An ambiguous tie between two different cards (both scoring purely on
+      // generic overlap) is worse than no suggestion — silently paying down
+      // the wrong card's bill is real harm.
       if (best && tied) best = null;
       if (best) {
-        const billPending = isBillPending(best.entry, isCurrentMonthReal, todayDay);
-        usedEntryIds.add(best.entry.id);
-        result.set(t.id, billPending && (best.entry.carriedInAmount ?? 0) > 0
-          ? {
-              kind: "cc",
-              entryId: best.entry.id,
-              templateId: best.entry.templateId,
-              templateName: best.entry.template.name,
-              // carriedInAmount is already net of any earlier partial
-              // payments (payCarriedAmount reduces it directly), so there's
-              // no separate "already paid toward it" figure to subtract.
-              owed: carriedDebtAmount(best.entry, isCurrentMonthReal, todayDay),
-              alreadyPaid: 0,
-            }
-          : {
-              kind: "cc",
-              entryId: best.entry.id,
-              templateId: best.entry.templateId,
-              templateName: best.entry.template.name,
-              owed: netAmount(best.entry),
-              alreadyPaid: effectivePaid(best.entry),
-            });
+        usedCardIds.add(best.card.cardId);
+        result.set(t.id, {
+          kind: "cc",
+          entryId: null,
+          cardId: best.card.cardId,
+          templateId: best.card.templateId,
+          templateName: best.card.name,
+          owed: Math.round(best.card.status.statementBalance + best.card.status.pastDue),
+          alreadyPaid: 0,
+        });
         continue;
       }
     }
 
+    const month = months.find(m => m.year === t.date.getFullYear() && m.month === t.date.getMonth() + 1);
+    if (!month) continue;
+
+    const candidates = month.entries.filter(e => !usedEntryIds.has(e.id) && e.template.category !== "CREDIT_CARD");
     let best: { entry: typeof candidates[number]; score: number } | null = null;
     let tied = false;
     for (const entry of candidates) {
-      if (ccTemplateIds.has(entry.templateId)) continue; // handled above
       const outstanding = netAmount(entry) - effectivePaid(entry);
       if (outstanding <= 0 || t.amount > outstanding + AMOUNT_EPSILON) continue;
       const nameScore = nameSimilarity(searchText, entry.template.name);
@@ -185,6 +154,7 @@ export async function findEntryMatches(userId: string, transactions: PendingTx[]
       result.set(t.id, {
         kind: "recurring",
         entryId: best.entry.id,
+        cardId: null,
         templateId: best.entry.templateId,
         templateName: best.entry.template.name,
         owed: netAmount(best.entry),

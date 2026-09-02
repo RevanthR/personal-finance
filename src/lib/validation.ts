@@ -211,6 +211,9 @@ export const ParsedTransactionPatchSchema = z.object({
   // "settle" only — the MonthlyEntry this transaction pays down instead of
   // becoming a new AdHocItem.
   entryId:        z.string().optional(),
+  // "settle" only — the CreditCard whose open statement this transaction
+  // pays down (a card bill payment, not a recurring-entry payment).
+  cardId:         z.string().optional(),
 });
 
 export const PaymentOrderSchema = z.object({
