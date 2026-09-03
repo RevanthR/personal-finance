@@ -4,6 +4,10 @@ import { startWatch } from "@/lib/gmail/watch";
 import { syncGmailForUser } from "@/lib/gmail/sync";
 import { sendPushToUser } from "@/lib/push";
 
+// Loops a full-scan reconciliation sync over every connected user. 60s is
+// the Vercel Hobby ceiling.
+export const maxDuration = 60;
+
 // Leaves a 2-day buffer before Google's 7-day Testing-mode refresh-token
 // cliff — enough for the user to notice and reconnect before sync
 // actually breaks.
@@ -47,7 +51,7 @@ export async function GET(req: NextRequest) {
     else failed++;
 
     try {
-      await syncGmailForUser(userId, undefined, { forceFullScan: true });
+      await syncGmailForUser(userId, undefined, { forceFullScan: true, bypassLock: true });
       reconciled++;
     } catch (err) {
       reconcileFailed++;

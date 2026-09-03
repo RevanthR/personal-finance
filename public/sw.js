@@ -108,21 +108,35 @@ self.addEventListener("push", (event) => {
         });
         const placeholder = await self.registration.getNotifications({ tag: silentTag });
         placeholder.forEach((n) => n.close());
+
+        if (data.tag === "gmail-sync") {
+          const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+          for (const w of wins) w.postMessage({ type: "gmail-sync-updated" });
+        }
       })()
     );
     return;
   }
 
   event.waitUntil(
-    self.registration.showNotification(data.title ?? "Artha", {
-      body: data.body ?? "You have a pending payment",
-      // Same tag as a previous notification replaces it in place (on THIS
-      // device) instead of stacking a second, now-stale one — e.g. a
-      // gmail-sync count that changed after reviewing some of the batch.
-      ...(data.tag && { tag: data.tag }),
-      data: { url: data.url ?? "/dashboard" },
-      actions: [{ action: "open", title: "View" }],
-    })
+    (async () => {
+      await self.registration.showNotification(data.title ?? "Artha", {
+        body: data.body ?? "You have a pending payment",
+        // Same tag as a previous notification replaces it in place (on THIS
+        // device) instead of stacking a second, now-stale one — e.g. a
+        // gmail-sync count that changed after reviewing some of the batch.
+        ...(data.tag && { tag: data.tag }),
+        data: { url: data.url ?? "/dashboard" },
+        actions: [{ action: "open", title: "View" }],
+      });
+
+      // Nudge any open tab to refresh its unread-sync badge right away
+      // instead of waiting for the next 20s poll (see useImportsBadge).
+      if (data.tag === "gmail-sync") {
+        const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+        for (const w of wins) w.postMessage({ type: "gmail-sync-updated" });
+      }
+    })()
   );
 });
 

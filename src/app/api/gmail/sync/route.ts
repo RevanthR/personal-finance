@@ -2,6 +2,11 @@ import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { syncGmailForUser } from "@/lib/gmail/sync";
 
+// A full batch (up to 25 emails, Gemini calls in between) can run over a
+// minute. 60s is the Vercel Hobby ceiling; the stream keeps the client's
+// progress bar alive until then.
+export const maxDuration = 60;
+
 // POST /api/gmail/sync — triggered by the "Sync now" button. Streams
 // newline-delimited JSON progress events instead of a single blocking
 // response, since a full batch (up to 25 emails, one Gemini call each) can

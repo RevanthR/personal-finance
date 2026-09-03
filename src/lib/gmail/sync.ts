@@ -202,13 +202,47 @@ export interface SyncOptions {
   // Gmail body fetch or Gemini call, so only genuinely-missed messages
   // actually get reprocessed.
   forceFullScan?: boolean;
+  // Skips the "one sync at a time per user" lock — the daily reconciliation
+  // cron should always run even if a webhook-triggered sync is mid-flight.
+  bypassLock?: boolean;
 }
+
+const SYNC_LOCK_MS = 4 * 60 * 1000;
 
 export async function syncGmailForUser(userId: string, onProgress?: ProgressCallback, opts?: SyncOptions): Promise<SyncResult> {
   const gmailClient = await getGmailClientForUser(userId);
   if (!gmailClient) return { synced: 0, skipped: 0, failed: 0, error: "Gmail not connected" };
   const gmail = gmailClient; // non-null, closed over below
 
+  // Coalesce overlapping runs. Several bank emails landing together each
+  // fire a Pub/Sub webhook; without this they start overlapping syncs that
+  // race on the historyId cursor and burn Gemini quota reprocessing the
+  // same mail. Atomic conditional update — only the caller that flips
+  // syncingUntil from null/expired to a future deadline proceeds; the rest
+  // bail. A stale deadline (a crashed run) is treated as unlocked.
+  if (!opts?.bypassLock) {
+    const acquired = await db.gmailConnection.updateMany({
+      where: { userId, OR: [{ syncingUntil: null }, { syncingUntil: { lt: new Date() } }] },
+      data: { syncingUntil: new Date(Date.now() + SYNC_LOCK_MS) },
+    });
+    if (acquired.count === 0) return { synced: 0, skipped: 0, failed: 0 };
+  }
+
+  try {
+    return await runSync(gmail, userId, onProgress, opts);
+  } finally {
+    if (!opts?.bypassLock) {
+      await db.gmailConnection.updateMany({ where: { userId }, data: { syncingUntil: null } }).catch(() => {});
+    }
+  }
+}
+
+async function runSync(
+  gmail: NonNullable<Awaited<ReturnType<typeof getGmailClientForUser>>>,
+  userId: string,
+  onProgress?: ProgressCallback,
+  opts?: SyncOptions,
+): Promise<SyncResult> {
   const conn = await db.gmailConnection.findUnique({ where: { userId }, select: { historyId: true } });
 
   // Incremental fetch when we have a cursor — only what changed since
@@ -297,6 +331,29 @@ export async function syncGmailForUser(userId: string, onProgress?: ProgressCall
   const newlySynced: { merchant: string | null; bank: string; amount: number }[] = [];
   onProgress?.(processed, total);
 
+  // Fire the "new transaction" push the moment the FIRST one is persisted,
+  // not after the whole run finishes — a run with several emails (each a
+  // multi-second Gemini call) otherwise sits silent for 20-40s. The final
+  // summary push below carries the same tag, so it just updates this one
+  // in place with the accurate count. Guard is best-effort: a race between
+  // two concurrent finalize() calls at most sends two pushes on the same
+  // tag, which collapse to one banner anyway.
+  let earlyPushSent = false;
+  async function maybePushFirst(tx: { merchant: string | null; bank: string; amount: number }): Promise<void> {
+    if (earlyPushSent) return;
+    earlyPushSent = true;
+    try {
+      await sendPushToUser(userId, {
+        title: "New transaction detected",
+        body: `₹${tx.amount.toLocaleString("en-IN")} at ${tx.merchant ?? tx.bank}`,
+        url: "/imports",
+        tag: GMAIL_SYNC_PUSH_TAG,
+      });
+    } catch (err) {
+      console.error(`[gmail-sync] early push failed for user ${userId}:`, err instanceof Error ? err.message : err);
+    }
+  }
+
   // finalize() is shared by every extraction source (known template, solo
   // Gemini call, or a batched one) — resolves the INR amount, writes the
   // ParsedTransaction (or just marks seen for a confirmed non-transaction),
@@ -355,7 +412,9 @@ export async function syncGmailForUser(userId: string, onProgress?: ProgressCall
       await db.gmailSeenMessage.create({ data: { userId, gmailMessageId: c.id } });
       await recordReputation(userId, c.senderEmail, true);
       synced++;
-      newlySynced.push({ merchant: extracted.merchant, bank: extracted.bank ?? "Unknown", amount });
+      const tx = { merchant: extracted.merchant, bank: extracted.bank ?? "Unknown", amount };
+      newlySynced.push(tx);
+      await maybePushFirst(tx);
     } catch (err) {
       failed++;
       console.error(`[gmail-sync] failed finalizing message ${c.id}:`, err instanceof Error ? err.message : err);
@@ -493,8 +552,10 @@ export async function syncGmailForUser(userId: string, onProgress?: ProgressCall
   // One summary notification per sync run, not one per transaction — a
   // single real-world purchase can show up as several separate bank
   // emails (seen firsthand: one charge, three alert emails), which would
-  // otherwise fire a burst of near-identical notifications.
-  if (newlySynced.length > 0) {
+  // otherwise fire a burst of near-identical notifications. Skipped when
+  // the early push already covered a lone transaction — re-sending an
+  // identical payload is just a second delivery for no new information.
+  if (newlySynced.length > 0 && !(earlyPushSent && newlySynced.length === 1)) {
     // Same tag every time — reviewing some (but not all) of a batch from
     // one device sends an updated count that replaces this in place on
     // every OTHER device too, instead of leaving a stale count sitting

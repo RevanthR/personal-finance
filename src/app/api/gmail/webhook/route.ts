@@ -7,6 +7,12 @@ interface PubSubPushBody {
   message?: { data?: string };
 }
 
+// The webhook returns 200 in milliseconds but runs the actual sync in
+// after() — which keeps the function alive. A Gemini-heavy sync can take
+// well over the default timeout, and being killed mid-run means no push
+// ever fires. 60s is the Vercel Hobby ceiling.
+export const maxDuration = 60;
+
 // POST /api/gmail/webhook — Pub/Sub push endpoint. Google calls this the
 // moment a watched mailbox changes. Must respond fast (Pub/Sub retries,
 // and can eventually disable the subscription, if this hangs or 5xxs), so

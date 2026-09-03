@@ -510,6 +510,11 @@ model GmailConnection {
   // CURRENT token's lifecycle — reset on every reconnect so the next
   // 7-day cycle can remind again.
   reminderSentAt  DateTime?
+  // Set to a short deadline while a sync is running, so several bank
+  // emails arriving together (each firing a Pub/Sub webhook) don't kick
+  // off overlapping syncs that race on historyId and waste Gemini quota.
+  // A stale value (past) is ignored, so a crashed run never wedges sync.
+  syncingUntil    DateTime?
 }
 
 enum ParsedTransactionStatus {

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { validate, zMoney } from "@/lib/validation";
 import { ensureCurrentStatement, getCardsOverview } from "@/lib/cards-db";
+import { closePushForUser, PAYMENT_REMINDER_PUSH_TAG } from "@/lib/push";
 import { revalidatePath } from "next/cache";
 
 const Schema = z.object({
@@ -65,5 +66,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ car
 
   revalidatePath("/cards");
   revalidatePath("/dashboard");
+  // Paying a card bill clears the "payment due" reminder on every device,
+  // same as paying a recurring bill does — it's one per-user banner that
+  // may cover several bills, so settling any of them has done its job.
+  if (!unpay && (row.paidInFull || (amount ?? 0) > 0)) {
+    await closePushForUser(userId, PAYMENT_REMINDER_PUSH_TAG, "/dashboard").catch(() => {});
+  }
   return NextResponse.json({ statement: row });
 }

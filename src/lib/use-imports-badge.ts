@@ -28,12 +28,17 @@ export function useImportsBadge(initial = 0): number {
     };
     const interval = setInterval(poll, 20_000);
     const onVisibilityChange = () => { if (document.visibilityState === "visible") poll(); };
+    // The service worker posts this the instant a gmail-sync push lands, so
+    // the badge updates immediately instead of on the next 20s tick.
+    const onSwMessage = (e: MessageEvent) => { if (e.data?.type === "gmail-sync-updated") poll(); };
     document.addEventListener("visibilitychange", onVisibilityChange);
     window.addEventListener("focus", poll);
+    navigator.serviceWorker?.addEventListener("message", onSwMessage);
     return () => {
       clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("focus", poll);
+      navigator.serviceWorker?.removeEventListener("message", onSwMessage);
     };
   }, []);
 

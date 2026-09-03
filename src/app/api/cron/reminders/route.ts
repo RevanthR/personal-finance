@@ -4,6 +4,8 @@ import { initVapid, sendPushToUser, PAYMENT_REMINDER_PUSH_TAG } from "@/lib/push
 import { actualDueDate } from "@/lib/finance-utils";
 import { prevMonthYear, ordinal } from "@/lib/utils";
 
+export const maxDuration = 60;
+
 // GET /api/cron/reminders — called daily by Vercel Cron
 export async function GET(req: NextRequest) {
   // Fail closed: if CRON_SECRET is not configured, block all requests
@@ -54,21 +56,39 @@ export async function GET(req: NextRequest) {
     return due.year === targetYear && due.month === targetMonth && due.day === targetDay;
   });
 
-  if (entries.length === 0) return NextResponse.json({ sent: 0, skipped: "no due entries" });
+  // Credit-card bills don't have MonthlyEntry rows any more — they're on
+  // CardStatement, with a real paymentDueDate. Any confirmed-or-not
+  // statement still owing something, due exactly on the target day.
+  const tgtStart = new Date(Date.UTC(targetYear, targetMonth - 1, targetDay));
+  const tgtEnd = new Date(Date.UTC(targetYear, targetMonth - 1, targetDay + 1));
+  const ccStatements = await db.cardStatement.findMany({
+    where: { paidInFull: false, paymentDueDate: { gte: tgtStart, lt: tgtEnd } },
+    select: {
+      userId: true, statementBalance: true, paidAmount: true, cashback: true,
+      card: { select: { template: { select: { name: true } } } },
+    },
+  });
+  const ccDue = ccStatements.filter(s => {
+    const owed = (s.statementBalance ?? 0) - s.paidAmount - s.cashback;
+    return owed > 1;
+  });
 
-  // Group entries by userId
-  const byUser = new Map<string, typeof entries>();
-  for (const e of entries) {
-    const uid = e.month.userId;
+  if (entries.length === 0 && ccDue.length === 0) return NextResponse.json({ sent: 0, skipped: "no due entries" });
+
+  // One reminder per user covering everything due that day — recurring
+  // bills and card bills together, not two separate banners.
+  const byUser = new Map<string, string[]>();
+  const add = (uid: string, name: string) => {
     if (!byUser.has(uid)) byUser.set(uid, []);
-    byUser.get(uid)!.push(e);
-  }
+    byUser.get(uid)!.push(name);
+  };
+  for (const e of entries) add(e.month.userId, e.template.name);
+  for (const s of ccDue) add(s.userId, s.card.template.name);
 
   let sent = 0;
 
-  for (const [userId, userEntries] of byUser) {
-    const names = userEntries.map(e => e.template.name);
-    const dueDay = userEntries[0].template.dueDateDay!;
+  for (const [userId, names] of byUser) {
+    const dueDay = targetDay;
 
     // Routed through sendPushToUser (not raw webpush) so it marks
     // PAYMENT_REMINDER_PUSH_TAG active — otherwise the close sent when a

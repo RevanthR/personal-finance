@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -117,9 +117,17 @@ export function ImportsClient({ gmail }: ImportsClientProps) {
     toast.success("Requested, you'll be able to connect once approved");
   }
 
-  // Live-refresh (polling + focus/visibility) now lives in Sidebar, since
-  // it's present on every page and this page is rendered inside it — no
-  // need for a second, redundant effect here.
+  // Live-refresh (polling + focus/visibility) for the badge lives in the
+  // shared useImportsBadge hook. Here, additionally pull the full list when
+  // a gmail-sync push lands while this page is open, so a new transaction
+  // shows up without a manual reload.
+  useEffect(() => {
+    const onSwMessage = (e: MessageEvent) => {
+      if (e.data?.type === "gmail-sync-updated") router.refresh();
+    };
+    navigator.serviceWorker?.addEventListener("message", onSwMessage);
+    return () => navigator.serviceWorker?.removeEventListener("message", onSwMessage);
+  }, [router]);
 
   const grouped = useMemo(() => {
     const byDay = new Map<string, ParsedTransactionItem[]>();
