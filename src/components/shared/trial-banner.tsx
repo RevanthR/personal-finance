@@ -9,7 +9,13 @@ export function TrialBanner({ trialEndsAt }: { trialEndsAt: string }) {
   const urgent = days <= 1;
 
   return (
-    <div className={`flex items-center justify-between gap-3 px-4 py-2 text-xs ${urgent ? "bg-negative text-white" : "bg-warning text-white dark:text-background"}`}>
+    // When shown, this is the topmost element, so it (not the header) has
+    // to clear the iOS status bar — viewport-fit=cover runs the web view
+    // edge to edge under it.
+    <div
+      className={`flex items-center justify-between gap-3 px-4 py-2 text-xs ${urgent ? "bg-negative text-white" : "bg-warning text-white dark:text-background"}`}
+      style={{ paddingTop: "calc(0.5rem + env(safe-area-inset-top))" }}
+    >
       <div className="flex items-center gap-2">
         <Clock className="w-3.5 h-3.5 shrink-0" />
         <span className="font-medium">

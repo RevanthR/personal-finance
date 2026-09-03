@@ -41,7 +41,7 @@ export function Header({ user }: HeaderProps) {
 
   return (
     <>
-    <header className="border-b border-border bg-card/90 backdrop-blur-sm flex flex-col justify-end px-4 md:px-6 shrink-0" style={{ paddingTop: "env(safe-area-inset-top)", minHeight: "calc(3.5rem + env(safe-area-inset-top))" }}>
+    <header className="border-b border-border bg-card flex flex-col justify-end px-4 md:px-6 shrink-0" style={{ paddingTop: "env(safe-area-inset-top)", minHeight: "calc(3.5rem + env(safe-area-inset-top))" }}>
       <div className="h-14 flex items-center justify-between">
         <div className="md:hidden flex items-center gap-2">
           <div className="w-7 h-7 bg-primary rounded-xl flex items-center justify-center shrink-0">
