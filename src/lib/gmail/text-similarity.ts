@@ -6,7 +6,7 @@
 // (the divisor mode, the stopword list, the match threshold) stays local to
 // each file — those are deliberate, documented domain-specific tuning
 // decisions, not something that should converge.
-export function normalizeTokens(s: string, stopwords?: Set<string>): Set<string> {
+function normalizeTokens(s: string, stopwords?: Set<string>): Set<string> {
   return new Set(
     s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(t => t && !stopwords?.has(t)),
   );

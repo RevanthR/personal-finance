@@ -27,7 +27,7 @@ const EXCLUDE_SUBJECT_KEYWORDS = ["reward", "rewards", "emi", "luxury", "deals",
 // titles, with no text EXCLUDE_SUBJECT_KEYWORDS can catch.
 const EXCLUDE_FROM_KEYWORDS = ["linkedin", "indeed", "naukri", "glassdoor"];
 
-export function matchesKeywordFilter(subject: string, from: string): boolean {
+function matchesKeywordFilter(subject: string, from: string): boolean {
   const s = subject.toLowerCase();
   const f = from.toLowerCase();
   if (EXCLUDE_SUBJECT_KEYWORDS.some(k => s.includes(k))) return false;

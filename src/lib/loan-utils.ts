@@ -18,7 +18,7 @@ export function computeLoanEndDate(params: {
   return { month: d.getMonth() + 1, year: d.getFullYear() };
 }
 
-export function computeChitEndDate(startDateStr: string, durationMonths: number): { month: number; year: number } {
+function computeChitEndDate(startDateStr: string, durationMonths: number): { month: number; year: number } {
   const start = new Date(startDateStr);
   const startM = start.getUTCMonth(); // 0-indexed
   const startY = start.getUTCFullYear();
@@ -33,7 +33,7 @@ export function computeChitEndDate(startDateStr: string, durationMonths: number)
 // Year View's projection and actual month setup so a loan considered "paid
 // off" by the math can't keep generating real bills in one path while the
 // other correctly stops projecting it.
-export function computeTemplateEndDate(t: {
+function computeTemplateEndDate(t: {
   category: string;
   amount: number;
   loanInterestRate: number | null;

@@ -122,7 +122,7 @@ export function isPreCloseDate(date: Date, statementDay: number | null): boolean
  * fuller actualDueDate/isPastDueDate below exist for callers that only
  * have a bare day number and need the real month/year worked out too.
  */
-export function isDueDateNextMonth(
+function isDueDateNextMonth(
   billGenerationDay: number | null,
   paymentDueDay: number | null,
 ): boolean {

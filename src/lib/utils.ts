@@ -170,7 +170,7 @@ export const CATEGORY_COLORS: Record<string, string> = {
 // categories are recognizable by icon+color everywhere in the app, not
 // just in nav. Custom (user-created) categories always get the generic
 // Tag icon — there's no way to know what a freeform name like "Kids" means.
-export const CATEGORY_ICONS: Record<string, LucideIcon> = {
+const CATEGORY_ICONS: Record<string, LucideIcon> = {
   HOUSE_MAINTENANCE: Home,
   LOAN: Landmark,
   CHIT_FUND: Users,
@@ -194,7 +194,7 @@ export function getCategoryIcon(category: string, customCategory?: string | null
 // Best-effort icon match for the free-text sub-category field — covers the
 // common labels users actually accumulate, falls back to a generic tag for
 // anything else since sub-categories aren't a closed set.
-export const SUBCATEGORY_ICONS: Record<string, LucideIcon> = {
+const SUBCATEGORY_ICONS: Record<string, LucideIcon> = {
   Food: UtensilsCrossed,
   Coffee: Coffee,
   Groceries: ShoppingCart,

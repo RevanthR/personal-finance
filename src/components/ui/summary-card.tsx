@@ -24,7 +24,7 @@ interface SummaryCardProps {
 // Exported so SummaryCardSkeleton below stays pixel-for-pixel in sync with
 // the real column logic instead of duplicating (and inevitably drifting
 // from) this lookup.
-export const GRID_COLS_BY_COUNT: Record<number, string> = {
+const GRID_COLS_BY_COUNT: Record<number, string> = {
   1: "grid-cols-1",
   2: "grid-cols-2",
   3: "grid-cols-2 sm:grid-cols-3",
