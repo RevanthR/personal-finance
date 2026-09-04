@@ -1,6 +1,6 @@
 // Service Worker for Artha PWA
-const STATIC_CACHE = "artha-static-v1";
-const PAGE_CACHE   = "artha-pages-v1";
+const STATIC_CACHE = "artha-static-v2";
+const PAGE_CACHE   = "artha-pages-v2";
 const OFFLINE_URL  = "/offline.html";
 
 self.addEventListener("install", (event) => {

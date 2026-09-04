@@ -22,15 +22,20 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    statusBarStyle: "black-translucent",
+    // "default" (not "black-translucent"): the iOS status bar keeps its own
+    // opaque background and the web view starts BELOW it, instead of the
+    // page drawing edge-to-edge under a translucent bar — which put a
+    // frosted band around the clock. theme-color below sets that bar's
+    // colour to match the header exactly, so there's no seam.
+    statusBarStyle: "default",
     title: "Artha",
   },
 };
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f5f6f7" },
-    { media: "(prefers-color-scheme: dark)", color: "#0d0e10" },
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#1c1d20" },
   ],
   width: "device-width",
   initialScale: 1,
