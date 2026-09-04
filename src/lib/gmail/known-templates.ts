@@ -115,7 +115,8 @@ const TEMPLATES: Template[] = [
   // investigation this template's exact sample email came from). Deliberately
   // NOT paymentMethod "creditCard": this is money paid TOWARD the bill, not
   // spent using the card, and that distinction is what routes it to the
-  // "settle" flow (findEntryMatches) instead of misfiring reverseCCEffect.
+  // "settle" flow (findEntryMatches marks the card's CardStatement paid)
+  // instead of being logged as a spend against the card.
   // "Thank you for your Payment of INR 33,991.00 towards your IndusInd Bank
   //  Credit Card. Your payment is credited to your Credit Card account on
   //  20/07/2026."

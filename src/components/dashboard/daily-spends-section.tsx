@@ -48,9 +48,9 @@ export function DailySpendsSection({ adHocItems, allAdHocItems, ccCards, onDelet
   const [customTo, setCustomTo] = useState("");
 
   // A card repayment is money paid TOWARD a card's bill, not a purchase in
-  // any category — it belongs in the card's own statement view (see
-  // CardStatementDialog), not here, so it's excluded outright rather than
-  // included and netted to a category total that has nothing to do with it.
+  // any category — it belongs in the card's own statement view (the /cards
+  // screen), not here, so it's excluded outright rather than included and
+  // netted to a category total that has nothing to do with it.
   const allExpenseItems = adHocItems.filter(i => i.type === "EXPENSE" && !i.isCardRepayment);
 
   // A fully-picked Custom range is the one mode where the user is

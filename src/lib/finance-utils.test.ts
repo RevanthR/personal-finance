@@ -6,7 +6,6 @@ import {
   isPreCloseDate,
   carriedDebtAmount,
   computeCashBalance,
-  isZeroCCBalance,
   computeMetrics,
   groupProjectedExpenses,
   type EntryBase,
@@ -137,20 +136,6 @@ describe("computeCashBalance", () => {
   });
 });
 
-describe("isZeroCCBalance", () => {
-  it("is true with no spend and no carried debt", () => {
-    expect(isZeroCCBalance(0, 0, 0)).toBe(true);
-  });
-  it("is true when cashback fully offsets the amount", () => {
-    expect(isZeroCCBalance(500, 0, 500)).toBe(true);
-  });
-  it("is false with any real carried-in debt, even at zero current spend", () => {
-    expect(isZeroCCBalance(0, 100, 0)).toBe(false);
-  });
-  it("is false with positive spend after cashback", () => {
-    expect(isZeroCCBalance(1000, 0, 200)).toBe(false);
-  });
-});
 
 describe("computeMetrics", () => {
   it("counts a plain unpaid entry as committed and pending, paid entries as settled", () => {

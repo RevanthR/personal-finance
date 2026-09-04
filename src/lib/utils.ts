@@ -44,9 +44,9 @@ export function getCurrentMonthYear(): { month: number; year: number } {
 
 // month/year rollover — this exact `month === 1 ? 12 : month - 1` (and its
 // `=== 12` mirror) was independently copy-pasted into setup-month.ts,
-// cc-effects.ts, templates/route.ts, chits/[chitId]/route.ts, and both
-// dashboard page.tsx files, which is how two of those copies ended up with
-// slightly different inline forms of the same rule. Single source of truth.
+// templates/route.ts, chits/[chitId]/route.ts, and both dashboard page.tsx
+// files, which is how two of those copies ended up with slightly different
+// inline forms of the same rule. Single source of truth.
 export function prevMonthYear(month: number, year: number): { month: number; year: number } {
   return month === 1 ? { month: 12, year: year - 1 } : { month: month - 1, year };
 }

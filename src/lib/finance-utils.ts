@@ -105,28 +105,11 @@ export function isBillPending(
  * on statementDay, so a charge dated exactly on that day has already
  * missed the cut — it belongs to the next cycle, not this one. Only a
  * charge dated strictly before statementDay counts as part of the bill
- * closing now. Single source of truth for both directions of this rule:
- * which spend lands in this cycle's `amount` vs next cycle's
- * `statementAmount` (cc-effects.ts).
+ * closing now. Single source of truth for the day-of-month side of this
+ * rule (src/lib/cards.ts does the full month-aware cycle math).
  */
 export function isPreCloseDate(date: Date, statementDay: number | null): boolean {
   return statementDay !== null && date.getDate() < statementDay;
-}
-
-/**
- * The real calendar date of the most recent Bill Generation Date that's
- * already happened (today counts) — also, by definition, the day the
- * currently-open cycle started accumulating. Unlike isPreCloseDate (which
- * only compares a day-of-month within one already-known month), this
- * resolves an actual month/year, so it can tell "1st" in the card's own
- * next-cycle label apart from "1st of which month" — and lets a caller
- * with charges spanning more than one calendar month (e.g. a statement
- * popup) split them by real chronological cycle membership instead of by
- * which month each charge happens to be dated in.
- */
-export function mostRecentCloseDate(statementDay: number, asOf: Date = new Date()): Date {
-  const y = asOf.getFullYear(), m = asOf.getMonth();
-  return asOf.getDate() >= statementDay ? new Date(y, m, statementDay) : new Date(y, m - 1, statementDay);
 }
 
 /**
@@ -312,21 +295,6 @@ export function computeCashBalance(params: {
   carriedDebtPaid: number;
 }): number {
   return params.openingBalance + params.income - params.expense - params.carriedDebtPaid;
-}
-
-/**
- * True when a CC entry owes nothing at all this cycle — no carried-forward
- * debt, no net spend — so it can auto-close as paid without the user ever
- * having to tap anything. Shared by entry creation (setup-month.ts,
- * templates/route.ts's addToCurrentMonth) and the mid-month self-heal in
- * cc-effects.ts (a reversed/deleted charge dropping a card back to zero).
- */
-export function isZeroCCBalance(
-  amount: number,
-  carriedInAmount: number | null | undefined,
-  cashbackAmount: number | null | undefined = 0,
-): boolean {
-  return amount - (cashbackAmount ?? 0) <= 0 && (carriedInAmount ?? 0) <= 0;
 }
 
 /** All progress and CC metrics in one pass over entries. */
