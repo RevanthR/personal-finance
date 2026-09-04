@@ -2,7 +2,8 @@ import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { startWatch } from "@/lib/gmail/watch";
 import { syncGmailForUser } from "@/lib/gmail/sync";
-import { sendPushToUser } from "@/lib/push";
+import { sendPushToUser, GMAIL_RECONNECT_PUSH_TAG } from "@/lib/push";
+import { runPool } from "@/lib/gmail/pool";
 
 // Loops a full-scan reconciliation sync over every connected user. 60s is
 // the Vercel Hobby ceiling.
@@ -40,21 +41,21 @@ export async function GET(req: NextRequest) {
     select: { userId: true, connectedAt: true, reminderSentAt: true },
   });
 
-  let renewed = 0;
-  let failed = 0;
-  let reconciled = 0;
-  let reconcileFailed = 0;
-  let reminded = 0;
-  for (const { userId, connectedAt, reminderSentAt } of connections) {
+  const stats = { renewed: 0, failed: 0, reconciled: 0, reconcileFailed: 0, reminded: 0 };
+
+  // Process users a few at a time, not one-by-one — a sequential loop over
+  // every connection (watch renewal + a full-scan sync + maybe a Gemini
+  // call each) can blow past maxDuration and leave later users unprocessed.
+  await runPool(connections, 3, async ({ userId, connectedAt, reminderSentAt }) => {
     const ok = await startWatch(userId);
-    if (ok) renewed++;
-    else failed++;
+    if (ok) stats.renewed++;
+    else stats.failed++;
 
     try {
       await syncGmailForUser(userId, undefined, { forceFullScan: true, bypassLock: true });
-      reconciled++;
+      stats.reconciled++;
     } catch (err) {
-      reconcileFailed++;
+      stats.reconcileFailed++;
       console.error(`[gmail-watch-renew] reconciliation sync failed for user ${userId}:`, err instanceof Error ? err.message : err);
     }
 
@@ -64,15 +65,16 @@ export async function GET(req: NextRequest) {
         await sendPushToUser(userId, {
           title: "Gmail sync needs reconnecting soon",
           body: "Your Gmail connection expires in a couple of days. Reconnect to keep transactions syncing.",
-          url: "/dashboard",
+          url: "/settings",
+          tag: GMAIL_RECONNECT_PUSH_TAG,
         });
         await db.gmailConnection.update({ where: { userId }, data: { reminderSentAt: new Date() } });
-        reminded++;
+        stats.reminded++;
       } catch (err) {
         console.error(`[gmail-watch-renew] reconnect reminder failed for user ${userId}:`, err instanceof Error ? err.message : err);
       }
     }
-  }
+  });
 
-  return NextResponse.json({ total: connections.length, renewed, failed, reconciled, reconcileFailed, reminded });
+  return NextResponse.json({ total: connections.length, ...stats });
 }

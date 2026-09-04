@@ -19,10 +19,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme={theme as ToasterProps["theme"]}
       className="toaster group"
-      // Sonner's default top offset doesn't know about the iOS PWA status
-      // bar (black-translucent + viewport-fit: cover means content draws
-      // under it) or this app's own fixed-height header, so toasts render
-      // partially hidden behind both in standalone mode. Clear both.
+      // Sonner's default top offset doesn't know about this app's
+      // fixed-height header (or any iOS safe-area inset), so toasts render
+      // partially hidden behind it in standalone mode. Clear both.
       offset={{ top: "calc(env(safe-area-inset-top) + 4.5rem)" }}
       mobileOffset={{ top: "calc(env(safe-area-inset-top) + 4.5rem)" }}
       icons={{

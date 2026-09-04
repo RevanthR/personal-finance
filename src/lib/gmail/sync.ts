@@ -205,6 +205,10 @@ export interface SyncOptions {
   // Skips the "one sync at a time per user" lock — the daily reconciliation
   // cron should always run even if a webhook-triggered sync is mid-flight.
   bypassLock?: boolean;
+  // Skips the "new transaction" push entirely — the manual "Sync now"
+  // button is watched live (progress bar + list refresh), so a push for a
+  // transaction already on screen is just noise.
+  suppressPush?: boolean;
 }
 
 const SYNC_LOCK_MS = 4 * 60 * 1000;
@@ -340,7 +344,7 @@ async function runSync(
   // tag, which collapse to one banner anyway.
   let earlyPushSent = false;
   async function maybePushFirst(tx: { merchant: string | null; bank: string; amount: number }): Promise<void> {
-    if (earlyPushSent) return;
+    if (earlyPushSent || opts?.suppressPush) return;
     earlyPushSent = true;
     try {
       await sendPushToUser(userId, {
@@ -555,7 +559,7 @@ async function runSync(
   // otherwise fire a burst of near-identical notifications. Skipped when
   // the early push already covered a lone transaction — re-sending an
   // identical payload is just a second delivery for no new information.
-  if (newlySynced.length > 0 && !(earlyPushSent && newlySynced.length === 1)) {
+  if (newlySynced.length > 0 && !opts?.suppressPush && !(earlyPushSent && newlySynced.length === 1)) {
     // Same tag every time — reviewing some (but not all) of a batch from
     // one device sends an updated count that replaces this in place on
     // every OTHER device too, instead of leaving a stale count sitting
@@ -591,19 +595,29 @@ async function runSync(
 // count REPLACES it in place; hitting zero CLOSES it instead of leaving a
 // stale "3 new transactions" banner sitting on a phone the review never
 // touched.
+const REVIEW_PUSH_DEBOUNCE_MS = 20_000;
+
 export async function notifyReviewProgress(userId: string): Promise<void> {
   try {
     const remaining = await db.parsedTransaction.count({ where: { userId, status: "PENDING" } });
     if (remaining === 0) {
+      // The "all clear" close always fires — it's the signal that matters
+      // on any other device still showing a stale count.
       await closePushForUser(userId, GMAIL_SYNC_PUSH_TAG, "/imports");
-    } else {
-      await sendPushToUser(userId, {
-        title: remaining === 1 ? "1 transaction still needs review" : `${remaining} transactions still need review`,
-        body: "Tap to review",
-        url: "/imports",
-        tag: GMAIL_SYNC_PUSH_TAG,
-      });
+      return;
     }
+    // Debounce the intermediate "N still need review" refresh: reviewing a
+    // batch one at a time otherwise sends one push per tap. The tag keeps
+    // it to one banner, but each send is still a delivery Apple can throttle.
+    const conn = await db.gmailConnection.findUnique({ where: { userId }, select: { lastReviewPushAt: true } });
+    if (conn?.lastReviewPushAt && Date.now() - conn.lastReviewPushAt.getTime() < REVIEW_PUSH_DEBOUNCE_MS) return;
+    await db.gmailConnection.updateMany({ where: { userId }, data: { lastReviewPushAt: new Date() } });
+    await sendPushToUser(userId, {
+      title: remaining === 1 ? "1 transaction still needs review" : `${remaining} transactions still need review`,
+      body: "Tap to review",
+      url: "/imports",
+      tag: GMAIL_SYNC_PUSH_TAG,
+    });
   } catch (err) {
     console.error(`[gmail-sync] review-progress push failed for user ${userId}:`, err instanceof Error ? err.message : err);
   }

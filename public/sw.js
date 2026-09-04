@@ -86,28 +86,31 @@ self.addEventListener("push", (event) => {
     event.waitUntil(
       (async () => {
         const notifications = await self.registration.getNotifications();
+        let closedAny = false;
         for (const n of notifications) {
-          if ((data.tag && n.tag === data.tag) || (data.url && n.data?.url === data.url)) n.close();
+          if ((data.tag && n.tag === data.tag) || (data.url && n.data?.url === data.url)) {
+            n.close();
+            closedAny = true;
+          }
         }
 
         // Browsers require every push to a userVisibleOnly subscription to
         // result in a visible notification, or they eventually revoke the
-        // subscription outright for "silent push" abuse — which is exactly
-        // what a close-only push (no showNotification call) used to be. The
-        // server only sends this when a notification is actually showing
-        // somewhere (see closePushForUser in src/lib/push.ts), so by the
-        // time this runs there's something real to say — show that instead
-        // of a blank flash, then close it right away rather than leaving it
-        // sitting in the tray.
-        const silentTag = `silent-${data.tag ?? "close"}`;
-        await self.registration.showNotification("Handled on another device", {
-          body: "Cleared, no action needed here.",
-          tag: silentTag,
-          silent: true,
-          requireInteraction: false,
-        });
-        const placeholder = await self.registration.getNotifications({ tag: silentTag });
-        placeholder.forEach((n) => n.close());
+        // subscription for "silent push" abuse. Closing a real, still-showing
+        // notification satisfies that — so the brief placeholder flash is
+        // only needed when there was nothing to close on this device (the
+        // banner was already gone, e.g. this is the device that just acted).
+        if (!closedAny) {
+          const silentTag = `silent-${data.tag ?? "close"}`;
+          await self.registration.showNotification("Up to date", {
+            body: "Nothing needs your attention here.",
+            tag: silentTag,
+            silent: true,
+            requireInteraction: false,
+          });
+          const placeholder = await self.registration.getNotifications({ tag: silentTag });
+          placeholder.forEach((n) => n.close());
+        }
 
         if (data.tag === "gmail-sync") {
           const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });

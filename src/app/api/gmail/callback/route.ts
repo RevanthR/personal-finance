@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { getOAuthClient } from "@/lib/gmail/client";
 import { startWatch } from "@/lib/gmail/watch";
+import { closePushForUser, GMAIL_RECONNECT_PUSH_TAG } from "@/lib/push";
 import { google } from "googleapis";
 
 // GET /api/gmail/callback — Google redirects here after consent.
@@ -65,6 +66,9 @@ export async function GET(req: NextRequest) {
   } catch {
     // startWatch() already logs its own errors — nothing further to do.
   }
+
+  // Clear any "reconnect soon" banner still showing on another device.
+  await closePushForUser(session.user.id, GMAIL_RECONNECT_PUSH_TAG, "/settings").catch(() => {});
 
   const res = NextResponse.redirect(new URL("/settings?gmail=connected", req.url));
   res.cookies.delete("gmail_oauth_state");

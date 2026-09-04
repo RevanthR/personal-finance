@@ -131,7 +131,10 @@ Requires `.env` (not committed):
 - `DATABASE_URL`: Neon PostgreSQL (pooled)
 - `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`: Google OAuth
 - `AUTH_SECRET`: NextAuth secret
-- `NEXT_PUBLIC_VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`: Web Push
+- `NEXT_PUBLIC_VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` (a `mailto:` URL): Web Push. All three are required, missing any one silently disables every push notification (`initVapid` logs a one-time error).
+- `GEMINI_API_KEY`: Gmail transaction extraction
+- `GMAIL_WEBHOOK_SECRET` / `GMAIL_PUBSUB_TOPIC`: Gmail push (Pub/Sub) sync
+- `CRON_SECRET`: authorizes the Vercel Cron routes
 
 ## Deployment
 

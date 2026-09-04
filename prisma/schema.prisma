@@ -515,6 +515,9 @@ model GmailConnection {
   // off overlapping syncs that race on historyId and waste Gemini quota.
   // A stale value (past) is ignored, so a crashed run never wedges sync.
   syncingUntil    DateTime?
+  // Last time a "N transactions still need review" push went out, so a
+  // rapid review session (tap, tap, tap) doesn't fire one delivery per tap.
+  lastReviewPushAt DateTime?
 }
 
 enum ParsedTransactionStatus {

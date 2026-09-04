@@ -23,7 +23,7 @@ export async function POST() {
       try {
         const result = await syncGmailForUser(userId, (processed, total) => {
           send({ type: "progress", processed, total });
-        });
+        }, { suppressPush: true });
         if (result.error) send({ type: "error", error: result.error });
         else send({ type: "done", ...result });
       } catch (err) {
