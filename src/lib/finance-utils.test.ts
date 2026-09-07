@@ -4,7 +4,6 @@ import {
   effectivePaid,
   isBillPending,
   isPreCloseDate,
-  carriedDebtAmount,
   computeMetrics,
   groupProjectedExpenses,
   type EntryBase,
@@ -19,9 +18,6 @@ function entry(overrides: Partial<EntryBase> & { template?: Partial<EntryBase["t
     isPaid: false,
     paidAmount: null,
     cashbackAmount: null,
-    statementAmount: null,
-    billedAmount: null,
-    carriedInAmount: null,
     billPaymentsAttributed: null,
     paidViaCardTemplateId: null,
     ...overrides,
@@ -100,92 +96,30 @@ describe("isPreCloseDate", () => {
   });
 });
 
-describe("carriedDebtAmount", () => {
-  it("is the carried-in amount net of cashback while the bill is still pending", () => {
-    const e = entry({
-      template: { category: "CREDIT_CARD", statementDay: 15 },
-      carriedInAmount: 5000,
-      cashbackAmount: 200,
-    });
-    expect(carriedDebtAmount(e, true, 10)).toBe(4800);
-  });
-  it("floors at 0 rather than going negative", () => {
-    const e = entry({
-      template: { category: "CREDIT_CARD", statementDay: 15 },
-      carriedInAmount: 100,
-      cashbackAmount: 500,
-    });
-    expect(carriedDebtAmount(e, true, 10)).toBe(0);
-  });
-  it("is 0 once the bill is no longer pending, even with a carried-in amount", () => {
-    const e = entry({
-      template: { category: "CREDIT_CARD", statementDay: 15 },
-      carriedInAmount: 5000,
-    });
-    expect(carriedDebtAmount(e, true, 20)).toBe(0);
-  });
-});
-
 describe("computeMetrics", () => {
   it("counts a plain unpaid entry as committed and pending, paid entries as settled", () => {
     const entries = [
       entry({ amount: 1000, isPaid: false }),
       entry({ amount: 500, isPaid: true, paidAmount: 500 }),
     ];
-    const m = computeMetrics(entries, true, 10);
+    const m = computeMetrics(entries);
     expect(m.totalCommitted).toBe(1500);
     expect(m.totalPaid).toBe(500);
+    expect(m.totalPending).toBe(1000);
     expect(m.pendingCount).toBe(1);
   });
 
-  it("keeps a pending (unclosed) CC bill's carried debt out of totalCommitted but in totalPending", () => {
-    const entries = [
-      entry({
-        template: { category: "CREDIT_CARD", statementDay: 15 },
-        amount: 2000, // this cycle's still-building spend
-        carriedInAmount: 3000, // real debt from last cycle
-      }),
-    ];
-    const m = computeMetrics(entries, true, 10); // before statementDay 15 — still pending
-    expect(m.totalCommitted).toBe(0);
-    expect(m.carriedCCDebt).toBe(3000);
-    expect(m.totalPending).toBe(3000);
+  it("nets cashback out of the committed figure", () => {
+    const m = computeMetrics([entry({ amount: 1000, cashbackAmount: 100, isPaid: false })]);
+    expect(m.totalCommitted).toBe(900);
   });
 
-  it("moves a CC entry's own committed amount into ccBillsThisMonth once its statement has closed", () => {
-    const entries = [
-      entry({
-        template: { category: "CREDIT_CARD", statementDay: 15 },
-        amount: 2000,
-        billedAmount: 2000,
-      }),
-    ];
-    const m = computeMetrics(entries, true, 20); // past statementDay 15 — closed, a real bill now
-    expect(m.totalCommitted).toBe(2000);
-    expect(m.ccBillsThisMonth).toBe(2000);
-    expect(m.recurringNonCC).toBe(0);
-  });
-
-  it("excludes a bill paid via a card from cash totals without touching committed/paid", () => {
-    const entries = [
-      entry({ amount: 1000, isPaid: true, paidAmount: 1000, paidViaCardTemplateId: "card-1" }),
-    ];
-    const m = computeMetrics(entries, true, 10);
-    expect(m.totalCommitted).toBe(1000);
-    expect(m.totalPaid).toBe(1000);
-  });
-
-  it("excludes a card's billPaymentsAttributed portion from committed/paid", () => {
-    const entries = [
-      entry({
-        template: { category: "CREDIT_CARD", statementDay: 15 },
-        amount: 5000,
-        billedAmount: 5000,
-        billPaymentsAttributed: 2000, // 2000 of this bill is really another bill routed through the card
-      }),
-    ];
-    const m = computeMetrics(entries, true, 20); // closed
-    expect(m.totalCommitted).toBe(3000); // 5000 - 2000 attributed
+  it("paidPercent is paid over committed, capped at 100", () => {
+    const m = computeMetrics([
+      entry({ amount: 1000, isPaid: true, paidAmount: 1000 }),
+      entry({ amount: 1000, isPaid: false }),
+    ]);
+    expect(m.paidPercent).toBe(50);
   });
 });
 

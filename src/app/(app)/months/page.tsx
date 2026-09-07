@@ -4,13 +4,14 @@ import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { isTemplateActiveInMonth, computeLoanAmortization, computeLoanEndDate, type LoanAmortization } from "@/lib/loan-utils";
 import { chitMonthlyAmount } from "@/lib/entry-amount";
-import { getCardBillsByMonth } from "@/lib/cards-db";
+import { getCardBillsByMonth, type MonthlyCardBills } from "@/lib/cards-db";
 import { getCashBalance } from "@/lib/cash-balance";
-import { computeMonthIncome, effectiveEntryAmount, isBillPending, isPastDueDate, netAmount, effectivePaid, type EntryBase } from "@/lib/finance-utils";
+import { computeMonthIncome, incomeOverrides, resolvedTemplateIncome, adHocIncomeTotal, effectiveEntryAmount, isBillPending, isPastDueDate, netAmount, effectivePaid, type EntryBase } from "@/lib/finance-utils";
 
 const isCC = (e: { template: { category: string } }) => e.template.category === "CREDIT_CARD";
 import { YearOverviewClient, type MonthData } from "@/components/months/year-overview-client";
-import { CATEGORY_LABELS, CATEGORY_COLORS, MONTHS, pendingAmountKicks, getCurrentMonthYear, prevMonthYear } from "@/lib/utils";
+import { CATEGORY_LABELS, CATEGORY_COLORS, MONTHS, getCurrentMonthYear } from "@/lib/utils";
+import { projectMonth } from "@/lib/months/projection";
 import type { AnalyticsData } from "@/components/months/stats-breakdown";
 import { clusterByName } from "@/lib/gmail/text-similarity";
 
@@ -25,24 +26,15 @@ function computeMonthIncomeByCategory(
   month: number,
   year: number,
 ): { salary: number; freelance: number; other: number; adHoc: number } {
-  const overrides = new Map<string, number>();
-  let adHoc = 0;
-  for (const item of adHocItems) {
-    if (item.type !== "INCOME") continue;
-    if (item.notes?.startsWith("income_override:")) {
-      overrides.set(item.notes.slice("income_override:".length), item.amount);
-    } else {
-      adHoc += item.amount;
-    }
-  }
+  const overrides = incomeOverrides(adHocItems);
   let salary = 0, freelance = 0, other = 0;
   for (const t of templates) {
-    const amount = overrides.has(t.id) ? overrides.get(t.id)! : (pendingAmountKicks(t, month, year) ? t.pendingAmount! : t.amount);
+    const amount = resolvedTemplateIncome(t, overrides, month, year);
     if (t.category === "SALARY") salary += amount;
     else if (t.category === "FREELANCE") freelance += amount;
     else other += amount;
   }
-  return { salary, freelance, other, adHoc };
+  return { salary, freelance, other, adHoc: adHocIncomeTotal(adHocItems) };
 }
 
 function getFY(month: number, year: number) {
@@ -107,7 +99,7 @@ export default async function MonthsPage() {
   for (const { month, year } of fyMonths) ccMonthKeys.set(`${year}-${month}`, { month, year });
   for (const m of allMonths) ccMonthKeys.set(`${m.year}-${m.month}`, { month: m.month, year: m.year });
   const ccByMonth = await getCardBillsByMonth(userId, [...ccMonthKeys.values()]);
-  const ccFor = (m: number, y: number) => ccByMonth.get(`${y}-${m}`) ?? { total: 0, byCard: [] as { templateId: string; name: string; amount: number; basis: string }[] };
+  const ccFor = (m: number, y: number): MonthlyCardBills => ccByMonth.get(`${y}-${m}`) ?? { total: 0, byCard: [] };
 
   const currentMonthFull = allMonths.find(m => m.month === todayMonth && m.year === todayYear) ?? null;
   const analyticsMonths = allMonths.filter(m => m.isPopulated);
@@ -134,14 +126,6 @@ export default async function MonthsPage() {
     .filter(m => m.isPopulated)
     .sort((a, b) => b.year - a.year || b.month - a.month)[0];
   const fallbackIncome = recentMonth?.salaryIncome ?? 0;
-
-  function getProjectedIncome(month: number, year: number): number {
-    if (incomeTemplates.length === 0) return fallbackIncome;
-    return incomeTemplates.reduce((sum, t) => {
-      const amount = pendingAmountKicks(t, month, year) ? t.pendingAmount! : t.amount;
-      return sum + amount;
-    }, 0);
-  }
 
   // Compute which future months have an income step-change from a pending template amount.
   // Key format: "YEAR-MONTH"
@@ -175,42 +159,22 @@ export default async function MonthsPage() {
         foreclosureAmount: foreclosureByMonthKey.get(`${year}-${month}`) ?? 0,
       };
     }
-    // Projected: sum active non-CC expense templates; CC projects from a
-    // 3-month rolling average of the cards' recent statements.
-    const activeThisMonth = expenseTemplates.filter(t =>
-      t.category !== "CREDIT_CARD" &&
-      (t.frequency === "MONTHLY" || (t.frequency === "YEARLY" && t.dueMonth === month)) &&
-      isTemplateActiveInMonth(t, month, year)
-    );
-    const projCC = ccFor(month, year);
-    const projCCTotal = projCC.total;
-    const projCCByCard = projCC.byCard;
-    const projExpenses = activeThisMonth.reduce((s, t) => {
-      return s + (t.chitFund ? chitMonthlyAmount(t.chitFund, t.amount) : t.amount);
-    }, 0) + projCCTotal;
-    // Pending receivables whose expectedDate falls in this projected month
-    const receivableIncome = pendingReceivables
-      .filter((r) => {
-        if (!r.expectedDate) return false;
-        const d = new Date(r.expectedDate);
-        return d.getFullYear() === year && d.getMonth() + 1 === month;
-      })
-      .reduce((s, r) => s + r.expectedAmount, 0);
-
-    // AdHocItems already recorded in a not-yet-populated month record (e.g. received receivables)
+    // Projected: one shared formula (projectMonth) — same as the dashboard's
+    // future-month view, so the two never disagree on the same month.
     const nonPopMonth = allMonths.find(m => m.month === month && m.year === year && !m.isPopulated);
-    const existingAdHocIncome = nonPopMonth
-      ? nonPopMonth.adHocItems.filter(i => i.type === "INCOME").reduce((s, i) => s + i.amount, 0)
-      : 0;
-
-    const projIncome = getProjectedIncome(month, year) + receivableIncome + existingAdHocIncome;
-
-    // Templates that were active last month but not this month
-    const { month: prevM, year: prevY } = prevMonthYear(month, year);
-    const endingTemplateNames = expenseTemplates
-      .filter(t => t.frequency === "MONTHLY")
-      .filter(t => isTemplateActiveInMonth(t, prevM, prevY) && !isTemplateActiveInMonth(t, month, year))
-      .map(t => t.name);
+    const proj = projectMonth({
+      month, year,
+      templates: allTemplates,
+      ccBills: ccFor(month, year),
+      receivables: pendingReceivables,
+      existingAdHoc: nonPopMonth?.adHocItems ?? [],
+      fallbackIncome,
+    });
+    const projIncome = proj.income;
+    const projExpenses = proj.expenses;
+    const projCCTotal = proj.ccTotal;
+    const projCCByCard = proj.ccByCard;
+    const endingTemplateNames = proj.endingTemplateNames;
 
     return {
       id: null, month, year,

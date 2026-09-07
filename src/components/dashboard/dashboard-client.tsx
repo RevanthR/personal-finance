@@ -412,15 +412,12 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
   // manually-entered salaryIncome instead of letting it silently read as 0.
   const grandIncome   = (incomeTemplates.length === 0 ? (currentMonth?.salaryIncome ?? 0) : templateIncome) + adHocIncome;
 
-  // Single-pass metric computation via shared finance-utils
-  const metrics = useMemo(
-    () => computeMetrics(entries, isCurrentMonth, todayDay),
-    [entries, isCurrentMonth, todayDay],
-  );
-  const {
-    totalCommitted, totalPaid, paidPercent,
-    recurringNonCC,
-  } = metrics;
+  // Single-pass metric computation via shared finance-utils (non-CC bills).
+  const metrics = useMemo(() => computeMetrics(entries), [entries]);
+  const { totalCommitted, totalPaid, paidPercent } = metrics;
+  // metrics carries only non-CC recurring bills, so committed IS the
+  // non-CC recurring figure.
+  const recurringNonCC = totalCommitted;
   // metrics is always non-CC now. Cards feed the tiles as explicit figures
   // via ccView (current + past months); a projected month has no ccView and
   // takes its card figure from projectedEntries instead (dispCCBills below).

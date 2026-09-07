@@ -8,8 +8,7 @@ import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { getCardsOverview, getCardBillsByMonth } from "@/lib/cards-db";
 import { getCashBalance } from "@/lib/cash-balance";
 import { getCurrentMonthYear, prevMonthYear, nextMonthYear } from "@/lib/utils";
-import { isTemplateActiveInMonth } from "@/lib/loan-utils";
-import { chitMonthlyAmount } from "@/lib/entry-amount";
+import { projectMonth } from "@/lib/months/projection";
 import DashboardLoading from "./loading";
 
 function monthNav(m: number, y: number, todayM: number, todayY: number) {
@@ -83,7 +82,7 @@ async function DashboardData({
 
   // ── Future month → projected view ─────────────────────────────────────────
   if (isFuture) {
-    const [allTemplates, ccBills, futureMonthRecord, pendingReceivables] = await Promise.all([
+    const [allTemplates, ccBills, futureMonthRecord, pendingReceivables, lastPopulatedMonth] = await Promise.all([
       getActiveTemplates(userId),
       // CC bill for the projected month, one rule (cardBillForMonth): the
       // statement due that month, confirmed / closed-cycle sum / projection.
@@ -96,57 +95,21 @@ async function DashboardData({
         where: { userId, status: "PENDING", expectedDate: { not: null } },
         select: { description: true, expectedAmount: true, expectedDate: true },
       }),
+      db.month.findFirst({
+        where: { userId, isPopulated: true },
+        orderBy: [{ year: "desc" }, { month: "desc" }],
+        select: { salaryIncome: true },
+      }),
     ]);
 
-    const ccBillByTemplate = new Map<string, number>();
-    for (const line of ccBills.get(`${targetYear}-${targetMonth}`)?.byCard ?? []) {
-      ccBillByTemplate.set(line.templateId, line.amount);
-    }
-
-    const incomeTemplates  = allTemplates.filter(t => t.templateType === "INCOME");
-    const expenseTemplates = allTemplates.filter(t => t.templateType !== "INCOME");
-
-    // Itemized so the Income tile's drilldown on a projected month can show
-    // where the number comes from, same as Payables. Mirrors the three
-    // components of projIncome below one-to-one.
-    const projectedIncomeSources: { name: string; amount: number; kind: "template" | "receivable" | "adhoc" }[] = [];
-
-    for (const t of incomeTemplates) {
-      const kicks = t.pendingAmount != null && t.pendingFromYear != null && t.pendingFromMonth != null &&
-        (targetYear > t.pendingFromYear || (targetYear === t.pendingFromYear && targetMonth >= t.pendingFromMonth));
-      projectedIncomeSources.push({ name: t.name, amount: kicks ? t.pendingAmount! : t.amount, kind: "template" });
-    }
-    for (const r of pendingReceivables) {
-      const d = new Date(r.expectedDate!);
-      if (d.getFullYear() === targetYear && d.getMonth() + 1 === targetMonth) {
-        projectedIncomeSources.push({ name: r.description, amount: r.expectedAmount, kind: "receivable" });
-      }
-    }
-    for (const i of futureMonthRecord?.adHocItems ?? []) {
-      if (i.type === "INCOME") projectedIncomeSources.push({ name: i.name, amount: i.amount, kind: "adhoc" });
-    }
-
-    const projIncome = projectedIncomeSources.reduce((s, i) => s + i.amount, 0);
-
-    const projExpenses = expenseTemplates
-      .filter(t =>
-        (t.frequency === "MONTHLY" || (t.frequency === "YEARLY" && t.dueMonth === targetMonth)) &&
-        isTemplateActiveInMonth(t, targetMonth, targetYear)
-      )
-      .map(t => ({
-        name: t.name,
-        amount: t.category === "CREDIT_CARD"
-          ? (ccBillByTemplate.get(t.id) ?? 0)
-          : t.chitFund
-            ? chitMonthlyAmount(t.chitFund, t.amount)
-            : t.amount,
-        category: t.category,
-        customCategory: t.customCategory,
-        isFixed: t.isFixed,
-        dueDateDay: t.dueDateDay,
-      }))
-      // Drop a card with no projected bill for the month rather than show it at ₹0.
-      .filter(e => e.category !== "CREDIT_CARD" || e.amount > 0);
+    const projection = projectMonth({
+      month: targetMonth, year: targetYear,
+      templates: allTemplates,
+      ccBills: ccBills.get(`${targetYear}-${targetMonth}`) ?? { total: 0, byCard: [] },
+      receivables: pendingReceivables,
+      existingAdHoc: futureMonthRecord?.adHocItems ?? [],
+      fallbackIncome: lastPopulatedMonth?.salaryIncome ?? 0,
+    });
 
     return (
       <DashboardClient
@@ -166,9 +129,9 @@ async function DashboardData({
         targetYear={targetYear}
         prevUrl={prevUrl}
         nextUrl={nextUrl}
-        projectedIncome={projIncome}
-        projectedIncomeSources={projectedIncomeSources}
-        projectedEntries={projExpenses}
+        projectedIncome={projection.income}
+        projectedIncomeSources={projection.incomeSources}
+        projectedEntries={projection.expenseItems}
         gmailStatus={gmailStatus}
       />
     );

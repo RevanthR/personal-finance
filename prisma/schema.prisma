@@ -70,61 +70,61 @@ enum GmailSyncStatus {
 }
 
 model User {
-  id                String             @id @default(cuid())
-  name              String?
-  email             String?            @unique
-  emailVerified     DateTime?
-  image             String?
-  role              Role               @default(USER)
-  isActive          Boolean            @default(true)
-  createdAt         DateTime           @default(now())
-  planType          String             @default("FREE")  // FREE | WEEKLY | MONTHLY | QUARTERLY | YEARLY
-  planExpiry        DateTime?
-  trialEndsAt       DateTime?
-  gmailSyncStatus      GmailSyncStatus @default(NONE)
-  gmailSyncRequestedAt DateTime?
+  id                       String                   @id @default(cuid())
+  name                     String?
+  email                    String?                  @unique
+  emailVerified            DateTime?
+  image                    String?
+  role                     Role                     @default(USER)
+  isActive                 Boolean                  @default(true)
+  createdAt                DateTime                 @default(now())
+  planType                 String                   @default("FREE") // FREE | WEEKLY | MONTHLY | QUARTERLY | YEARLY
+  planExpiry               DateTime?
+  trialEndsAt              DateTime?
+  gmailSyncStatus          GmailSyncStatus          @default(NONE)
+  gmailSyncRequestedAt     DateTime?
   // Push tags with a notification currently showing somewhere (set when a
   // "notify" push is sent, cleared when the matching "close" push is sent).
   // Lets closePushForUser skip sending anything when there's nothing to
   // close — see src/lib/push.ts.
-  activePushTags       String[]        @default([])
+  activePushTags           String[]                 @default([])
   // Day of the month salary lands. Used to date a month's income for the
   // real-time cash balance (a month's salary isn't "cash on hand" until
   // payday). Income templates can override with their own dueDateDay.
-  payDay            Int                @default(1)
-  accounts          Account[]
-  sessions          Session[]
-  months            Month[]
-  templates         LineItemTemplate[]
-  chitFunds         ChitFund[]
-  creditCards       CreditCard[]
-  cardStatements    CardStatement[]
-  receivables       Receivable[]
-  pushSubscriptions PushSubscription[]
-  payments          Payment[]
-  customCategories  CustomCategory[]
-  gmailConnection   GmailConnection?
-  parsedTransactions ParsedTransaction[]
-  gmailSeenMessages  GmailSeenMessage[]
-  gmailSenderReputations GmailSenderReputation[]
+  payDay                   Int                      @default(1)
+  accounts                 Account[]
+  sessions                 Session[]
+  months                   Month[]
+  templates                LineItemTemplate[]
+  chitFunds                ChitFund[]
+  creditCards              CreditCard[]
+  cardStatements           CardStatement[]
+  receivables              Receivable[]
+  pushSubscriptions        PushSubscription[]
+  payments                 Payment[]
+  customCategories         CustomCategory[]
+  gmailConnection          GmailConnection?
+  parsedTransactions       ParsedTransaction[]
+  gmailSeenMessages        GmailSeenMessage[]
+  gmailSenderReputations   GmailSenderReputation[]
   merchantCategoryMemories MerchantCategoryMemory[]
-  geminiUsageLogs   GeminiUsageLog[]
-  carriedDebtSettlements CarriedDebtSettlement[]
-  cashAnchors       CashAnchor[]
-  cashPayments      CashPayment[]
+  geminiUsageLogs          GeminiUsageLog[]
+  carriedDebtSettlements   CarriedDebtSettlement[]
+  cashAnchors              CashAnchor[]
+  cashPayments             CashPayment[]
 }
 
 // User-defined expense categories, reused (not retyped) across templates
 // and ad-hoc items so a name can't drift into near-duplicates over time.
 model CustomCategory {
-  id         String             @id @default(cuid())
-  userId     String
-  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name       String
-  createdAt  DateTime           @default(now())
-  templates   LineItemTemplate[]
-  adHocItems  AdHocItem[]
-  receivables Receivable[]
+  id               String                   @id @default(cuid())
+  userId           String
+  user             User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name             String
+  createdAt        DateTime                 @default(now())
+  templates        LineItemTemplate[]
+  adHocItems       AdHocItem[]
+  receivables      Receivable[]
   merchantMemories MerchantCategoryMemory[]
 
   @@unique([userId, name])
@@ -135,8 +135,8 @@ model Payment {
   userId            String
   razorpayOrderId   String   @unique
   razorpayPaymentId String?
-  planType          String   // WEEKLY | MONTHLY | QUARTERLY | YEARLY
-  amount            Int      // paise
+  planType          String // WEEKLY | MONTHLY | QUARTERLY | YEARLY
+  amount            Int // paise
   status            String   @default("CREATED") // CREATED | CAPTURED | FAILED
   createdAt         DateTime @default(now())
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -177,45 +177,45 @@ enum AdHocType {
 
 // Recurring line item template — one per type of payment
 model LineItemTemplate {
-  id               String         @id @default(cuid())
-  userId           String
-  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name             String
-  category         Category
-  customCategory   String?
-  customCategoryId String?
-  customCategoryRef CustomCategory? @relation(fields: [customCategoryId], references: [id], onDelete: SetNull)
-  amount           Float
-  isFixed          Boolean        @default(true)
-  dueDateDay       Int?
-  isActive         Boolean        @default(true)
-  foreClosedOn     DateTime?
-  foreCloseAmount  Float?
-  pendingAmount    Float?
-  pendingFromMonth Int?
-  pendingFromYear  Int?
-  statementDay     Int?
+  id                      String                  @id @default(cuid())
+  userId                  String
+  user                    User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                    String
+  category                Category
+  customCategory          String?
+  customCategoryId        String?
+  customCategoryRef       CustomCategory?         @relation(fields: [customCategoryId], references: [id], onDelete: SetNull)
+  amount                  Float
+  isFixed                 Boolean                 @default(true)
+  dueDateDay              Int?
+  isActive                Boolean                 @default(true)
+  foreClosedOn            DateTime?
+  foreCloseAmount         Float?
+  pendingAmount           Float?
+  pendingFromMonth        Int?
+  pendingFromYear         Int?
+  statementDay            Int?
   // CC only: the card's total credit line, for showing utilization
   // (spent / limit) — separate from any one cycle's bill amount.
-  creditLimit      Float?
-  frequency        Frequency      @default(MONTHLY)
-  dueMonth         Int?
-  templateType     TemplateType   @default(EXPENSE)
-  endsOnMonth      Int?
-  endsOnYear       Int?
-  sortOrder        Int            @default(0)
+  creditLimit             Float?
+  frequency               Frequency               @default(MONTHLY)
+  dueMonth                Int?
+  templateType            TemplateType            @default(EXPENSE)
+  endsOnMonth             Int?
+  endsOnYear              Int?
+  sortOrder               Int                     @default(0)
   loanOriginalPrincipal   Float?
   loanInterestRate        Float?
-  loanRateType            String?   // "FIXED" | "FLOATING"
+  loanRateType            String? // "FIXED" | "FLOATING"
   loanStartDate           DateTime?
   loanOutstandingOverride Float?
-  createdAt        DateTime       @default(now())
-  entries          MonthlyEntry[]
-  paidViaCardFor   MonthlyEntry[] @relation("PaidViaCard")
-  chitFund         ChitFund?
-  creditCard       CreditCard?
-  adHocCharges     AdHocItem[]
-  carriedDebtSettlements CarriedDebtSettlement[]
+  createdAt               DateTime                @default(now())
+  entries                 MonthlyEntry[]
+  paidViaCardFor          MonthlyEntry[]          @relation("PaidViaCard")
+  chitFund                ChitFund?
+  creditCard              CreditCard?
+  adHocCharges            AdHocItem[]
+  carriedDebtSettlements  CarriedDebtSettlement[]
 }
 
 // One record per calendar month per user
@@ -250,44 +250,45 @@ model Month {
 
 // Instance of a template for a specific month
 model MonthlyEntry {
-  id              String           @id @default(cuid())
-  monthId         String
-  month           Month            @relation(fields: [monthId], references: [id], onDelete: Cascade)
-  templateId      String
-  template        LineItemTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  amount          Float
-  isPaid          Boolean          @default(false)
-  paidOn          DateTime?
-  paidAmount      Float?
-  cashbackAmount  Float?
-  notes           String?
-  // statementAmount / billedAmount / carriedInAmount / openingAmount are
-  // frozen legacy from before the credit-card rework: credit cards no
+  id                     String            @id @default(cuid())
+  monthId                String
+  month                  Month             @relation(fields: [monthId], references: [id], onDelete: Cascade)
+  templateId             String
+  template               LineItemTemplate  @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  amount                 Float
+  isPaid                 Boolean           @default(false)
+  paidOn                 DateTime?
+  paidAmount             Float?
+  cashbackAmount         Float?
+  notes                  String?
+  // Frozen legacy from before the credit-card rework: credit cards no
   // longer create MonthlyEntry rows (they run off CardStatement, see
-  // src/lib/cards.ts). statementAmount / billedAmount / carriedInAmount are
-  // still read by computeMetrics / effectiveEntryAmount for historical-month
-  // dashboards; openingAmount is read by nothing and is a drop candidate.
-  statementAmount Float?
-  billedAmount    Float?
-  carriedInAmount Float?
-  openingAmount   Float            @default(0)
-  createdAt       DateTime         @default(now())
+  // src/lib/cards.ts). statementAmount is still written by a manual CC bill
+  // override on the entry PATCH route and read by the dashboard client's
+  // optimistic update. billedAmount / carriedInAmount / openingAmount are
+  // DEPRECATED (metrics rework, Sep 2026) — read by nothing now, kept only
+  // so historical rows aren't lost. Drop candidates.
+  statementAmount        Float?
+  billedAmount           Float?
+  carriedInAmount        Float?
+  openingAmount          Float             @default(0)
+  createdAt              DateTime          @default(now())
   // Non-CC only: which card actually settled this bill, if not cash/bank —
   // paying rent/insurance/an EMI with a credit card instead of cash. When
   // set, this entry's own cash contribution is deferred to whenever that
-  // card's bill itself gets paid off (see billPaymentsAttributed below and
-  // finance-utils.ts's cashCommitted/cashPaid).
-  paidViaCardTemplateId String?
-  paidViaCard           LineItemTemplate? @relation("PaidViaCard", fields: [paidViaCardTemplateId], references: [id], onDelete: SetNull)
+  // card's bill itself gets paid off (see billPaymentsAttributed below;
+  // the cash ledger records the move via CashPayment, src/lib/cash-payment.ts).
+  paidViaCardTemplateId  String?
+  paidViaCard            LineItemTemplate? @relation("PaidViaCard", fields: [paidViaCardTemplateId], references: [id], onDelete: SetNull)
   // CC only: how much of THIS card's own amount is really someone else's
   // bill routed through it (via paidViaCardTemplateId above), not genuine
   // card spend — excluded from Expenditure/category-breakdown totals (that
   // money is already counted once, under whichever bill actually spent it)
   // but still real money this card owes, so it stays in amount/billedAmount
   // and in cash-flow totals once the card itself gets paid off.
-  billPaymentsAttributed Float @default(0)
+  billPaymentsAttributed Float             @default(0)
 
-  cashPayments    CashPayment[]
+  cashPayments CashPayment[]
 
   @@unique([monthId, templateId])
 }
@@ -342,16 +343,16 @@ model ChitFund {
 
 // Credit card — linked 1:1 to a LineItemTemplate of category CREDIT_CARD
 model CreditCard {
-  id           String           @id @default(cuid())
-  templateId   String           @unique
-  template     LineItemTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  userId       String
-  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  bank         String?
-  network      String?          // "Visa" | "Mastercard" | "Rupay" | "Amex"
-  last4        String?          // last 4 digits, used to auto-match Gmail-imported transactions
-  createdAt    DateTime         @default(now())
-  statements   CardStatement[]
+  id         String           @id @default(cuid())
+  templateId String           @unique
+  template   LineItemTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bank       String?
+  network    String? // "Visa" | "Mastercard" | "Rupay" | "Amex"
+  last4      String? // last 4 digits, used to auto-match Gmail-imported transactions
+  createdAt  DateTime         @default(now())
+  statements CardStatement[]
 }
 
 // One row per card per billing cycle. The only stored credit-card state
@@ -367,14 +368,14 @@ model CardStatement {
   user             User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   // The cycle this statement covers: [cycleStart, statementDate).
   cycleStart       DateTime
-  statementDate    DateTime   // the day the bank cut the bill
+  statementDate    DateTime // the day the bank cut the bill
   paymentDueDate   DateTime
   // The bank's figure. Null while the cycle is only estimated from logged
   // charges; set (and thereafter never recomputed) once the user or a
   // parsed statement email confirms the real amount.
   statementBalance Float?
   confirmedAt      DateTime?
-  confirmedVia     String?    // "manual" | "gmail"
+  confirmedVia     String? // "manual" | "gmail"
   paidAmount       Float      @default(0)
   paidInFull       Boolean    @default(false)
   // When the payment was made, for the cash-balance view. Cleared on undo.
@@ -383,7 +384,7 @@ model CardStatement {
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 
-  cashPayments     CashPayment[]
+  cashPayments CashPayment[]
 
   @@unique([cardId, statementDate])
   @@index([userId])
@@ -397,17 +398,17 @@ model CardStatement {
 // sync for display; this table is the source of truth for WHEN cash moved.
 // See src/lib/cash-balance.ts.
 model CashPayment {
-  id              String        @id @default(cuid())
+  id              String         @id @default(cuid())
   userId          String
-  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  amount          Float         // cash out; negative = reversal / partial un-pay
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount          Float // cash out; negative = reversal / partial un-pay
   paidOn          DateTime
   monthlyEntryId  String?
-  monthlyEntry    MonthlyEntry? @relation(fields: [monthlyEntryId], references: [id], onDelete: Cascade)
+  monthlyEntry    MonthlyEntry?  @relation(fields: [monthlyEntryId], references: [id], onDelete: Cascade)
   cardStatementId String?
   cardStatement   CardStatement? @relation(fields: [cardStatementId], references: [id], onDelete: Cascade)
   note            String?
-  createdAt       DateTime      @default(now())
+  createdAt       DateTime       @default(now())
 
   @@index([userId, paidOn])
 }
@@ -429,9 +430,9 @@ model CashAnchor {
 
 // One-off income or expense for a month
 model AdHocItem {
-  id                String          @id @default(cuid())
+  id                String            @id @default(cuid())
   monthId           String
-  month             Month           @relation(fields: [monthId], references: [id], onDelete: Cascade)
+  month             Month             @relation(fields: [monthId], references: [id], onDelete: Cascade)
   name              String
   amount            Float
   type              AdHocType
@@ -441,7 +442,7 @@ model AdHocItem {
   // when this is set, customCategory holds the real display name.
   customCategory    String?
   customCategoryId  String?
-  customCategoryRef CustomCategory? @relation(fields: [customCategoryId], references: [id], onDelete: SetNull)
+  customCategoryRef CustomCategory?   @relation(fields: [customCategoryId], references: [id], onDelete: SetNull)
   // Sub-category, scoped under whichever of category/customCategoryId is
   // set on this row — e.g. Personal -> "Coffee". Plain string, not a
   // relation: suggestions are scoped by querying existing rows for the
@@ -456,7 +457,7 @@ model AdHocItem {
   // card's statement total instead of added. Set by the Gmail-approve
   // flow (a detected refund) or by the manual dialog's "card repayment"
   // toggle (see isCardRepayment below) — always paired with ccTemplateId.
-  isCredit          Boolean         @default(false)
+  isCredit          Boolean           @default(false)
   // Narrows isCredit to specifically "money paid toward the card's own
   // bill" (bank transfer/UPI/autopay settling what's owed) rather than a
   // merchant refund on a past purchase. The distinction matters because a
@@ -465,10 +466,10 @@ model AdHocItem {
   // purchase was in — so a repayment is excluded entirely from category
   // totals and the Daily Spend breakdown instead of just netting to zero
   // there. Always false unless isCredit is also true.
-  isCardRepayment   Boolean         @default(false)
+  isCardRepayment   Boolean           @default(false)
   date              DateTime
   notes             String?
-  createdAt         DateTime        @default(now())
+  createdAt         DateTime          @default(now())
   // Back-reference for ChitFund.liftIncomeItemId — lets a chit's lift
   // income row be found by real FK instead of matching on a computed
   // "{template name} Chit Lifted" string, which broke silently if the
@@ -488,27 +489,27 @@ enum ReceivableStatus {
 }
 
 model Receivable {
-  id              String             @id @default(cuid())
-  userId          String
-  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category        ReceivableCategory
-  customCategory  String?
+  id                String             @id @default(cuid())
+  userId            String
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category          ReceivableCategory
+  customCategory    String?
   // Links to the same CustomCategory table AdHocItem/LineItemTemplate use —
   // previously a plain unlinked string, so a "Kids" receivable never
   // converged with a "Kids" custom category created elsewhere (ad-hoc entry,
   // recurring template), and case variants didn't canonicalize either.
   customCategoryId  String?
-  customCategoryRef CustomCategory?   @relation(fields: [customCategoryId], references: [id], onDelete: SetNull)
-  description     String
-  expectedAmount  Float
-  expectedDate    DateTime?
-  status          ReceivableStatus   @default(PENDING)
-  receivedAmount  Float?
-  receivedDate    DateTime?
-  receivedMonthId String?
-  receivedMonth   Month?             @relation(fields: [receivedMonthId], references: [id])
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  customCategoryRef CustomCategory?    @relation(fields: [customCategoryId], references: [id], onDelete: SetNull)
+  description       String
+  expectedAmount    Float
+  expectedDate      DateTime?
+  status            ReceivableStatus   @default(PENDING)
+  receivedAmount    Float?
+  receivedDate      DateTime?
+  receivedMonthId   String?
+  receivedMonth     Month?             @relation(fields: [receivedMonthId], references: [id])
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 }
 
 // Web Push subscription per device
@@ -530,30 +531,30 @@ model PushSubscription {
 // Account record so the sensitive gmail.readonly scope is only ever
 // requested when a user explicitly opts in from Settings, not at sign-in.
 model GmailConnection {
-  id           String    @id @default(cuid())
-  userId       String    @unique
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  email        String?
-  accessToken  String    @db.Text
-  refreshToken String    @db.Text
-  tokenExpiry  DateTime
-  lastSyncAt   DateTime?
-  connectedAt  DateTime  @default(now())
-  historyId       String?
-  watchExpiration DateTime?
+  id               String    @id @default(cuid())
+  userId           String    @unique
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email            String?
+  accessToken      String    @db.Text
+  refreshToken     String    @db.Text
+  tokenExpiry      DateTime
+  lastSyncAt       DateTime?
+  connectedAt      DateTime  @default(now())
+  historyId        String?
+  watchExpiration  DateTime?
   // Set the moment a sync actually hits an invalid/revoked refresh token
   // (Google's Testing-mode OAuth apps expire these after 7 days) — a
   // definitive "reconnect now" signal, not a guess from elapsed time.
-  needsReauth     Boolean   @default(false)
+  needsReauth      Boolean   @default(false)
   // Last time the proactive "reconnect soon" reminder fired for the
   // CURRENT token's lifecycle — reset on every reconnect so the next
   // 7-day cycle can remind again.
-  reminderSentAt  DateTime?
+  reminderSentAt   DateTime?
   // Set to a short deadline while a sync is running, so several bank
   // emails arriving together (each firing a Pub/Sub webhook) don't kick
   // off overlapping syncs that race on historyId and waste Gemini quota.
   // A stale value (past) is ignored, so a crashed run never wedges sync.
-  syncingUntil    DateTime?
+  syncingUntil     DateTime?
   // Last time a "N transactions still need review" push went out, so a
   // rapid review session (tap, tap, tap) doesn't fire one delivery per tap.
   lastReviewPushAt DateTime?
@@ -591,29 +592,29 @@ enum ParsedTransactionKind {
 // review before it becomes a real AdHocItem (and, for credit cards, a
 // MonthlyEntry statement-math effect).
 model ParsedTransaction {
-  id                     String                          @id @default(cuid())
-  userId                 String
-  user                   User                            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  gmailMessageId         String
-  bank                   String
-  amount                 Float
-  originalCurrency       String?
-  originalAmount         Float?
-  merchant               String?
-  last4                  String?
-  date                   DateTime
-  transactionTime        String?
-  emailReceivedAt        DateTime?
-  rawSnippet             String
-  status                 ParsedTransactionStatus         @default(PENDING)
-  kind                   ParsedTransactionKind           @default(TRANSACTION)
-  paymentMethod          ParsedTransactionPaymentMethod  @default(CREDIT_CARD)
-  transactionType        ParsedTransactionType           @default(DEBIT)
-  suggestedCcTemplateId  String?
-  suggestedSubcategory   String?
+  id                    String                         @id @default(cuid())
+  userId                String
+  user                  User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gmailMessageId        String
+  bank                  String
+  amount                Float
+  originalCurrency      String?
+  originalAmount        Float?
+  merchant              String?
+  last4                 String?
+  date                  DateTime
+  transactionTime       String?
+  emailReceivedAt       DateTime?
+  rawSnippet            String
+  status                ParsedTransactionStatus        @default(PENDING)
+  kind                  ParsedTransactionKind          @default(TRANSACTION)
+  paymentMethod         ParsedTransactionPaymentMethod @default(CREDIT_CARD)
+  transactionType       ParsedTransactionType          @default(DEBIT)
+  suggestedCcTemplateId String?
+  suggestedSubcategory  String?
   // STATEMENT rows only: the payment due date parsed from the email.
-  statementDueDate       DateTime?
-  createdAt              DateTime                        @default(now())
+  statementDueDate      DateTime?
+  createdAt             DateTime                       @default(now())
 
   @@unique([userId, gmailMessageId])
 }
@@ -682,14 +683,14 @@ model GeminiUsageLog {
 // Gemini — a single real transaction from that sender resets the streak,
 // so a sender never gets permanently locked out on a fluke.
 model GmailSenderReputation {
-  id             String   @id @default(cuid())
-  userId         String
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  senderEmail    String
-  notTxnStreak   Int      @default(0)
-  totalSeen      Int      @default(0)
-  totalTxn       Int      @default(0)
-  updatedAt      DateTime @updatedAt
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  senderEmail  String
+  notTxnStreak Int      @default(0)
+  totalSeen    Int      @default(0)
+  totalTxn     Int      @default(0)
+  updatedAt    DateTime @updatedAt
 
   @@unique([userId, senderEmail])
 }

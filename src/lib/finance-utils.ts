@@ -11,9 +11,6 @@ export interface EntryBase {
   isPaid: boolean;
   paidAmount: number | null;
   cashbackAmount: number | null;
-  statementAmount: number | null;
-  billedAmount: number | null;
-  carriedInAmount?: number | null;
   // CC only: how much of this card's own amount is really another bill
   // routed through it (see paidViaCardTemplateId below) — excluded from
   // committed/paid totals (already counted once, under that other bill's
@@ -31,28 +28,24 @@ export interface EntryBase {
   };
 }
 
+// Credit cards no longer flow through computeMetrics at all — every caller
+// pre-filters them out and reads card figures from cardStatus() /
+// getCardBillsByMonth instead. These are the recurring non-CC bill totals only.
 export interface ProgressMetrics {
   totalCommitted: number;
   totalPaid: number;
   totalPending: number;
   paidPercent: number;
   pendingCount: number;
-  ccBillsThisMonth: number;
-  recurringNonCC: number;
-  ccNextMonth: number;
-  // Real prior-cycle CC debt still on a not-yet-closed card — in
-  // totalPending already, broken out so callers can show it separately
-  // from this month's own Expenditure/CC Bill figures.
-  carriedCCDebt: number;
 }
 
 /**
  * Entry's net obligation after cashback. Takes just the two fields it
  * needs (not the full EntryBase) so callers with a narrower query shape —
- * gmail matching/dedupe, which don't select statementAmount/billedAmount —
- * can call the real formula instead of re-deriving `amount - cashback` by
- * hand, which is exactly how this and effectivePaid below ended up
- * reimplemented independently in gmail/entry-match.ts and gmail/dedupe.ts.
+ * gmail matching/dedupe — can call the real formula instead of re-deriving
+ * `amount - cashback` by hand, which is exactly how this and effectivePaid
+ * below ended up reimplemented independently in gmail/entry-match.ts and
+ * gmail/dedupe.ts.
  */
 export function netAmount(e: { amount: number; cashbackAmount: number | null }): number {
   return e.amount - (e.cashbackAmount ?? 0);
@@ -172,6 +165,43 @@ export interface AdHocForIncome {
   notes: string | null;
 }
 
+const OVERRIDE_PREFIX = "income_override:";
+
+/**
+ * The `income_override:<templateId>` ad-hoc rows for a month, as
+ * templateId → amount. Such a row REPLACES that template's amount for the
+ * month rather than adding on top. Shared by every income calculation
+ * (the month total, the per-category split, the dated cash events).
+ */
+export function incomeOverrides(adHocItems: AdHocForIncome[]): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const i of adHocItems) {
+    if (i.type === "INCOME" && i.notes?.startsWith(OVERRIDE_PREFIX)) {
+      m.set(i.notes.slice(OVERRIDE_PREFIX.length), i.amount);
+    }
+  }
+  return m;
+}
+
+/** One income template's amount for a month: an override wins, else the
+ * scheduled amount (a reached pending change promoted). */
+export function resolvedTemplateIncome(
+  t: IncomeTemplateForCalc,
+  overrides: Map<string, number>,
+  month: number,
+  year: number,
+): number {
+  if (overrides.has(t.id)) return overrides.get(t.id)!;
+  return pendingAmountKicks(t, month, year) ? t.pendingAmount! : t.amount;
+}
+
+/** Non-override ad-hoc INCOME for a month (added on top of template income). */
+export function adHocIncomeTotal(adHocItems: AdHocForIncome[]): number {
+  return adHocItems
+    .filter(i => i.type === "INCOME" && !i.notes?.startsWith(OVERRIDE_PREFIX))
+    .reduce((sum, i) => sum + i.amount, 0);
+}
+
 /**
  * Correct income for a month.
  * income_override:<templateId> adhocs REPLACE the corresponding template's amount.
@@ -188,39 +218,23 @@ export function computeMonthIncome(
   // was silently discarded and a template-less month's income read as 0.
   salaryIncomeFallback = 0,
 ): number {
-  if (incomeTemplates.length === 0) {
-    const nonOverrideAdhoc = adHocItems
-      .filter(i => i.type === "INCOME" && !i.notes?.startsWith("income_override:"))
-      .reduce((sum, i) => sum + i.amount, 0);
-    return salaryIncomeFallback + nonOverrideAdhoc;
-  }
+  const nonOverrideAdhoc = adHocIncomeTotal(adHocItems);
+  if (incomeTemplates.length === 0) return salaryIncomeFallback + nonOverrideAdhoc;
 
-  const overrides = new Map<string, number>();
-  let nonOverrideAdhoc = 0;
-  for (const item of adHocItems) {
-    if (item.type !== "INCOME") continue;
-    if (item.notes?.startsWith("income_override:")) {
-      overrides.set(item.notes.slice("income_override:".length), item.amount);
-    } else {
-      nonOverrideAdhoc += item.amount;
-    }
-  }
-  const templateIncome = incomeTemplates.reduce((sum, t) => {
-    if (overrides.has(t.id)) return sum + overrides.get(t.id)!;
-    const amount = pendingAmountKicks(t, month, year) ? t.pendingAmount! : t.amount;
-    return sum + amount;
-  }, 0);
+  const overrides = incomeOverrides(adHocItems);
+  const templateIncome = incomeTemplates.reduce(
+    (sum, t) => sum + resolvedTemplateIncome(t, overrides, month, year), 0,
+  );
   return templateIncome + nonOverrideAdhoc;
 }
 
 /**
- * What an entry currently contributes toward "this month's own
- * expenditure" — zero for a credit card whose statement hasn't closed yet
- * (its running amount is old carried debt, tracked separately by
- * carriedDebtAmount below, plus new spend that isn't a real bill yet),
- * otherwise its net amount. Single source of truth for this rule — the
- * dashboard's Expenditure tile and the Year View's per-month Expenses
- * figure both go through this instead of each having their own copy of it.
+ * What an entry contributes toward "this month's own expenditure" — its net
+ * amount after cashback. Zero for a credit card whose statement hasn't
+ * closed yet (its running amount isn't a real bill), and a card's own
+ * amount drops whatever portion is really another bill routed through it.
+ * Single source of truth for this rule — the dashboard's Expenditure tile
+ * and the Year View's per-month Expenses both go through it.
  */
 export function effectiveEntryAmount(
   e: EntryBase,
@@ -229,85 +243,27 @@ export function effectiveEntryAmount(
 ): number {
   if (isBillPending(e, isCurrentMonth, todayDay)) return 0;
   const net = netAmount(e);
-  // A card's own amount can include another bill's payment routed through
-  // it — that money is already counted once, under the other bill's own
-  // category, so it's excluded here to avoid double-counting Expenditure.
   return e.template.category === "CREDIT_CARD"
     ? Math.max(0, net - (e.billPaymentsAttributed ?? 0))
     : net;
 }
 
 /**
- * Real, already-billed debt still sitting on a not-yet-closed card —
- * genuinely owed, but last cycle's liability, not this month's own
- * spending (see effectiveEntryAmount above, which excludes it).
+ * Committed / paid / pending totals for a month's recurring bills.
+ * Credit cards never reach here — every caller filters them out and reads
+ * card figures from cardStatus() / getCardBillsByMonth instead.
  */
-export function carriedDebtAmount(
-  e: EntryBase,
-  isCurrentMonth: boolean,
-  todayDay: number,
-): number {
-  if (!isBillPending(e, isCurrentMonth, todayDay)) return 0;
-  return Math.max(0, (e.carriedInAmount ?? 0) - (e.cashbackAmount ?? 0));
-}
-
-/** All progress and CC metrics in one pass over entries. */
-export function computeMetrics(
-  entries: EntryBase[],
-  isCurrentMonth: boolean,
-  todayDay: number,
-): ProgressMetrics {
+export function computeMetrics(entries: EntryBase[]): ProgressMetrics {
   let totalCommitted = 0;
   let totalPaid = 0;
   let pendingCount = 0;
-  let ccBillsThisMonth = 0;
-  let ccNextMonth = 0;
-  // Real, already-billed debt still sitting on a not-yet-closed card. This
-  // is genuinely owed, so it belongs in Pending — but it's last cycle's
-  // liability, not this month's own spending, so it must NOT flow into
-  // totalCommitted/ccBillsThisMonth (those feed Expenditure and the CC Bill
-  // tile, which should only ever reflect this month's own bills).
-  let carriedCCDebt = 0;
 
   for (const e of entries) {
-    const pending = isBillPending(e, isCurrentMonth, todayDay);
-
-    if (pending) {
-      const carried = carriedDebtAmount(e, isCurrentMonth, todayDay);
-      if (carried > 0) {
-        carriedCCDebt += carried;
-        pendingCount++;
-      }
-      continue;
-    }
-
-    const rawNet = netAmount(e);
-    const rawPaid = effectivePaid(e);
-    const attributed = e.billPaymentsAttributed ?? 0;
-    const isCC = e.template.category === "CREDIT_CARD";
-
-    // Committed/paid (bill-settlement view): a card's own bill excludes
-    // whatever portion of it is really another bill routed through it —
-    // that money is already counted once, under that other bill's own
-    // category. A partial card payment is treated as settling the card's
-    // own genuine spend first, so this view never shows more paid than committed.
-    const net  = isCC ? Math.max(0, rawNet - attributed) : rawNet;
-    const paid = isCC
-      ? (e.isPaid ? net : Math.max(0, rawPaid - attributed))
-      : rawPaid;
-
-    totalCommitted += net;
-    totalPaid += paid;
+    totalCommitted += netAmount(e);
+    totalPaid += effectivePaid(e);
     if (!e.isPaid) pendingCount++;
-
-    if (isCC) {
-      ccBillsThisMonth += net;
-      const rolling = !e.isPaid ? Math.max(0, (e.billedAmount ?? e.amount) - e.amount) : 0;
-      ccNextMonth += (e.statementAmount ?? 0) + rolling;
-    }
   }
 
-  const recurringNonCC = totalCommitted - ccBillsThisMonth;
   const paidPercent = totalCommitted > 0
     ? Math.min(100, Math.round((totalPaid / totalCommitted) * 100))
     : 0;
@@ -315,15 +271,9 @@ export function computeMetrics(
   return {
     totalCommitted,
     totalPaid,
-    // Carried CC debt counts toward what you owe overall, just not toward
-    // this month's own committed spend (see carriedCCDebt above).
-    totalPending: totalCommitted - totalPaid + carriedCCDebt,
-    carriedCCDebt,
+    totalPending: totalCommitted - totalPaid,
     paidPercent,
     pendingCount,
-    ccBillsThisMonth,
-    recurringNonCC,
-    ccNextMonth,
   };
 }
 

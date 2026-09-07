@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { pendingAmountKicks } from "@/lib/utils";
+import { incomeOverrides, resolvedTemplateIncome } from "@/lib/finance-utils";
 
 // Real-time cash on hand = the most recent CashAnchor before `asOf`, plus
 // every dated inflow, minus every dated outflow, in the window between the
@@ -93,23 +93,19 @@ type MonthRow = {
 export function incomeEventsFor(months: MonthRow[], incomeTemplates: IncomeTemplate[], payDay: number): CashEvent[] {
   const events: CashEvent[] = [];
   for (const m of months) {
-    const overrides = new Map<string, number>();
+    // Same amount rules as computeMonthIncome (finance-utils), just placed on
+    // real receipt dates instead of collapsed to one monthly figure.
+    const overrides = incomeOverrides(m.adHocItems);
     for (const item of m.adHocItems) {
-      if (item.type !== "INCOME") continue;
-      if (item.notes?.startsWith("income_override:")) {
-        overrides.set(item.notes.slice("income_override:".length), item.amount);
-      } else {
-        events.push({ kind: "income", on: item.date, amount: item.amount });
-      }
+      if (item.type !== "INCOME" || item.notes?.startsWith("income_override:")) continue;
+      events.push({ kind: "income", on: item.date, amount: item.amount });
     }
     if (incomeTemplates.length === 0) {
       if (m.salaryIncome) events.push({ kind: "income", on: incomeDate(m.year, m.month, payDay), amount: m.salaryIncome });
       continue;
     }
     for (const t of incomeTemplates) {
-      const amount = overrides.has(t.id)
-        ? overrides.get(t.id)!
-        : (pendingAmountKicks(t, m.month, m.year) ? t.pendingAmount! : t.amount);
+      const amount = resolvedTemplateIncome(t, overrides, m.month, m.year);
       if (amount) events.push({ kind: "income", on: incomeDate(m.year, m.month, t.dueDateDay ?? payDay), amount });
     }
   }
