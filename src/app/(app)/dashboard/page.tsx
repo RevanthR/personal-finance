@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { setupMonth } from "@/lib/months/setup-month";
 import { redirect } from "next/navigation";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
-import { getCardsOverview, getCardCycleExpenseByMonth } from "@/lib/cards-db";
+import { getCardsOverview, getCardBillsByMonth } from "@/lib/cards-db";
 import { getCashBalance } from "@/lib/cash-balance";
 import { getCurrentMonthYear, prevMonthYear, nextMonthYear } from "@/lib/utils";
 import { isTemplateActiveInMonth } from "@/lib/loan-utils";
@@ -83,18 +83,11 @@ async function DashboardData({
 
   // ── Future month → projected view ─────────────────────────────────────────
   if (isFuture) {
-    const isImmediateNext =
-      (targetYear === todayYear && targetMonth === todayMonth + 1) ||
-      (todayMonth === 12 && targetMonth === 1 && targetYear === todayYear + 1);
-
-    const [allTemplates, currentMonthRecord, futureMonthRecord, pendingReceivables] = await Promise.all([
+    const [allTemplates, ccBills, futureMonthRecord, pendingReceivables] = await Promise.all([
       getActiveTemplates(userId),
-      isImmediateNext
-        ? db.month.findUnique({
-            where: { userId_month_year: { userId, month: todayMonth, year: todayYear } },
-            select: { entries: { select: { templateId: true, statementAmount: true } } },
-          })
-        : Promise.resolve(null),
+      // CC bill for the projected month, one rule (cardBillForMonth): the
+      // statement due that month, confirmed / closed-cycle sum / projection.
+      getCardBillsByMonth(userId, [{ month: targetMonth, year: targetYear }]),
       db.month.findUnique({
         where: { userId_month_year: { userId, month: targetMonth, year: targetYear } },
         select: { adHocItems: { select: { name: true, amount: true, type: true } } },
@@ -105,11 +98,9 @@ async function DashboardData({
       }),
     ]);
 
-    const ccStatements = new Map<string, number>();
-    for (const e of currentMonthRecord?.entries ?? []) {
-      if (e.statementAmount != null && e.statementAmount > 0) {
-        ccStatements.set(e.templateId, e.statementAmount);
-      }
+    const ccBillByTemplate = new Map<string, number>();
+    for (const line of ccBills.get(`${targetYear}-${targetMonth}`)?.byCard ?? []) {
+      ccBillByTemplate.set(line.templateId, line.amount);
     }
 
     const incomeTemplates  = allTemplates.filter(t => t.templateType === "INCOME");
@@ -144,8 +135,8 @@ async function DashboardData({
       )
       .map(t => ({
         name: t.name,
-        amount: t.category === "CREDIT_CARD" && ccStatements.has(t.id)
-          ? ccStatements.get(t.id)!
+        amount: t.category === "CREDIT_CARD"
+          ? (ccBillByTemplate.get(t.id) ?? 0)
           : t.chitFund
             ? chitMonthlyAmount(t.chitFund, t.amount)
             : t.amount,
@@ -153,7 +144,9 @@ async function DashboardData({
         customCategory: t.customCategory,
         isFixed: t.isFixed,
         dueDateDay: t.dueDateDay,
-      }));
+      }))
+      // Drop a card with no projected bill for the month rather than show it at ₹0.
+      .filter(e => e.category !== "CREDIT_CARD" || e.amount > 0);
 
     return (
       <DashboardClient
@@ -314,11 +307,13 @@ async function DashboardData({
   // the read-only cycle-expense snapshot (same source as the Year View).
   const [cards, ccByMonth] = await Promise.all([
     isRealCurrentMonth ? getCardsOverview(userId) : Promise.resolve([]),
-    getCardCycleExpenseByMonth(userId),
+    isRealCurrentMonth
+      ? Promise.resolve(null)
+      : getCardBillsByMonth(userId, [{ month: targetMonth, year: targetYear }]),
   ]);
   const ccMonth = isRealCurrentMonth
     ? null
-    : ccByMonth.byMonth.get(`${targetYear}-${targetMonth}`) ?? { total: 0, byCard: [] };
+    : ccByMonth!.get(`${targetYear}-${targetMonth}`) ?? { total: 0, byCard: [] };
 
   // Real-time cash: as of now for the current month, as of the last moment
   // of the viewed month for a past one. See src/lib/cash-balance.ts.

@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect, notFound } from "next/navigation";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
-import { getCardCycleExpenseByMonth } from "@/lib/cards-db";
+import { getCardBillsByMonth } from "@/lib/cards-db";
 import { getCashBalance } from "@/lib/cash-balance";
 import { getCurrentMonthYear, nextMonthYear } from "@/lib/utils";
 
@@ -93,8 +93,8 @@ export default async function MonthDetailPage({
 
   const { month: todayMonth, year: todayYear } = getCurrentMonthYear();
 
-  const ccByMonth = await getCardCycleExpenseByMonth(session.user.id);
-  const ccMonth = ccByMonth.byMonth.get(`${currentMonth.year}-${currentMonth.month}`) ?? { total: 0, byCard: [] };
+  const ccByMonth = await getCardBillsByMonth(session.user.id, [{ month: currentMonth.month, year: currentMonth.year }]);
+  const ccMonth = ccByMonth.get(`${currentMonth.year}-${currentMonth.month}`) ?? { total: 0, byCard: [] };
 
   const isRealCurrentMonth = currentMonth.month === todayMonth && currentMonth.year === todayYear;
   const cashAsOf = isRealCurrentMonth

@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { isTemplateActiveInMonth, computeLoanAmortization, computeLoanEndDate, type LoanAmortization } from "@/lib/loan-utils";
 import { chitMonthlyAmount } from "@/lib/entry-amount";
-import { getCardCycleExpenseByMonth } from "@/lib/cards-db";
+import { getCardBillsByMonth } from "@/lib/cards-db";
 import { getCashBalance } from "@/lib/cash-balance";
 import { computeMonthIncome, effectiveEntryAmount, isBillPending, isPastDueDate, netAmount, effectivePaid, type EntryBase } from "@/lib/finance-utils";
 
@@ -100,11 +100,14 @@ export default async function MonthsPage() {
     foreclosureByMonthKey.set(key, (foreclosureByMonthKey.get(key) ?? 0) + f.foreCloseAmount);
   }
 
-  // Credit-card cost per calendar month comes from CardStatement now, not
-  // the MonthlyEntry the FY grid used to read. A card's cost in month M is
-  // the statement cut in M (confirmed figure, or the cycle's charge sum).
-  const { byMonth: ccByMonth, projectedMonthly: ccProjectedMonthly } = await getCardCycleExpenseByMonth(userId);
-  const ccFor = (m: number, y: number) => ccByMonth.get(`${y}-${m}`) ?? { total: 0, byCard: [] as { templateId: string; name: string; amount: number }[] };
+  // Credit-card bill per calendar month — one rule (cardBillForMonth) for
+  // every month whether it's populated, historical or a future projection:
+  // confirmed bank figure, closed-cycle charge sum, or a projection.
+  const ccMonthKeys = new Map<string, { month: number; year: number }>();
+  for (const { month, year } of fyMonths) ccMonthKeys.set(`${year}-${month}`, { month, year });
+  for (const m of allMonths) ccMonthKeys.set(`${m.year}-${m.month}`, { month: m.month, year: m.year });
+  const ccByMonth = await getCardBillsByMonth(userId, [...ccMonthKeys.values()]);
+  const ccFor = (m: number, y: number) => ccByMonth.get(`${y}-${m}`) ?? { total: 0, byCard: [] as { templateId: string; name: string; amount: number; basis: string }[] };
 
   const currentMonthFull = allMonths.find(m => m.month === todayMonth && m.year === todayYear) ?? null;
   const analyticsMonths = allMonths.filter(m => m.isPopulated);
@@ -179,8 +182,9 @@ export default async function MonthsPage() {
       (t.frequency === "MONTHLY" || (t.frequency === "YEARLY" && t.dueMonth === month)) &&
       isTemplateActiveInMonth(t, month, year)
     );
-    const projCCTotal = ccProjectedMonthly;
-    const projCCByCard: { templateId: string; name: string; amount: number }[] = [];
+    const projCC = ccFor(month, year);
+    const projCCTotal = projCC.total;
+    const projCCByCard = projCC.byCard;
     const projExpenses = activeThisMonth.reduce((s, t) => {
       return s + (t.chitFund ? chitMonthlyAmount(t.chitFund, t.amount) : t.amount);
     }, 0) + projCCTotal;

@@ -1,8 +1,8 @@
 import { db } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client";
 import {
-  cardStatus, currentCycleOpen, prevStatementDate, dueDateFor,
-  type CardStatementRow, type CardStatusResult,
+  cardStatus, cardBillForMonth, currentCycleOpen, prevStatementDate, dueDateFor,
+  type CardStatementRow, type CardStatusResult, type CardBillBasis,
 } from "@/lib/cards";
 
 type DbClient = typeof db | Prisma.TransactionClient;
@@ -100,30 +100,49 @@ export async function getCardsOverview(userId: string, asOf: Date = new Date()):
   });
 }
 
+export type CardBillLine = { templateId: string; name: string; amount: number; basis: CardBillBasis };
+export type MonthlyCardBills = { total: number; byCard: CardBillLine[] };
+
 /**
- * Credit-card cost per calendar month, for the Year View. A card's cost in
- * month M is its statement that was cut in M: the confirmed balance, or the
- * charge-sum estimate for that cycle when it isn't confirmed. Also returns
- * a per-card 3-month trailing average, for projecting future months.
+ * Credit-card bill per calendar month, for a requested set of months (past,
+ * current or future). A card's bill for month M is the statement due in M
+ * (see cardBillForMonth): the confirmed bank figure, the closed cycle's
+ * charge sum, or a projection for a cycle that hasn't closed. Every screen
+ * that shows "what the cards cost in month M" reads this — one rule.
  */
-export async function getCardCycleExpenseByMonth(userId: string): Promise<{
-  byMonth: Map<string, { total: number; byCard: { templateId: string; name: string; amount: number }[] }>;
-  projectedMonthly: number;
-}> {
+export async function getCardBillsByMonth(
+  userId: string,
+  months: { month: number; year: number }[],
+  asOf: Date = new Date(),
+): Promise<Map<string, MonthlyCardBills>> {
+  const out = new Map<string, MonthlyCardBills>();
+  if (months.length === 0) return out;
+
   const cards = await db.creditCard.findMany({
     where: { userId },
     include: {
-      template: { select: { id: true, name: true, statementDay: true } },
-      statements: { orderBy: { statementDate: "asc" } },
+      template: { select: { id: true, name: true, isActive: true, statementDay: true, dueDateDay: true, creditLimit: true } },
+      statements: { orderBy: { statementDate: "desc" } },
     },
   });
-  if (cards.length === 0) return { byMonth: new Map(), projectedMonthly: 0 };
+  if (cards.length === 0) {
+    for (const { month, year } of months) out.set(`${year}-${month}`, { total: 0, byCard: [] });
+    return out;
+  }
 
-  const since = new Date();
-  since.setMonth(since.getMonth() - 18);
+  // Charges: back far enough to cover the earliest requested month's cycle
+  // and the trailing-median lookback (4 cycles before now).
+  const earliest = months.reduce((min, m) => {
+    const t = Date.UTC(m.year, m.month - 1, 1);
+    return t < min ? t : min;
+  }, asOf.getTime());
+  const since = new Date(earliest);
+  since.setUTCMonth(since.getUTCMonth() - 18);
+
   const charges = await db.adHocItem.findMany({
     where: { type: "EXPENSE", ccTemplateId: { in: cards.map(c => c.templateId) }, date: { gte: since }, month: { userId } },
     select: { ccTemplateId: true, date: true, amount: true, isCredit: true },
+    orderBy: { date: "desc" },
   });
   const chargesByCard = new Map<string, { date: Date; amount: number; isCredit: boolean }[]>();
   for (const c of charges) {
@@ -131,39 +150,26 @@ export async function getCardCycleExpenseByMonth(userId: string): Promise<{
     l.push({ date: c.date, amount: c.amount, isCredit: c.isCredit });
     chargesByCard.set(c.ccTemplateId!, l);
   }
-  const windowSum = (cs: { date: Date; amount: number; isCredit: boolean }[], from: Date, to: Date) =>
-    Math.max(0, Math.round(cs.filter(x => x.date >= from && x.date < to)
-      .reduce((s, x) => s + (x.isCredit ? -x.amount : x.amount), 0) * 100) / 100);
 
-  const byMonth = new Map<string, { total: number; byCard: { templateId: string; name: string; amount: number }[] }>();
-  const recentPerCard: number[] = [];
-
-  for (const card of cards) {
-    const sd = card.template.statementDay;
-    if (sd == null) continue;
-    const cs = chargesByCard.get(card.templateId) ?? [];
-    const cardMonthly: number[] = [];
-    for (const s of card.statements) {
-      const stDate = new Date(s.statementDate);
-      const amount = s.statementBalance ?? windowSum(cs, prevStatementDate(sd, stDate), stDate);
-      if (amount <= 0) continue;
-      const key = `${stDate.getUTCFullYear()}-${stDate.getUTCMonth() + 1}`;
-      const bucket = byMonth.get(key) ?? { total: 0, byCard: [] };
-      bucket.total = Math.round((bucket.total + amount) * 100) / 100;
-      bucket.byCard.push({ templateId: card.template.id, name: card.template.name, amount });
-      byMonth.set(key, bucket);
-      cardMonthly.push(amount);
+  for (const { month, year } of months) {
+    const byCard: CardBillLine[] = [];
+    let total = 0;
+    for (const card of cards) {
+      if (!card.template.isActive) continue;
+      const bill = cardBillForMonth(
+        { statementDay: card.template.statementDay, dueDateDay: card.template.dueDateDay, creditLimit: card.template.creditLimit },
+        card.statements.map(toRow),
+        chargesByCard.get(card.templateId) ?? [],
+        month, year, asOf,
+      );
+      if (bill.amount <= 0) continue;
+      byCard.push({ templateId: card.template.id, name: card.template.name, amount: bill.amount, basis: bill.basis });
+      total = Math.round((total + bill.amount) * 100) / 100;
     }
-    // Projection basis for this card: the lower-median of its last four
-    // statements. A plain mean lets one outlier month (a large one-off
-    // purchase, an EMI conversion) drag the whole forecast up for the rest
-    // of the year; the lower-median ignores a single spike and, with only
-    // two data points, takes the lower of the two.
-    const recent = cardMonthly.slice(-4).slice().sort((a, b) => a - b);
-    if (recent.length) recentPerCard.push(recent[Math.floor((recent.length - 1) / 2)]);
+    byCard.sort((a, b) => b.amount - a.amount);
+    out.set(`${year}-${month}`, { total, byCard });
   }
-
-  return { byMonth, projectedMonthly: Math.round(recentPerCard.reduce((a, b) => a + b, 0)) };
+  return out;
 }
 
 /**

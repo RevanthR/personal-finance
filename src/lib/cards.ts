@@ -60,6 +60,28 @@ export function dueDateFor(statementDate: Date, statementDay: number, dueDay: nu
   return new Date(Date.UTC(y, m, Math.min(dueDay, daysInUtcMonth(y, m))));
 }
 
+/**
+ * The statement whose payment falls due inside calendar month (month, year).
+ * When the due day is earlier in the month than the statement day, the
+ * statement that cut in the *previous* calendar month is the one due here
+ * (a card that cuts the 25th, due the 5th: the 25 Aug statement is due 5 Sep).
+ * `month` is 1-12.
+ */
+export function statementDueInMonth(
+  statementDay: number,
+  dueDay: number,
+  month: number,
+  year: number,
+): { statementDate: Date; cycleStart: Date; dueDate: Date } {
+  const cutInPrevMonth = dueDay < statementDay;
+  const statementDate = statementDateFor(year, (month - 1) - (cutInPrevMonth ? 1 : 0), statementDay);
+  return {
+    statementDate,
+    cycleStart: prevStatementDate(statementDay, statementDate),
+    dueDate: dueDateFor(statementDate, statementDay, dueDay),
+  };
+}
+
 // ── Status ──────────────────────────────────────────────────────────────────
 
 export type CardCharge = { date: string | Date; amount: number; isCredit?: boolean | null };
@@ -231,4 +253,100 @@ export function cardStatus(
       ? { logged: statementEstimated, statement: grossRounded, delta }
       : null,
   };
+}
+
+// ── Per-calendar-month bill ─────────────────────────────────────────────────
+
+export type CardBillBasis = "confirmed" | "estimated" | "projected" | "none";
+
+export type CardBillForMonth = {
+  /** What this card's bill for the month is, net of any recorded payment/cashback. */
+  amount: number;
+  /** The full figure before payments/cashback. */
+  gross: number;
+  basis: CardBillBasis;
+  statementDate: Date | null;
+  dueDate: Date | null;
+};
+
+/** Charge-sum of the last `count` closed cycles, as a lower-median. Robust to
+ * sparse CardStatement rows (they only exist once confirmed/paid) by walking
+ * cycles with date math and summing charges, preferring a confirmed row. */
+function trailingMedianCycle(
+  statements: CardStatementRow[],
+  charges: CardCharge[],
+  statementDay: number,
+  asOf: Date,
+  count = 4,
+): number {
+  const cycleOpen = currentCycleOpen(statementDay, asOf);
+  const amounts: number[] = [];
+  for (let k = 1; k <= count; k++) {
+    const end = statementDateFor(cycleOpen.getUTCFullYear(), cycleOpen.getUTCMonth() - (k - 1), statementDay);
+    const start = statementDateFor(cycleOpen.getUTCFullYear(), cycleOpen.getUTCMonth() - k, statementDay);
+    const row = statements.find(s => new Date(s.statementDate).getTime() === end.getTime());
+    const amt = row?.confirmedAt != null && row.statementBalance != null
+      ? row.statementBalance
+      : Math.max(0, sumBetween(charges, start, end));
+    if (amt > 0) amounts.push(amt);
+  }
+  amounts.sort((a, b) => a - b);
+  return amounts.length ? amounts[Math.floor((amounts.length - 1) / 2)] : 0;
+}
+
+/**
+ * What a single card contributes to the bill due in calendar month
+ * (month, year) — for ANY month, past or future. One rule, so the
+ * dashboard, the month page and the Year View all agree.
+ *
+ *  - confirmed CardStatement for that cycle  → the bank figure, net of paid/cashback
+ *  - cycle already closed, not confirmed     → sum of that cycle's charges (net of any recorded payment)
+ *  - cycle still open or entirely future     → projection: charges booked so far, floored at the
+ *                                              card's trailing-median statement so a barely-started
+ *                                              cycle doesn't read as ~0
+ */
+export function cardBillForMonth(
+  card: CardConfig,
+  statements: CardStatementRow[],
+  charges: CardCharge[],
+  month: number,
+  year: number,
+  asOf: Date = new Date(),
+): CardBillForMonth {
+  if (card.statementDay == null) {
+    return { amount: 0, gross: 0, basis: "none", statementDate: null, dueDate: null };
+  }
+  const sd = card.statementDay;
+  const dd = card.dueDateDay ?? sd;
+  const { statementDate, cycleStart, dueDate } = statementDueInMonth(sd, dd, month, year);
+
+  const row = statements.find(s => new Date(s.statementDate).getTime() === statementDate.getTime()) ?? null;
+  const paid = row?.paidAmount ?? 0;
+  const cashback = row?.cashback ?? 0;
+
+  if (row?.confirmedAt != null && row.statementBalance != null) {
+    return {
+      amount: Math.max(0, Math.round((row.statementBalance - paid - cashback) * 100) / 100),
+      gross: Math.round(row.statementBalance * 100) / 100,
+      basis: "confirmed", statementDate, dueDate,
+    };
+  }
+
+  const cycleClosed = statementDate.getTime() <= asOf.getTime();
+  if (cycleClosed) {
+    const est = Math.max(0, sumBetween(charges, cycleStart, statementDate));
+    return {
+      amount: Math.max(0, Math.round((est - paid - cashback) * 100) / 100),
+      gross: est, basis: "estimated", statementDate, dueDate,
+    };
+  }
+
+  // Open or future cycle: project.
+  const soFarEnd = asOf.getTime() > cycleStart.getTime()
+    ? new Date(Math.min(asOf.getTime(), statementDate.getTime()))
+    : cycleStart;
+  const soFar = Math.max(0, sumBetween(charges, cycleStart, soFarEnd));
+  const median = trailingMedianCycle(statements, charges, sd, asOf);
+  const amount = Math.round(Math.max(soFar, median) * 100) / 100;
+  return { amount, gross: amount, basis: "projected", statementDate, dueDate };
 }

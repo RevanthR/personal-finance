@@ -5,6 +5,8 @@ import {
   nextCycleClose,
   dueDateFor,
   cardStatus,
+  cardBillForMonth,
+  statementDueInMonth,
   type CardCharge,
   type CardStatementRow,
 } from "./cards";
@@ -166,5 +168,74 @@ describe("cardStatus", () => {
     expect(r.statementEstimated).toBe(63931); // all of August
     expect(r.unbilledSpends).toBe(245);       // 1 Sep onward
     expect(iso(r.paymentDueDate!)).toBe("2026-09-21");
+  });
+});
+
+describe("statementDueInMonth", () => {
+  it("due day after statement day: statement cut that same month", () => {
+    // cuts 2nd, due 20th → Oct bill is the 2 Oct statement
+    const r = statementDueInMonth(2, 20, 10, 2026);
+    expect(iso(r.statementDate)).toBe("2026-10-02");
+    expect(iso(r.dueDate)).toBe("2026-10-20");
+  });
+  it("due day before statement day: previous month's statement is due this month", () => {
+    // cuts 25th, due 5th → Oct bill is the 25 Sep statement
+    const r = statementDueInMonth(25, 5, 10, 2026);
+    expect(iso(r.statementDate)).toBe("2026-09-25");
+    expect(iso(r.dueDate)).toBe("2026-10-05");
+  });
+  it("statement day 1: the bill due in month M is M-1's full calendar month", () => {
+    const r = statementDueInMonth(1, 21, 10, 2026);
+    expect(iso(r.statementDate)).toBe("2026-10-01");
+    expect(iso(r.cycleStart)).toBe("2026-09-01");
+    expect(iso(r.dueDate)).toBe("2026-10-21");
+  });
+});
+
+describe("cardBillForMonth", () => {
+  const axis = { statementDay: 1, dueDateDay: 21, creditLimit: 170000 };
+
+  it("confirmed statement wins, net of payment and cashback", () => {
+    // statementDay 1: the September bill is the 1 Sep statement (covers August)
+    const statements = [row({ statementDate: "2026-09-01", statementBalance: 50000, confirmedAt: "2026-09-02", paidAmount: 10000, cashback: 500 })];
+    const r = cardBillForMonth(axis, statements, [], 9, 2026, new Date("2026-09-05"));
+    expect(r.basis).toBe("confirmed");
+    expect(r.gross).toBe(50000);
+    expect(r.amount).toBe(39500);
+  });
+
+  it("closed but unconfirmed cycle → charge-sum estimate", () => {
+    // September bill = the 1 Sep statement, cycle [1 Aug, 1 Sep)
+    const charges = [charge("2026-08-10", 60000), charge("2026-08-31", 3931), charge("2026-09-02", 245)];
+    const r = cardBillForMonth(axis, [], charges, 9, 2026, new Date("2026-09-05"));
+    expect(r.basis).toBe("estimated");
+    expect(r.amount).toBe(63931); // Aug only, Sep 2 charge is next cycle
+  });
+
+  it("open cycle → projection floored at the trailing-median statement", () => {
+    // Aug/Jul/Jun each ~63000 by charges; Sep barely started
+    const charges = [
+      charge("2026-06-10", 62000), charge("2026-07-10", 64000), charge("2026-08-10", 63000),
+      charge("2026-09-03", 1200),
+    ];
+    // Sep 1 cut is closed by Sep 15; the *October* bill is the 1 Oct statement, still open.
+    const r = cardBillForMonth(axis, [], charges, 10, 2026, new Date("2026-09-15"));
+    expect(r.basis).toBe("projected");
+    expect(r.amount).toBe(63000); // median of [62000, 63000, 64000], not the ~0 booked so far
+  });
+
+  it("open cycle where booked charges already exceed the median → use the higher figure", () => {
+    const charges = [
+      charge("2026-06-10", 20000), charge("2026-07-10", 22000), charge("2026-08-10", 21000),
+      charge("2026-09-05", 40000),
+    ];
+    const r = cardBillForMonth(axis, [], charges, 10, 2026, new Date("2026-09-20"));
+    expect(r.basis).toBe("projected");
+    expect(r.amount).toBe(40000);
+  });
+
+  it("no statement day → nothing", () => {
+    const r = cardBillForMonth({ statementDay: null, dueDateDay: null, creditLimit: null }, [], [charge("2026-08-01", 5000)], 9, 2026);
+    expect(r).toMatchObject({ amount: 0, basis: "none" });
   });
 });
