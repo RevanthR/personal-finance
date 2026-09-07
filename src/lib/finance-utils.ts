@@ -44,14 +44,6 @@ export interface ProgressMetrics {
   // totalPending already, broken out so callers can show it separately
   // from this month's own Expenditure/CC Bill figures.
   carriedCCDebt: number;
-  // Cash-flow view, distinct from totalCommitted/totalPaid above: a bill
-  // paid via a card contributes fully to totalCommitted/totalPaid (it's
-  // settled, nothing left to chase) but NOT to these — no actual cash
-  // moves until that card's own bill gets paid off, at which point the
-  // card's entry (now carrying that amount) counts here instead. Real
-  // balance/cash-in-hand figures should use these, not totalCommitted/totalPaid.
-  cashCommitted: number;
-  cashPaid: number;
 }
 
 /**
@@ -246,27 +238,6 @@ export function effectiveEntryAmount(
 }
 
 /**
- * Real cash contribution of this entry this month — a different view of
- * the same entries as effectiveEntryAmount above, for actual cash-in-hand
- * figures (the dashboard's Cash/UPI balance, the Year View's ending
- * balance) rather than committed-spend ones (Expenditure, category
- * breakdown). A bill settled via a card contributes 0 here — no cash
- * moves until that card's own bill gets paid off, at which point the
- * card's own entry (never itself paidViaCard) counts in full below,
- * attributed portion included. See computeMetrics's cashCommitted/cashPaid
- * for the same split applied in aggregate.
- */
-export function cashEntryAmount(
-  e: EntryBase,
-  isCurrentMonth: boolean,
-  todayDay: number,
-): number {
-  if (isBillPending(e, isCurrentMonth, todayDay)) return 0;
-  if (e.paidViaCardTemplateId) return 0;
-  return netAmount(e);
-}
-
-/**
  * Real, already-billed debt still sitting on a not-yet-closed card —
  * genuinely owed, but last cycle's liability, not this month's own
  * spending (see effectiveEntryAmount above, which excludes it).
@@ -278,23 +249,6 @@ export function carriedDebtAmount(
 ): number {
   if (!isBillPending(e, isCurrentMonth, todayDay)) return 0;
   return Math.max(0, (e.carriedInAmount ?? 0) - (e.cashbackAmount ?? 0));
-}
-
-/**
- * Real cash on hand: what carried in, plus what came in, minus what went
- * out, minus whatever was separately paid this month toward an older bill
- * (carriedDebtPaid is tracked apart from openingBalance/expense so a later
- * payment never has to retroactively rewrite either of those — see
- * Month.carriedDebtPaid). Shared by the dashboard's own balance figures and
- * the Year View's FY-level ending balance instead of each re-deriving it.
- */
-export function computeCashBalance(params: {
-  openingBalance: number;
-  income: number;
-  expense: number;
-  carriedDebtPaid: number;
-}): number {
-  return params.openingBalance + params.income - params.expense - params.carriedDebtPaid;
 }
 
 /** All progress and CC metrics in one pass over entries. */
@@ -314,10 +268,6 @@ export function computeMetrics(
   // totalCommitted/ccBillsThisMonth (those feed Expenditure and the CC Bill
   // tile, which should only ever reflect this month's own bills).
   let carriedCCDebt = 0;
-  // See ProgressMetrics.cashCommitted/cashPaid — real cash-flow view,
-  // separate from the committed/paid (bill-settlement) view above.
-  let cashCommitted = 0;
-  let cashPaid = 0;
 
   for (const e of entries) {
     const pending = isBillPending(e, isCurrentMonth, todayDay);
@@ -350,16 +300,6 @@ export function computeMetrics(
     totalPaid += paid;
     if (!e.isPaid) pendingCount++;
 
-    // Cash view: a bill settled via a card never moves cash this month —
-    // that happens later, when the card itself gets paid off (at which
-    // point the card's own rawNet/rawPaid — attributed portion included —
-    // correctly counts as cash below, since paidViaCardTemplateId is never
-    // set on the card's own entry).
-    if (!e.paidViaCardTemplateId) {
-      cashCommitted += rawNet;
-      cashPaid += rawPaid;
-    }
-
     if (isCC) {
       ccBillsThisMonth += net;
       const rolling = !e.isPaid ? Math.max(0, (e.billedAmount ?? e.amount) - e.amount) : 0;
@@ -384,8 +324,6 @@ export function computeMetrics(
     ccBillsThisMonth,
     recurringNonCC,
     ccNextMonth,
-    cashCommitted,
-    cashPaid,
   };
 }
 

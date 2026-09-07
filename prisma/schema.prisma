@@ -228,18 +228,16 @@ model Month {
   salaryIncome    Float          @default(0)
   freelanceIncome Float          @default(0)
   otherIncome     Float          @default(0)
-  // Actual cash left over from the previous month (income - what was
-  // actually paid out, not just committed), carried forward by setupMonth.
-  // Frozen once the month is populated — never mutated afterward, so it stays
-  // a true snapshot of what carried in. See carriedDebtPaid below for money
-  // that moves during the month itself.
+  // DEPRECATED (cash rework, Sep 2026). Cash on hand is now derived live
+  // from CashAnchor + CashPayment + dated inflows/outflows (see
+  // src/lib/cash-balance.ts), not a frozen per-month opening chain.
+  // setupMonth no longer writes this; still read only as a fallback FY-start
+  // estimate on the dashboard for months created before the rework. Drop
+  // candidate once no pre-rework month needs the fallback.
   openingBalance  Float          @default(0)
-  // Real cash paid THIS month toward a bill that belongs to an earlier
-  // month (a carried-over payable, or a credit card's carried-in debt paid
-  // before its statement closes) — tracked separately from openingBalance
-  // so that field can stay a frozen "what I started the month with" snapshot
-  // instead of silently absorbing later-month payments and misreporting
-  // what carried in.
+  // DEPRECATED (cash rework, Sep 2026). Superseded by CashPayment rows,
+  // which record when cash actually moved for any bill regardless of which
+  // month it belongs to. No longer written or read.
   carriedDebtPaid Float          @default(0)
   isPopulated     Boolean        @default(false)
   createdAt       DateTime       @default(now())

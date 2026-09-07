@@ -5,7 +5,6 @@ import {
   isBillPending,
   isPreCloseDate,
   carriedDebtAmount,
-  computeCashBalance,
   computeMetrics,
   groupProjectedExpenses,
   type EntryBase,
@@ -127,16 +126,6 @@ describe("carriedDebtAmount", () => {
   });
 });
 
-describe("computeCashBalance", () => {
-  it("adds opening balance and income, subtracts expense and carried-debt payments", () => {
-    expect(computeCashBalance({ openingBalance: 1000, income: 5000, expense: 3000, carriedDebtPaid: 500 })).toBe(2500);
-  });
-  it("can go negative, this is the exact bug fixed this session (dashboard used to floor it at 0)", () => {
-    expect(computeCashBalance({ openingBalance: 0, income: 1000, expense: 5000, carriedDebtPaid: 0 })).toBe(-4000);
-  });
-});
-
-
 describe("computeMetrics", () => {
   it("counts a plain unpaid entry as committed and pending, paid entries as settled", () => {
     const entries = [
@@ -184,11 +173,9 @@ describe("computeMetrics", () => {
     const m = computeMetrics(entries, true, 10);
     expect(m.totalCommitted).toBe(1000);
     expect(m.totalPaid).toBe(1000);
-    expect(m.cashCommitted).toBe(0);
-    expect(m.cashPaid).toBe(0);
   });
 
-  it("excludes a card's billPaymentsAttributed portion from committed/paid but keeps it in cash", () => {
+  it("excludes a card's billPaymentsAttributed portion from committed/paid", () => {
     const entries = [
       entry({
         template: { category: "CREDIT_CARD", statementDay: 15 },
@@ -199,7 +186,6 @@ describe("computeMetrics", () => {
     ];
     const m = computeMetrics(entries, true, 20); // closed
     expect(m.totalCommitted).toBe(3000); // 5000 - 2000 attributed
-    expect(m.cashCommitted).toBe(5000); // full amount still moves as real cash
   });
 });
 

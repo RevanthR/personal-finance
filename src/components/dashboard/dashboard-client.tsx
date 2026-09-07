@@ -133,7 +133,6 @@ type MonthWithDetails = {
   id: string; month: number; year: number;
   salaryIncome: number; freelanceIncome: number; otherIncome: number;
   openingBalance: number;
-  carriedDebtPaid: number;
   isPopulated: boolean;
   entries: EntryWithTemplate[];
   adHocItems: AdHocItem[];
@@ -726,7 +725,7 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
     if (existing) await handleAdHocDelete(existing.id);
   }
 
-  async function handleEntryUpdate(entryId: string, updates: { isPaid?: boolean; amount?: number; notes?: string; paidAmount?: number; cashbackAmount?: number; payCarriedAmount?: number; paidViaCardTemplateId?: string | null }) {
+  async function handleEntryUpdate(entryId: string, updates: { isPaid?: boolean; amount?: number; notes?: string; paidAmount?: number; cashbackAmount?: number; paidViaCardTemplateId?: string | null }) {
     if (!currentMonth) return;
     const res = await fetch(`/api/months/${currentMonth.id}/entries`, {
       method: "PATCH",
@@ -738,7 +737,6 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
     withReorderTransition(() => {
       setCurrentMonth(prev => prev ? {
         ...prev, entries: prev.entries.map(e => e.id === entryId ? { ...e, ...updated } : e),
-        ...(updates.payCarriedAmount !== undefined && { carriedDebtPaid: prev.carriedDebtPaid + updates.payCarriedAmount }),
       } : prev);
     });
     if (updates.amount !== undefined || updates.cashbackAmount !== undefined) {
@@ -748,19 +746,19 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
           : m
       ));
     }
+    // The Cash/UPI balance is server-derived from the ledger — refresh it.
+    if (updates.isPaid !== undefined || updates.paidAmount !== undefined) router.refresh();
     if (updates.isPaid !== undefined) toast.success(updates.isPaid ? "Marked paid ✓" : "Marked pending");
     if (updates.paidAmount !== undefined && !updated.isPaid) toast.success("Partial payment recorded");
     if (updates.cashbackAmount !== undefined) toast.success(`Cashback of ${formatCurrency(updates.cashbackAmount)} applied`);
-    if (updates.payCarriedAmount !== undefined) toast.success(`${formatCurrency(updates.payCarriedAmount)} paid toward last cycle's balance`);
   }
 
   // Paying an old bill from a previous month, right now: PATCHes against its
   // real original monthId (not the currently-viewed month — that entry was
   // never copied here), and moves cash out of today's balance immediately
   // rather than backdating it, since the payment is genuinely happening now.
-  // The server does the authoritative carriedDebtPaid increment in the same
-  // transaction; the effectivePaid delta below just mirrors that locally so
-  // the tile updates without waiting on a refetch.
+  // The server appends the CashPayment row; router.refresh() below re-pulls
+  // the ledger-derived Cash/UPI tile.
   async function handleCarriedOverUpdate(item: CarriedOverEntry, updates: { isPaid?: boolean; paidAmount?: number; cashbackAmount?: number; paidViaCardTemplateId?: string | null }) {
     const res = await fetch(`/api/months/${item.monthId}/entries`, {
       method: "PATCH",
@@ -770,21 +768,10 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
     if (!res.ok) { toast.error("Failed to save"); return; }
     const updated = await res.json();
 
-    const entryBase = (paidAmount: number | null, isPaid: boolean) => ({
-      amount: item.amount, isPaid, paidAmount,
-      cashbackAmount: item.cashbackAmount, statementAmount: null, billedAmount: null,
-      template: { category: item.template.category, statementDay: item.template.statementDay },
-    });
-    const paidBefore = _effectivePaid(entryBase(item.paidAmount, false));
-    const paidAfter = _effectivePaid(entryBase(updated.paidAmount, updated.isPaid));
-    // Paid via a card — no cash moved, so carriedDebtPaid shouldn't reflect
-    // it (matches the server, which skips the same bump for the same reason).
-    const delta = updates.paidViaCardTemplateId ? 0 : paidAfter - paidBefore;
-
-    setCurrentMonth(prev => prev ? { ...prev, carriedDebtPaid: prev.carriedDebtPaid + delta } : prev);
     setCarriedOver(prev => updated.isPaid
       ? prev.filter(e => e.id !== item.id)
       : prev.map(e => e.id === item.id ? { ...e, paidAmount: updated.paidAmount } : e));
+    router.refresh();
 
     if (updates.isPaid !== undefined) toast.success(updates.isPaid ? "Marked paid ✓" : "Marked pending");
     if (updates.paidAmount !== undefined && !updated.isPaid) toast.success("Partial payment recorded");

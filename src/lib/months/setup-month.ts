@@ -1,8 +1,7 @@
 import { db } from "@/lib/db";
 import { isTemplateActiveInMonth } from "@/lib/loan-utils";
 import { computeTemplateEntryAmount } from "@/lib/entry-amount";
-import { pendingAmountKicks, prevMonthYear } from "@/lib/utils";
-import { computeMonthIncome, computeMetrics } from "@/lib/finance-utils";
+import { pendingAmountKicks } from "@/lib/utils";
 import type { Month } from "@/generated/prisma/client";
 
 // Shared by POST /api/months (the user explicitly clicking "Start Month")
@@ -25,60 +24,6 @@ export async function setupMonth(userId: string, month: number, year: number, sa
       where: { userId, isActive: true },
       include: { chitFund: true },
     });
-
-    // Find previous month to carry the cash balance forward.
-    const { month: prevMonthNum, year: prevYear } = prevMonthYear(month, year);
-    const prevMonth = await db.month.findUnique({
-      where: { userId_month_year: { userId, month: prevMonthNum, year: prevYear } },
-      include: {
-        entries: {
-          select: {
-            templateId: true, statementAmount: true,
-            isPaid: true, amount: true, billedAmount: true, paidAmount: true, cashbackAmount: true,
-            template: { select: { category: true, name: true, statementDay: true } },
-          },
-        },
-        adHocItems: true,
-      },
-    });
-
-    // Carry forward actual leftover cash: previous month's real net cash
-    // flow (income actually received minus what was actually paid out —
-    // unpaid bills correctly don't reduce this, since that money hasn't
-    // left hand yet) on top of whatever it itself carried in. Unpaid bills
-    // themselves are NOT copied into this month at all (see below) — they
-    // stay payable against their real original entry, in their own month,
-    // so paying one later correctly moves cash on the day it actually
-    // happens instead of being silently pre-counted as spent here.
-    let openingBalance = 0;
-    if (prevMonth) {
-      const incomeTemplates = templates.filter(t => t.templateType === "INCOME");
-      const prevIncome = computeMonthIncome(prevMonth.adHocItems, incomeTemplates, prevMonthNum, prevYear, prevMonth.salaryIncome);
-      // Non-CC bills only. Credit-card spend is never cash-out on purchase —
-      // it leaves your hand when the statement is paid, captured by
-      // prevCcPaid below (same model as the dashboard's cash figure). A
-      // legacy CC MonthlyEntry marked paid must NOT count here as well, or
-      // the same bill is subtracted twice.
-      const prevNonCcEntries = prevMonth.entries.filter(e => e.template.category !== "CREDIT_CARD");
-      const prevPaid = computeMetrics(prevNonCcEntries, false, 0).totalPaid;
-      const prevAdHocExpense = prevMonth.adHocItems
-        .filter(i => i.type === "EXPENSE" && !i.ccTemplateId)
-        .reduce((s, i) => s + i.amount, 0);
-      // Credit-card cash-out during prevMonth = statement payments whose
-      // paidAt fell in that calendar month.
-      const prevStart = new Date(Date.UTC(prevYear, prevMonthNum - 1, 1));
-      const prevEnd = new Date(Date.UTC(prevYear, prevMonthNum, 1));
-      const prevStatements = await db.cardStatement.findMany({
-        where: { userId, paidAt: { gte: prevStart, lt: prevEnd } },
-        select: { paidAmount: true },
-      });
-      const prevCcPaid = prevStatements.reduce((s, r) => s + r.paidAmount, 0);
-      // prevMonth.openingBalance is frozen (never mutated after that month
-      // was populated) — carriedDebtPaid separately holds whatever real cash
-      // left during prevMonth to settle bills from before prevMonth, so it
-      // has to be subtracted here explicitly to keep the true cash total.
-      openingBalance = prevMonth.openingBalance + (prevIncome - prevPaid - prevAdHocExpense - prevCcPaid) - prevMonth.carriedDebtPaid;
-    }
 
     // Every write below is one atomic unit — a mid-way failure (timeout,
     // dropped connection) now rolls back entirely instead of leaving
@@ -129,11 +74,10 @@ export async function setupMonth(userId: string, month: number, year: number, sa
         });
       }
 
-      await tx.month.update({ where: { id: monthRecord.id }, data: { isPopulated: true, openingBalance } });
+      await tx.month.update({ where: { id: monthRecord.id }, data: { isPopulated: true } });
     }, { timeout: 15000 });
 
     monthRecord.isPopulated = true;
-    monthRecord.openingBalance = openingBalance;
   }
 
   return monthRecord;
