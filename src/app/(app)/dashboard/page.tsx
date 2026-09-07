@@ -6,6 +6,7 @@ import { setupMonth } from "@/lib/months/setup-month";
 import { redirect } from "next/navigation";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { getCardsOverview, getCardCycleExpenseByMonth } from "@/lib/cards-db";
+import { getCashBalance } from "@/lib/cash-balance";
 import { getCurrentMonthYear, prevMonthYear, nextMonthYear } from "@/lib/utils";
 import { isTemplateActiveInMonth } from "@/lib/loan-utils";
 import { chitMonthlyAmount } from "@/lib/entry-amount";
@@ -159,6 +160,7 @@ async function DashboardData({
         currentMonth={null}
         cards={null}
         ccMonth={null}
+        cashBalance={null}
         recentMonths={[]}
         ccTemplates={[]}
         customCategories={[]}
@@ -318,11 +320,19 @@ async function DashboardData({
     ? null
     : ccByMonth.byMonth.get(`${targetYear}-${targetMonth}`) ?? { total: 0, byCard: [] };
 
+  // Real-time cash: as of now for the current month, as of the last moment
+  // of the viewed month for a past one. See src/lib/cash-balance.ts.
+  const cashAsOf = isRealCurrentMonth
+    ? new Date()
+    : new Date(Date.UTC(targetYear, targetMonth, 1) - 1);
+  const cashBalance = await getCashBalance(userId, cashAsOf);
+
   return (
     <DashboardClient
       currentMonth={resolvedMonth ? JSON.parse(JSON.stringify(resolvedMonth)) : null}
       cards={isRealCurrentMonth ? JSON.parse(JSON.stringify(cards)) : null}
       ccMonth={ccMonth ? JSON.parse(JSON.stringify(ccMonth)) : null}
+      cashBalance={JSON.parse(JSON.stringify(cashBalance))}
       recentMonths={JSON.parse(JSON.stringify(recentMonths))}
       ccTemplates={JSON.parse(JSON.stringify(ccTemplates))}
       customCategories={customCategories}

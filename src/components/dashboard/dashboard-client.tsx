@@ -5,7 +5,7 @@ import { flushSync } from "react-dom";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { formatCurrency, formatMonthYear, getCategoryDisplay, getCategoryColor, getCategoryIcon, MONTHS, pendingAmountKicks, ordinal, EXPENSE_CATEGORIES } from "@/lib/utils";
-import { netAmount as _net, effectivePaid as _effectivePaid, isBillPending as _isBillPending, isPastDueDate, computeMetrics, computeMonthIncome, computeCashBalance, groupProjectedExpenses } from "@/lib/finance-utils";
+import { netAmount as _net, effectivePaid as _effectivePaid, isBillPending as _isBillPending, isPastDueDate, computeMetrics, computeMonthIncome, groupProjectedExpenses } from "@/lib/finance-utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -104,6 +104,11 @@ interface DashboardClientProps {
   cards: CardOverview[] | null;
   /** Read-only credit-card cost for the viewed month (statements that cut that month), for a past month. Null on the current or a projected month. */
   ccMonth: { total: number; byCard: { templateId: string; name: string; amount: number }[] } | null;
+  /** Real-time cash balance for the viewed month (as of now, or the month's end). Null on a projected month. See src/lib/cash-balance.ts. */
+  cashBalance: {
+    balance: number; anchorBalance: number; anchorAsOf: string;
+    incomeReceived: number; billsPaid: number; cardBillsPaid: number; oneOffSpend: number;
+  } | null;
   recentMonths: RecentMonthSummary[];
   ccTemplates: { id: string; name: string; statementDay: number | null; dueDateDay: number | null }[];
   customCategories: { id: string; name: string }[];
@@ -213,7 +218,7 @@ function net(e: EntryWithTemplate)                                              
 function effectivePaid(e: EntryWithTemplate)                                    { return _effectivePaid(e); }
 function isBillPending(e: EntryWithTemplate, isCurrent: boolean, day: number)   { return _isBillPending(e, isCurrent, day); }
 
-export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, recentMonths: initialRecentMonths, ccTemplates, customCategories, subCategorySuggestions, incomeTemplates, todayMonth, todayYear, targetMonth, targetYear, prevUrl, nextUrl, projectedIncome, projectedIncomeSources, projectedEntries, gmailStatus = "ok", carriedOverEntries: initialCarriedOver = [], settledCarryOverEntries = [] }: DashboardClientProps) {
+export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, cashBalance, recentMonths: initialRecentMonths, ccTemplates, customCategories, subCategorySuggestions, incomeTemplates, todayMonth, todayYear, targetMonth, targetYear, prevUrl, nextUrl, projectedIncome, projectedIncomeSources, projectedEntries, gmailStatus = "ok", carriedOverEntries: initialCarriedOver = [], settledCarryOverEntries = [] }: DashboardClientProps) {
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const viewMonth = targetMonth ?? todayMonth;
@@ -412,7 +417,7 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, re
   );
   const {
     totalCommitted, totalPaid, paidPercent,
-    recurringNonCC, cashPaid,
+    recurringNonCC,
   } = metrics;
   // metrics is always non-CC now. Cards feed the tiles as explicit figures
   // via ccView (current + past months); a projected month has no ccView and
@@ -422,18 +427,10 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, re
   const totalPending      = metrics.totalPending + (ccView?.totalOwed ?? 0);
   const pendingCount      = metrics.pendingCount + (ccView?.pendingCards ?? 0);
 
-  const openingBalance = currentMonth?.openingBalance ?? 0;
-  // Real cash paid this month toward a bill from an earlier month — kept
-  // separate from openingBalance (a frozen "what I started the month with"
-  // snapshot) so that snapshot never gets silently overwritten by a later
-  // payment. Still has to reduce the actual cash totals below.
-  const carriedDebtPaid = currentMonth?.carriedDebtPaid ?? 0;
-  // cashPaid is non-CC. A card's cash-out this month is what was actually
-  // paid against its statement (cc.cashThisMonth, via CardStatement.paidAt).
-  // Only the interactive current month has this; a past month's card cash
-  // is already baked into its frozen opening balance.
-  const ccPaidCash = cc ? cc.cashThisMonth : 0;
-  const inHandNow = computeCashBalance({ openingBalance, income: grandIncome, expense: cashPaid + adHocExpense + ccPaidCash, carriedDebtPaid });
+  // Real-time cash: the latest anchor before this instant, plus every dated
+  // inflow and outflow since (src/lib/cash-balance.ts). Computed server-side
+  // and passed in — no per-month frozen carry any more.
+  const inHandNow = cashBalance?.balance ?? 0;
 
   // Still-unpaid bills from earlier months are real pending money — they
   // belong in the headline Pending total, not just tucked away in their own
@@ -547,7 +544,7 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, re
       .reduce((s, e) => s + (_net(e) - _effectivePaid(e)), 0);
   }, [entries]);
 
-  const { fyIncome, fyExpenses, fyBalance, trendData } = useMemo(() => {
+  const { fyIncome, fyExpenses, fyBalanceEst, trendData } = useMemo(() => {
     const ccStatementDayById = new Map(ccTemplates.map(t => [t.id, t.statementDay]));
     const monthIncome = (m: typeof recentMonths[0]) =>
       computeMonthIncome(m.adHocItems, incomeTemplates, m.month, m.year, m.salaryIncome);
@@ -568,15 +565,15 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, re
       Income: monthIncome(m),
       Expenses: monthExpenses(m),
     }));
-    // recentMonths is ordered most-recent-first — the oldest month's
-    // openingBalance is this window's real starting cash position, so
-    // chaining forward from it (instead of a bare income-minus-expenses)
-    // keeps this "In hand"/"Deficit" figure consistent with the tiles
-    // above, which already account for carried-forward balance.
     const oldestMonth = recentMonths[recentMonths.length - 1];
-    const fyBalance = (oldestMonth?.openingBalance ?? 0) + fyIncome - fyExpenses;
-    return { fyIncome, fyExpenses, fyBalance, trendData };
+    const fyBalanceEst = (oldestMonth?.openingBalance ?? 0) + fyIncome - fyExpenses;
+    return { fyIncome, fyExpenses, fyBalanceEst, trendData };
   }, [recentMonths, incomeTemplates, ccTemplates, todayMonth, todayYear, todayDay]);
+
+  // The "In hand / Deficit" figure in the sidebar chart is the same number
+  // as the Cash/UPI Bal tile — the real-time balance when we have it, the
+  // 6-month estimate as a fallback (projected months).
+  const fyBalance = cashBalance ? inHandNow : fyBalanceEst;
 
   const { prevMonthName, expensesDelta } = useMemo(() => {
     const prev = [...recentMonths]
@@ -1129,8 +1126,8 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, re
             value: `${inHandNow < 0 ? "-" : ""}${fmt(Math.abs(inHandNow))}`,
             valueClass: inHandNow < 0 ? "text-negative" : "text-positive",
             onClick: () => setShowCashDrilldown(true),
-            hint: openingBalance !== 0
-              ? <span className="text-xs text-muted-foreground">{openingBalance > 0 ? "+" : "-"}{fmt(Math.abs(openingBalance))} carried over</span>
+            hint: cashBalance && cashBalance.anchorBalance !== 0
+              ? <span className="text-xs text-muted-foreground">from {fmt(cashBalance.anchorBalance)} on {format(new Date(cashBalance.anchorAsOf), "d MMM")}</span>
               : undefined,
           }] : []),
         ]}
@@ -1846,33 +1843,38 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, re
       <Dialog open={showCashDrilldown} onOpenChange={setShowCashDrilldown}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Cash/UPI Bal: {formatMonthYear(currentMonth?.month ?? viewMonth, currentMonth?.year ?? viewYear)}</DialogTitle>
+            <DialogTitle>Cash/UPI balance</DialogTitle>
           </DialogHeader>
+          {cashBalance ? (
           <div className="space-y-1.5 pt-1">
             <div className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
-              <span>Carried over from last month</span>
-              <span className={cn("font-semibold", openingBalance < 0 && "text-negative")}>
-                {openingBalance < 0 ? "-" : ""}{fmt(Math.abs(openingBalance))}
+              <span>Starting balance{cashBalance.anchorAsOf ? ` (${format(new Date(cashBalance.anchorAsOf), "d MMM yyyy")})` : ""}</span>
+              <span className={cn("font-semibold", cashBalance.anchorBalance < 0 && "text-negative")}>
+                {cashBalance.anchorBalance < 0 ? "-" : ""}{fmt(Math.abs(cashBalance.anchorBalance))}
               </span>
             </div>
             <div className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
-              <span>Earned this month</span>
-              <span className="font-semibold text-positive">+{fmt(grandIncome)}</span>
+              <span>Income received since</span>
+              <span className="font-semibold text-positive">+{fmt(cashBalance.incomeReceived)}</span>
             </div>
-            <div className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
-              <span>Paid out this month</span>
-              <span className="font-semibold text-negative">-{fmt(cashPaid + adHocExpense)}</span>
-            </div>
-            {ccPaidCash > 0 && (
+            {cashBalance.billsPaid !== 0 && (
               <div className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
-                <span>Paid toward card bills this month</span>
-                <span className="font-semibold text-negative">-{fmt(ccPaidCash)}</span>
+                <span>Bills paid</span>
+                <span className="font-semibold text-negative">-{fmt(cashBalance.billsPaid)}</span>
               </div>
             )}
-            {carriedDebtPaid > 0 && (
+            {cashBalance.cardBillsPaid !== 0 && (
               <div className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
-                <span>Paid toward old debts this month</span>
-                <span className="font-semibold text-negative">-{fmt(carriedDebtPaid)}</span>
+                <span>Card bills paid</span>
+                <span className="font-semibold text-negative">-{fmt(cashBalance.cardBillsPaid)}</span>
+              </div>
+            )}
+            {cashBalance.oneOffSpend !== 0 && (
+              <div className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
+                <span>{cashBalance.oneOffSpend > 0 ? "Other spending" : "Refunds"}</span>
+                <span className={cn("font-semibold", cashBalance.oneOffSpend > 0 ? "text-negative" : "text-positive")}>
+                  {cashBalance.oneOffSpend > 0 ? "-" : "+"}{fmt(Math.abs(cashBalance.oneOffSpend))}
+                </span>
               </div>
             )}
             <div className="flex items-center justify-between pt-2 border-t border-border">
@@ -1881,7 +1883,11 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, re
                 {inHandNow < 0 ? "-" : ""}{fmt(Math.abs(inHandNow))}
               </span>
             </div>
+            <p className="text-xs text-muted-foreground pt-1">Every recorded payment since your last reconcile. If it looks off, reconcile with your real balance.</p>
           </div>
+          ) : (
+            <p className="text-sm text-muted-foreground py-6 text-center">No cash data for this view.</p>
+          )}
         </DialogContent>
       </Dialog>
 
