@@ -212,26 +212,29 @@ describe("cardBillForMonth", () => {
     expect(r.amount).toBe(63931); // Aug only, Sep 2 charge is next cycle
   });
 
-  it("open cycle → projection floored at the trailing-median statement", () => {
-    // Aug/Jul/Jun each ~63000 by charges; Sep barely started
+  it("open cycle → only the charges booked into it so far, never guessed forward", () => {
+    // Big spend in Aug/Jul/Jun; the October bill's cycle (Sep) has barely started.
     const charges = [
       charge("2026-06-10", 62000), charge("2026-07-10", 64000), charge("2026-08-10", 63000),
       charge("2026-09-03", 1200),
     ];
-    // Sep 1 cut is closed by Sep 15; the *October* bill is the 1 Oct statement, still open.
     const r = cardBillForMonth(axis, [], charges, 10, 2026, new Date("2026-09-15"));
     expect(r.basis).toBe("projected");
-    expect(r.amount).toBe(63000); // median of [62000, 63000, 64000], not the ~0 booked so far
+    expect(r.amount).toBe(1200); // just what's on the Sep cycle so far, not last month's total
   });
 
-  it("open cycle where booked charges already exceed the median → use the higher figure", () => {
-    const charges = [
-      charge("2026-06-10", 20000), charge("2026-07-10", 22000), charge("2026-08-10", 21000),
-      charge("2026-09-05", 40000),
-    ];
-    const r = cardBillForMonth(axis, [], charges, 10, 2026, new Date("2026-09-20"));
+  it("cycle that hasn't started yet → 0", () => {
+    const charges = [charge("2026-08-10", 63000), charge("2026-09-10", 40000)];
+    // November bill = the 1 Nov statement, cycle [1 Oct, 1 Nov) — not started on 15 Sep
+    const r = cardBillForMonth(axis, [], charges, 11, 2026, new Date("2026-09-15"));
     expect(r.basis).toBe("projected");
-    expect(r.amount).toBe(40000);
+    expect(r.amount).toBe(0);
+  });
+
+  it("open cycle tracks up as charges land", () => {
+    const charges = [charge("2026-09-05", 12000), charge("2026-09-18", 8000)];
+    const r = cardBillForMonth(axis, [], charges, 10, 2026, new Date("2026-09-20"));
+    expect(r.amount).toBe(20000);
   });
 
   it("no statement day → nothing", () => {

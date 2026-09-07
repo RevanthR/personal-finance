@@ -297,7 +297,13 @@ export function YearOverviewClient({
                       : <span className="text-xs text-muted-foreground">from ₹0 at FY start</span>,
                   },
                   { label: "Income", value: fmt(totalIncome), valueClass: "text-positive" },
-                  { label: "Expenses", value: fmt(totalExpenses), valueClass: "text-negative" },
+                  {
+                    label: "Expenses", value: fmt(totalExpenses), valueClass: "text-negative",
+                    // Future-month card spend isn't guessed forward (see
+                    // cardBillForMonth), so this, and the year-end cash above,
+                    // are a best case that assumes no further card spend.
+                    hint: <span className="text-xs text-muted-foreground">card spend not projected</span>,
+                  },
                 ]}
               />
 

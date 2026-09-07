@@ -269,31 +269,6 @@ export type CardBillForMonth = {
   dueDate: Date | null;
 };
 
-/** Charge-sum of the last `count` closed cycles, as a lower-median. Robust to
- * sparse CardStatement rows (they only exist once confirmed/paid) by walking
- * cycles with date math and summing charges, preferring a confirmed row. */
-function trailingMedianCycle(
-  statements: CardStatementRow[],
-  charges: CardCharge[],
-  statementDay: number,
-  asOf: Date,
-  count = 4,
-): number {
-  const cycleOpen = currentCycleOpen(statementDay, asOf);
-  const amounts: number[] = [];
-  for (let k = 1; k <= count; k++) {
-    const end = statementDateFor(cycleOpen.getUTCFullYear(), cycleOpen.getUTCMonth() - (k - 1), statementDay);
-    const start = statementDateFor(cycleOpen.getUTCFullYear(), cycleOpen.getUTCMonth() - k, statementDay);
-    const row = statements.find(s => new Date(s.statementDate).getTime() === end.getTime());
-    const amt = row?.confirmedAt != null && row.statementBalance != null
-      ? row.statementBalance
-      : Math.max(0, sumBetween(charges, start, end));
-    if (amt > 0) amounts.push(amt);
-  }
-  amounts.sort((a, b) => a - b);
-  return amounts.length ? amounts[Math.floor((amounts.length - 1) / 2)] : 0;
-}
-
 /**
  * What a single card contributes to the bill due in calendar month
  * (month, year) — for ANY month, past or future. One rule, so the
@@ -301,9 +276,10 @@ function trailingMedianCycle(
  *
  *  - confirmed CardStatement for that cycle  → the bank figure, net of paid/cashback
  *  - cycle already closed, not confirmed     → sum of that cycle's charges (net of any recorded payment)
- *  - cycle still open or entirely future     → projection: charges booked so far, floored at the
- *                                              card's trailing-median statement so a barely-started
- *                                              cycle doesn't read as ~0
+ *  - cycle still open or entirely future     → only the charges booked into it so far (0 for a
+ *                                              cycle that hasn't started). Card spend is not a
+ *                                              fixed obligation — it's never guessed forward, it
+ *                                              just tracks up as real charges land.
  */
 export function cardBillForMonth(
   card: CardConfig,
@@ -341,12 +317,11 @@ export function cardBillForMonth(
     };
   }
 
-  // Open or future cycle: project.
+  // Open or future cycle: only what's actually been charged into it so far
+  // (nothing for a cycle that hasn't started). Never projected forward.
   const soFarEnd = asOf.getTime() > cycleStart.getTime()
     ? new Date(Math.min(asOf.getTime(), statementDate.getTime()))
     : cycleStart;
-  const soFar = Math.max(0, sumBetween(charges, cycleStart, soFarEnd));
-  const median = trailingMedianCycle(statements, charges, sd, asOf);
-  const amount = Math.round(Math.max(soFar, median) * 100) / 100;
-  return { amount, gross: amount, basis: "projected", statementDate, dueDate };
+  const soFar = Math.round(Math.max(0, sumBetween(charges, cycleStart, soFarEnd)) * 100) / 100;
+  return { amount: soFar, gross: soFar, basis: "projected", statementDate, dueDate };
 }
