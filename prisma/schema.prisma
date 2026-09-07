@@ -88,6 +88,10 @@ model User {
   // Lets closePushForUser skip sending anything when there's nothing to
   // close — see src/lib/push.ts.
   activePushTags       String[]        @default([])
+  // Day of the month salary lands. Used to date a month's income for the
+  // real-time cash balance (a month's salary isn't "cash on hand" until
+  // payday). Income templates can override with their own dueDateDay.
+  payDay            Int                @default(1)
   accounts          Account[]
   sessions          Session[]
   months            Month[]
@@ -106,6 +110,8 @@ model User {
   merchantCategoryMemories MerchantCategoryMemory[]
   geminiUsageLogs   GeminiUsageLog[]
   carriedDebtSettlements CarriedDebtSettlement[]
+  cashAnchors       CashAnchor[]
+  cashPayments      CashPayment[]
 }
 
 // User-defined expense categories, reused (not retyped) across templates
@@ -283,6 +289,8 @@ model MonthlyEntry {
   // and in cash-flow totals once the card itself gets paid off.
   billPaymentsAttributed Float @default(0)
 
+  cashPayments    CashPayment[]
+
   @@unique([monthId, templateId])
 }
 
@@ -377,8 +385,48 @@ model CardStatement {
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 
+  cashPayments     CashPayment[]
+
   @@unique([cardId, statementDate])
   @@index([userId])
+}
+
+// The per-payment cash ledger. One row per real payment event against a
+// recurring bill or a card statement — an un-pay or a partial reversal
+// records a negative row rather than deleting, so the ledger stays
+// append-only and cashAt(date) is just a running sum. MonthlyEntry and
+// CardStatement keep their own cumulative paidAmount/isPaid snapshot in
+// sync for display; this table is the source of truth for WHEN cash moved.
+// See src/lib/cash-balance.ts.
+model CashPayment {
+  id              String        @id @default(cuid())
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount          Float         // cash out; negative = reversal / partial un-pay
+  paidOn          DateTime
+  monthlyEntryId  String?
+  monthlyEntry    MonthlyEntry? @relation(fields: [monthlyEntryId], references: [id], onDelete: Cascade)
+  cardStatementId String?
+  cardStatement   CardStatement? @relation(fields: [cardStatementId], references: [id], onDelete: Cascade)
+  note            String?
+  createdAt       DateTime      @default(now())
+
+  @@index([userId, paidOn])
+}
+
+// "On this date I actually had ₹X in bank + wallet + UPI." The real-time
+// cash balance is this, plus every dated inflow, minus every dated outflow
+// since asOf. Re-anchoring (a new row at today) zeroes any accumulated
+// drift. History kept; the latest row before a given instant is the base.
+model CashAnchor {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balance   Float
+  asOf      DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId, asOf])
 }
 
 // One-off income or expense for a month
