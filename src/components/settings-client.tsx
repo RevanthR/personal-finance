@@ -7,9 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { SegmentedControl } from "@/components/ui/segmented-control";
-import { Bell, User, Sun, Moon, Monitor } from "lucide-react";
+import { Bell, User, Sun, Moon, Monitor, Wallet } from "lucide-react";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { formatCurrency, ordinal } from "@/lib/utils";
+import { format } from "date-fns";
 
 const APPEARANCE_OPTIONS = [
   { value: "light", label: "Light", icon: Sun },
@@ -55,9 +59,90 @@ function AppearanceCard() {
 
 interface SettingsClientProps {
   user: { name?: string | null; email?: string | null; image?: string | null; role?: string };
+  payDay: number;
+  cash: { balance: number; anchorBalance: number; anchorAsOf: string };
 }
 
-export function SettingsClient({ user }: SettingsClientProps) {
+function CashCard({ payDay, cash }: { payDay: number; cash: SettingsClientProps["cash"] }) {
+  const router = useRouter();
+  const [day, setDay] = useState(String(payDay));
+  const [savingDay, setSavingDay] = useState(false);
+  const [balanceInput, setBalanceInput] = useState("");
+  const [reconciling, setReconciling] = useState(false);
+
+  async function savePayDay() {
+    const n = parseInt(day, 10);
+    if (isNaN(n) || n < 1 || n > 31) { toast.error("Pay day must be 1–31"); return; }
+    setSavingDay(true);
+    const res = await fetch("/api/user", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ payDay: n }) });
+    setSavingDay(false);
+    if (!res.ok) { toast.error("Failed to save"); return; }
+    toast.success(`Salary lands on the ${ordinal(n)}`);
+    router.refresh();
+  }
+
+  async function reconcile() {
+    const v = parseFloat(balanceInput.replace(/,/g, ""));
+    if (isNaN(v)) { toast.error("Enter your current balance"); return; }
+    setReconciling(true);
+    const res = await fetch("/api/cash-anchor", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: v }) });
+    setReconciling(false);
+    if (!res.ok) { toast.error("Failed to reconcile"); return; }
+    setBalanceInput("");
+    toast.success("Cash balance set");
+    router.refresh();
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Wallet className="w-4 h-4" /> Cash &amp; income
+        </CardTitle>
+        <CardDescription>
+          The dashboard&apos;s Cash/UPI balance is your last reconciled figure plus every payment since.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div>
+          <p className="text-sm font-medium mb-1">Salary lands on</p>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">day</span>
+            <Input type="number" min={1} max={31} value={day} onChange={e => setDay(e.target.value)} className="w-20 h-9" />
+            <Button size="sm" variant="outline" onClick={savePayDay} disabled={savingDay || day === String(payDay)}>
+              {savingDay ? "Saving…" : "Save"}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">A month&apos;s income only counts as cash from this day.</p>
+        </div>
+
+        <div>
+          <p className="text-sm font-medium mb-1">Reconcile cash balance</p>
+          <p className="text-xs text-muted-foreground mb-2">
+            {cash.anchorBalance !== 0 || cash.anchorAsOf
+              ? <>Last set to {formatCurrency(cash.anchorBalance)} on {format(new Date(cash.anchorAsOf), "d MMM yyyy")}. </>
+              : null}
+            The app currently thinks you have <span className="font-medium text-foreground">{formatCurrency(cash.balance)}</span>.
+          </p>
+          <div className="flex items-center gap-2">
+            <Input
+              inputMode="decimal"
+              placeholder="Actual balance (bank + wallet + UPI)"
+              value={balanceInput}
+              onChange={e => setBalanceInput(e.target.value)}
+              className="h-9"
+            />
+            <Button size="sm" onClick={reconcile} disabled={reconciling || !balanceInput.trim()}>
+              {reconciling ? "Setting…" : "Set"}
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+export function SettingsClient({ user, payDay, cash }: SettingsClientProps) {
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
   const [testLoading, setTestLoading] = useState(false);
@@ -168,6 +253,8 @@ export function SettingsClient({ user }: SettingsClientProps) {
       </Card>
 
       <AppearanceCard />
+
+      <CashCard payDay={payDay} cash={cash} />
 
       {/* Push Notifications */}
       <Card>

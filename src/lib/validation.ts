@@ -26,6 +26,15 @@ export const zRole               = z.enum(["ADMIN","USER"]);
 export const zGmailSyncStatus     = z.enum(["NONE","REQUESTED","APPROVED"]);
 
 // ── Route schemas ─────────────────────────────────────────────────────────────
+// A reconcile can go negative (an overdraft), so not zMoney.
+export const CashAnchorSchema = z.object({
+  balance: z.number().finite().min(-100_000_000).max(100_000_000),
+});
+
+export const UserSettingsSchema = z.object({
+  payDay: zDay.optional(),
+});
+
 export const AdminPatchSchema = z.object({
   userId:          z.string().min(1),
   role:            zRole.optional(),

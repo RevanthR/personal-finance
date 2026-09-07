@@ -258,6 +258,9 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
   const [showCCSpendDrilldown, setShowCCSpendDrilldown] = useState(false);
   const [showExpenditureDrilldown, setShowExpenditureDrilldown] = useState(false);
   const [showCashDrilldown, setShowCashDrilldown] = useState(false);
+  const [reconcileOpen, setReconcileOpen] = useState(false);
+  const [reconcileInput, setReconcileInput] = useState("");
+  const [reconciling, setReconciling] = useState(false);
   // Payables (recurring bills + card dues, both action-oriented) vs Daily
   // Spend (browsing/logging ad-hoc transactions) — splitting these into
   // tabs instead of stacking every section on one long page.
@@ -917,6 +920,20 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
 
   function handleEditRequest(item: AdHocItem) {
     setEditingItem(item);
+  }
+
+  async function handleReconcile() {
+    const v = parseFloat(reconcileInput.replace(/,/g, ""));
+    if (isNaN(v)) { toast.error("Enter your current balance"); return; }
+    setReconciling(true);
+    const res = await fetch("/api/cash-anchor", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ balance: v }) });
+    setReconciling(false);
+    if (!res.ok) { toast.error("Failed to reconcile"); return; }
+    setReconcileOpen(false);
+    setReconcileInput("");
+    setShowCashDrilldown(false);
+    toast.success("Cash balance set");
+    router.refresh();
   }
 
   async function handleSetupMonth(salaryIncome: number) {
@@ -1883,7 +1900,19 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
                 {inHandNow < 0 ? "-" : ""}{fmt(Math.abs(inHandNow))}
               </span>
             </div>
-            <p className="text-xs text-muted-foreground pt-1">Every recorded payment since your last reconcile. If it looks off, reconcile with your real balance.</p>
+            {isCurrentMonth && (reconcileOpen ? (
+              <div className="pt-2 space-y-2">
+                <p className="text-xs text-muted-foreground">How much do you actually have right now (bank + wallet + UPI)?</p>
+                <div className="flex items-center gap-2">
+                  <Input inputMode="decimal" placeholder="Actual balance" value={reconcileInput} onChange={e => setReconcileInput(e.target.value)} className="h-9" autoFocus />
+                  <Button size="sm" onClick={handleReconcile} disabled={reconciling || !reconcileInput.trim()}>{reconciling ? "…" : "Set"}</Button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={() => setReconcileOpen(true)} className="text-xs text-primary pt-1 hover:underline">
+                Looks off? Reconcile with your real balance
+              </button>
+            ))}
           </div>
           ) : (
             <p className="text-sm text-muted-foreground py-6 text-center">No cash data for this view.</p>
