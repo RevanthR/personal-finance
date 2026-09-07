@@ -6,6 +6,7 @@ import { validate, AdHocPostSchema, AdHocPatchSchema } from "@/lib/validation";
 import { resolveCustomCategory } from "@/lib/custom-category";
 import { resolveSubCategory } from "@/lib/sub-category";
 import { resolveMonthForDate } from "@/lib/months/resolve-month";
+import { adHocDate } from "@/lib/utils";
 
 // A CC charge is just an AdHocItem tagged with ccTemplateId — the card's
 // bill is derived from those rows + CardStatement (src/lib/cards.ts), never
@@ -58,7 +59,7 @@ export async function POST(
     ? await resolveSubCategory(userId, { category: resolvedCategory ?? null, customCategoryId: customCat?.id ?? null }, body.subCategory)
     : null;
 
-  const date = new Date(body.date);
+  const date = adHocDate(body.date);
   // A date outside the viewed month files this under the month it actually
   // belongs to instead of blindly attaching it to whatever's in the URL —
   // see resolveMonthForDate for why that month has to already exist.
@@ -119,7 +120,7 @@ export async function PATCH(
   // Resolve the next value of every field — provided value wins, else keep existing.
   const nextName     = body.name ?? existing.name;
   const nextAmount   = body.amount ?? existing.amount;
-  const nextDate     = body.date ? new Date(body.date) : existing.date;
+  const nextDate     = body.date ? adHocDate(body.date) : existing.date;
   const nextNotes    = body.notes !== undefined ? body.notes : existing.notes;
   const nextCCTemplateId = body.ccTemplateId !== undefined
     ? (body.ccTemplateId || null)

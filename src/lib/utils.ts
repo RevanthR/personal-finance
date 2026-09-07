@@ -42,6 +42,21 @@ export function getCurrentMonthYear(): { month: number; year: number } {
   return { month: now.getMonth() + 1, year: now.getFullYear() };
 }
 
+// Stored date for an ad-hoc item. A date-only string ("2026-09-07") parses
+// to UTC midnight, which sorts *before* a same-day cash reconcile or bill
+// payment (both stamped at a precise instant) — the cash-balance window
+// (src/lib/cash-balance.ts) would then drop a "today" expense the user just
+// added right after reconciling. So when the picked day is today, stamp the
+// real current instant; a backdated or future day keeps its plain midnight.
+export function adHocDate(dateStr: string): Date {
+  const picked = new Date(dateStr);
+  const now = new Date();
+  const isToday = picked.getUTCFullYear() === now.getUTCFullYear()
+    && picked.getUTCMonth() === now.getUTCMonth()
+    && picked.getUTCDate() === now.getUTCDate();
+  return isToday ? now : picked;
+}
+
 // month/year rollover — this exact `month === 1 ? 12 : month - 1` (and its
 // `=== 12` mirror) was independently copy-pasted into setup-month.ts,
 // templates/route.ts, chits/[chitId]/route.ts, and both dashboard page.tsx

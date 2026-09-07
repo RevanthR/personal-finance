@@ -802,6 +802,7 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
       ));
       toast.success(`Added to ${formatMonthYear(movedToMonth.month, movedToMonth.year)}, that's the entry's real month`);
       setShowAdHoc(false);
+      router.refresh(); // Cash/UPI tile is server-derived from the ledger
       return;
     }
 
@@ -821,6 +822,7 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
     ));
     toast.success("Added");
     setShowAdHoc(false);
+    router.refresh(); // Cash/UPI tile is server-derived from the ledger
   }
 
   async function handleAdHocDelete(id: string) {
@@ -855,6 +857,7 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
     ));
     setRemovingIds(prev => { const next = new Set(prev); next.delete(id); return next; });
     toast.success("Removed");
+    router.refresh(); // Cash/UPI tile is server-derived from the ledger
   }
 
   async function handleAdHocEdit(id: string, fields: AdHocSubmitFields) {
@@ -894,6 +897,7 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
       }));
       toast.success(`Moved to ${formatMonthYear(movedToMonth.month, movedToMonth.year)}, that's the entry's real month`);
       setEditingItem(null);
+      router.refresh(); // Cash/UPI tile is server-derived from the ledger
       return;
     }
     setRecentMonths(prev => prev.map(m =>
@@ -903,6 +907,7 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
     ));
     toast.success("Updated");
     setEditingItem(null);
+    router.refresh(); // Cash/UPI tile is server-derived from the ledger
   }
 
   function handleEditRequest(item: AdHocItem) {
