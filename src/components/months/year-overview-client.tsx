@@ -4,7 +4,6 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useState } from "react";
 import { formatCurrency, cn, MONTHS } from "@/lib/utils";
-import { computeCashBalance } from "@/lib/finance-utils";
 import { usePrivacy } from "@/contexts/privacy-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
@@ -100,12 +99,6 @@ export type MonthData = {
   year: number;
   income: number;
   expenses: number;
-  // Cash view for the ending-balance calc below — distinct from `expenses`
-  // (committed spend, used for the "saved/deficit" per-month figure and
-  // the Expenses tile), since a bill settled via a card doesn't move cash
-  // until that card's own bill is paid off. See finance-utils.ts's
-  // cashEntryAmount.
-  cashExpenses: number;
   ccTotal: number;
   ccByCard: { templateId: string; name: string; amount: number }[];
   balance: number;
@@ -142,16 +135,14 @@ type InsightData = {
 export function YearOverviewClient({
   months,
   fyKey,
-  fyOpeningBalance = 0,
-  carriedDebtPaid = 0,
+  fyStartCash = 0,
   pastFYSummaries = [],
   currentMonthInsights = null,
   analyticsData,
 }: {
   months: MonthData[];
   fyKey: string;
-  fyOpeningBalance?: number;
-  carriedDebtPaid?: number;
+  fyStartCash?: number;
   pastFYSummaries?: PastFY[];
   currentMonthInsights?: InsightData;
   analyticsData?: AnalyticsData;
@@ -160,19 +151,11 @@ export function YearOverviewClient({
   const { hidden } = usePrivacy();
   const fmt = (v: number) => hidden ? "••••" : formatCurrency(v);
   const totalIncome   = months.reduce((s, m) => s + m.income, 0);
-  // The "Projected full year" card is a CASH view: opening cash + income −
-  // cash out. cashExpenses is the cash-basis monthly spend; carriedDebtPaid
-  // is anything paid this year toward an older carried-over bill.
-  const totalCashExpenses = months.reduce((s, m) => s + m.cashExpenses, 0);
-  const yearEndBalance = computeCashBalance({
-    openingBalance: fyOpeningBalance,
-    income: totalIncome,
-    expense: totalCashExpenses,
-    carriedDebtPaid,
-  });
-  // Shown as the card's own "Cash out" stat, derived so the three numbers
-  // bridge exactly: Year-end cash = opening cash + Income − Cash out.
-  const totalCashOut = fyOpeningBalance + totalIncome - yearEndBalance;
+  const totalExpenses = months.reduce((s, m) => s + m.expenses, 0);
+  // "Projected full year" is a true ending-balance: the real cash on hand
+  // the moment this FY began, plus the FY's whole net. The three stats
+  // bridge exactly (Year-end cash = FY-start cash + Income − Expenses).
+  const yearEndBalance = fyStartCash + totalIncome - totalExpenses;
   const actualCount   = months.filter(m => m.isPopulated).length;
   const projCount     = 12 - actualCount;
 
@@ -304,19 +287,17 @@ export function YearOverviewClient({
                 tag="Projected full year"
                 stats={[
                   {
-                    // A cash view: opening cash + Income − Cash out. The two
-                    // stats beside it are the cash-basis in/out, so the
-                    // three numbers bridge exactly (unlike the accrual
-                    // Income/Expenses on the YTD and rest-of-year cards).
+                    // FY-start cash + Income − Expenses, so the three stats
+                    // bridge exactly.
                     label: "Year-end cash",
                     value: `${yearEndBalance >= 0 ? "+" : "−"}${fmt(Math.abs(yearEndBalance))}`,
                     valueClass: yearEndBalance >= 0 ? "text-positive" : "text-negative",
-                    hint: fyOpeningBalance !== 0
-                      ? <span className="text-xs text-muted-foreground">{fyOpeningBalance > 0 ? "+" : "−"}{fmt(Math.abs(fyOpeningBalance))} opening cash</span>
-                      : <span className="text-xs text-muted-foreground">cash basis</span>,
+                    hint: fyStartCash !== 0
+                      ? <span className="text-xs text-muted-foreground">{fyStartCash > 0 ? "+" : "−"}{fmt(Math.abs(fyStartCash))} cash at FY start</span>
+                      : <span className="text-xs text-muted-foreground">from ₹0 at FY start</span>,
                   },
                   { label: "Income", value: fmt(totalIncome), valueClass: "text-positive" },
-                  { label: "Cash out", value: fmt(totalCashOut), valueClass: "text-negative" },
+                  { label: "Expenses", value: fmt(totalExpenses), valueClass: "text-negative" },
                 ]}
               />
 

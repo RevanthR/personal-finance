@@ -5,7 +5,8 @@ import { redirect } from "next/navigation";
 import { isTemplateActiveInMonth, computeLoanAmortization, computeLoanEndDate, type LoanAmortization } from "@/lib/loan-utils";
 import { chitMonthlyAmount } from "@/lib/entry-amount";
 import { getCardCycleExpenseByMonth } from "@/lib/cards-db";
-import { computeMonthIncome, effectiveEntryAmount, cashEntryAmount, isBillPending, isPastDueDate, netAmount, effectivePaid, type EntryBase } from "@/lib/finance-utils";
+import { getCashBalance } from "@/lib/cash-balance";
+import { computeMonthIncome, effectiveEntryAmount, isBillPending, isPastDueDate, netAmount, effectivePaid, type EntryBase } from "@/lib/finance-utils";
 
 const isCC = (e: { template: { category: string } }) => e.template.category === "CREDIT_CARD";
 import { YearOverviewClient, type MonthData } from "@/components/months/year-overview-client";
@@ -116,9 +117,6 @@ export default async function MonthsPage() {
   function entryExpense(e: EntryBase, isCurrentM: boolean): number {
     return isCC(e) ? 0 : effectiveEntryAmount(e, isCurrentM, todayDay);
   }
-  function entryCash(e: EntryBase, isCurrentM: boolean): number {
-    return isCC(e) ? 0 : cashEntryAmount(e, isCurrentM, todayDay);
-  }
   function entryNet(e: { template: { category: string }; amount: number; cashbackAmount: number | null }): number {
     return isCC(e) ? 0 : netAmount(e);
   }
@@ -162,14 +160,8 @@ export default async function MonthsPage() {
       const expenses = nonCcEntries.reduce((s, e) => s + entryExpense(e, isCurrentM), 0)
         + actual.adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0)
         + cc.total;
-      // Cash view for the year's ending balance. A card statement counts as
-      // cash out in the month it was cut (close enough for an FY-level
-      // ending balance; the exact pay date is tracked per statement).
-      const cashExpenses = nonCcEntries.reduce((s, e) => s + entryCash(e, isCurrentM), 0)
-        + actual.adHocItems.filter(i => i.type === "EXPENSE" && !i.ccTemplateId).reduce((s, i) => s + i.amount, 0)
-        + cc.total;
       return {
-        id: actual.id, month, year, income, expenses, cashExpenses, ccTotal: cc.total, ccByCard: cc.byCard,
+        id: actual.id, month, year, income, expenses, ccTotal: cc.total, ccByCard: cc.byCard,
         balance: income - expenses,
         paid: nonCcEntries.filter(e => e.isPaid).length,
         total: nonCcEntries.length,
@@ -218,7 +210,7 @@ export default async function MonthsPage() {
 
     return {
       id: null, month, year,
-      income: projIncome, expenses: projExpenses, cashExpenses: projExpenses, ccTotal: projCCTotal, ccByCard: projCCByCard,
+      income: projIncome, expenses: projExpenses, ccTotal: projCCTotal, ccByCard: projCCByCard,
       balance: projIncome - projExpenses,
       paid: null, total: null,
       isPopulated: false,
@@ -724,23 +716,16 @@ export default async function MonthsPage() {
     currentMonthlyCommitted, resolvableMonthlyCommitted, openEndedMonthlyCommitted, reliefMilestones,
   };
 
-  // The FY's real starting cash position (April's carried-forward balance)
-  // — "projected year-end" below is a true ending-balance figure (starting
-  // cash + this FY's full net), not just an isolated income-minus-expenses,
-  // so it doesn't silently disagree with the dashboard's own balance.
-  const aprilMonth = allMonths.find(m => m.month === 4 && m.year === fyStart);
-  const fyOpeningBalance = aprilMonth?.openingBalance ?? 0;
-  // Real cash paid this month toward an older bill (see Month.carriedDebtPaid)
-  // — subtracted from the FY-level ending cash the same way the dashboard's
-  // own balance figures subtract it, so the two never disagree.
-  const carriedDebtPaidThisFY = currentMonthFull?.carriedDebtPaid ?? 0;
+  // The FY's real starting cash position — the actual cash balance the
+  // moment before this FY began. "Projected year-end" is that plus the
+  // FY's full accrual net, so it stays a true ending-balance figure.
+  const fyStartCash = (await getCashBalance(userId, new Date(Date.UTC(fyStart, 3, 1) - 1))).balance;
 
   return (
     <YearOverviewClient
       months={JSON.parse(JSON.stringify(currentFYMonths))}
       fyKey={fyKey}
-      fyOpeningBalance={fyOpeningBalance}
-      carriedDebtPaid={carriedDebtPaidThisFY}
+      fyStartCash={fyStartCash}
       pastFYSummaries={pastFYSummaries}
       currentMonthInsights={JSON.parse(JSON.stringify(currentMonthInsights))}
       analyticsData={JSON.parse(JSON.stringify(analyticsData))}
