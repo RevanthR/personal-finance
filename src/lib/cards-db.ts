@@ -104,11 +104,14 @@ export type CardBillLine = { templateId: string; name: string; amount: number; b
 export type MonthlyCardBills = { total: number; byCard: CardBillLine[] };
 
 /**
- * Credit-card bill per calendar month, for a requested set of months (past,
- * current or future). A card's bill for month M is the statement due in M
- * (see cardBillForMonth): the confirmed bank figure, the closed cycle's
- * charge sum, or a projection for a cycle that hasn't closed. Every screen
- * that shows "what the cards cost in month M" reads this — one rule.
+ * What the credit cards cost per calendar month, for a requested set of
+ * months (past, current or future). A card's cost in month M is the
+ * statement due in M (see cardBillForMonth): the confirmed bank figure, the
+ * closed cycle's charge sum, or a projection for a cycle that hasn't
+ * closed. This is the GROSS billed figure (a spend/cost view) — payments
+ * made against it don't reduce it; "what's still owed right now" is a
+ * separate question that cardStatus() answers for the live month.
+ * Every screen that shows "what the cards cost in month M" reads this.
  */
 export async function getCardBillsByMonth(
   userId: string,
@@ -162,9 +165,9 @@ export async function getCardBillsByMonth(
         chargesByCard.get(card.templateId) ?? [],
         month, year, asOf,
       );
-      if (bill.amount <= 0) continue;
-      byCard.push({ templateId: card.template.id, name: card.template.name, amount: bill.amount, basis: bill.basis });
-      total = Math.round((total + bill.amount) * 100) / 100;
+      if (bill.gross <= 0) continue;
+      byCard.push({ templateId: card.template.id, name: card.template.name, amount: bill.gross, basis: bill.basis });
+      total = Math.round((total + bill.gross) * 100) / 100;
     }
     byCard.sort((a, b) => b.amount - a.amount);
     out.set(`${year}-${month}`, { total, byCard });
