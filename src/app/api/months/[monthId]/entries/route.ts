@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { validate, EntryPatchSchema } from "@/lib/validation";
 import { computePaymentUpdate } from "@/lib/entry-payment";
 import { effectivePaid } from "@/lib/finance-utils";
+import { recordEntryCashDelta } from "@/lib/cash-payment";
 import { getCurrentMonthYear } from "@/lib/utils";
 import { closePushForUser, PAYMENT_REMINDER_PUSH_TAG } from "@/lib/push";
 
@@ -80,6 +81,11 @@ export async function PATCH(
         where: { userId: session.user.id, month: entry.month.month, year: entry.month.year },
         data: { carriedDebtPaid: { increment: pay } },
       });
+      // Cash ledger: this branch moves `pay` out today without touching
+      // paidAmount, so record it directly rather than via a before/after delta.
+      await tx.cashPayment.create({
+        data: { userId: session.user.id, monthlyEntryId: entryId, amount: pay, paidOn: new Date(), note: "carried" },
+      });
       return updatedEntry;
     });
 
@@ -129,6 +135,15 @@ export async function PATCH(
       },
       include: { template: true },
     });
+
+    // Cash ledger: one row for the change in this bill's cash-paid total.
+    await recordEntryCashDelta(
+      tx,
+      session.user.id,
+      entryId,
+      { amount: entry.amount, cashbackAmount: entry.cashbackAmount, isPaid: entry.isPaid, paidAmount: entry.paidAmount, paidViaCardTemplateId: entry.paidViaCardTemplateId },
+      { amount: updatedEntry.amount, cashbackAmount: updatedEntry.cashbackAmount, isPaid: updatedEntry.isPaid, paidAmount: updatedEntry.paidAmount, paidViaCardTemplateId: updatedEntry.paidViaCardTemplateId },
+    );
 
     // If this is an unlifted chit fund, accumulate savings
     if (updatedEntry.isPaid && updatedEntry.template.category === "CHIT_FUND") {

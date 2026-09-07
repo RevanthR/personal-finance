@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { validate, zMoney } from "@/lib/validation";
 import { ensureCurrentStatement, getCardsOverview } from "@/lib/cards-db";
+import { recordCardCashDelta } from "@/lib/cash-payment";
 import { closePushForUser, PAYMENT_REMINDER_PUSH_TAG } from "@/lib/push";
 import { revalidatePath } from "next/cache";
 
@@ -49,19 +50,26 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ car
     if (!stmt) throw new Error("no cycle to pay");
 
     if (unpay) {
-      return tx.cardStatement.update({ where: { id: stmt.id }, data: { paidAmount: 0, paidInFull: false, paidAt: null } });
+      const r = await tx.cardStatement.update({ where: { id: stmt.id }, data: { paidAmount: 0, paidInFull: false, paidAt: null } });
+      await recordCardCashDelta(tx, userId, stmt.id, stmt.paidAmount, 0);
+      return r;
     }
     if (full) {
-      return tx.cardStatement.update({
+      const newPaid = stmt.paidAmount + remaining;
+      const r = await tx.cardStatement.update({
         where: { id: stmt.id },
-        data: { paidAmount: stmt.paidAmount + remaining, paidInFull: true, paidAt: new Date() },
+        data: { paidAmount: newPaid, paidInFull: true, paidAt: new Date() },
       });
+      await recordCardCashDelta(tx, userId, stmt.id, stmt.paidAmount, newPaid);
+      return r;
     }
     const newPaid = stmt.paidAmount + (amount ?? 0);
-    return tx.cardStatement.update({
+    const r = await tx.cardStatement.update({
       where: { id: stmt.id },
       data: { paidAmount: newPaid, paidInFull: newPaid + stmt.cashback >= gross - 0.5, paidAt: new Date() },
     });
+    await recordCardCashDelta(tx, userId, stmt.id, stmt.paidAmount, newPaid);
+    return r;
   });
 
   revalidatePath("/cards");

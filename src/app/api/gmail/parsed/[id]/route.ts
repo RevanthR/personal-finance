@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { validate, ParsedTransactionPatchSchema } from "@/lib/validation";
 import { ensureCurrentStatement, getCardsOverview } from "@/lib/cards-db";
+import { recordEntryCashDelta, recordCardCashDelta } from "@/lib/cash-payment";
 import { resolveCustomCategory } from "@/lib/custom-category";
 import { resolveSubCategory } from "@/lib/sub-category";
 import { rememberMerchantCategory } from "@/lib/merchant-memory";
@@ -77,6 +78,7 @@ export async function PATCH(
           where: { id: stmt.id },
           data: { paidAmount: newPaid, paidInFull: clearsIt, paidAt: new Date() },
         });
+        await recordCardCashDelta(tx, userId, stmt.id, stmt.paidAmount, newPaid);
         await tx.parsedTransaction.update({ where: { id }, data: { status: "APPROVED" } });
       });
 
@@ -91,6 +93,7 @@ export async function PATCH(
       where: { id: body.entryId, month: { userId } },
       select: {
         id: true, templateId: true, amount: true, cashbackAmount: true, paidAmount: true, isPaid: true,
+        paidViaCardTemplateId: true,
         month: { select: { id: true, month: true, year: true } },
       },
     });
@@ -106,6 +109,11 @@ export async function PATCH(
         where: { id: entry.id },
         data: computePaymentUpdate(netAmount, newPaidAmount),
       });
+      await recordEntryCashDelta(
+        tx, userId, entry.id,
+        { amount: entry.amount, cashbackAmount: entry.cashbackAmount, isPaid: entry.isPaid, paidAmount: entry.paidAmount, paidViaCardTemplateId: entry.paidViaCardTemplateId },
+        { amount: updatedEntry.amount, cashbackAmount: updatedEntry.cashbackAmount, isPaid: updatedEntry.isPaid, paidAmount: updatedEntry.paidAmount, paidViaCardTemplateId: updatedEntry.paidViaCardTemplateId },
+      );
       await tx.parsedTransaction.update({ where: { id }, data: { status: "APPROVED" } });
       return updatedEntry;
     });
