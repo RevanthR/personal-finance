@@ -330,9 +330,15 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
     let owed = 0, pastDue = 0, unbilled = 0, cashThisMonth = 0, pendingCards = 0;
+    // billed = this cycle's full statement (0 until it closes); settled = the
+    // part of it already covered by a payment or cashback. billed - settled
+    // === owed, so paid + pending reconcile against the same figure.
+    let billed = 0, settled = 0;
     for (const c of cards) {
       if (!c.isActive) continue;
       owed += c.status.statementBalance;
+      billed += c.status.statementGross;
+      settled += Math.max(0, c.status.statementGross - c.status.statementBalance);
       pastDue += c.status.pastDue;
       unbilled += c.status.unbilledSpends;
       cashThisMonth += cardCashPaidBetween(c.statements, monthStart, monthEnd);
@@ -340,6 +346,7 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
     }
     return {
       owed: Math.round(owed), pastDue: Math.round(pastDue), unbilled: Math.round(unbilled),
+      billed: Math.round(billed), settled: Math.round(settled),
       cashThisMonth: Math.round(cashThisMonth), pendingCards,
       totalOwed: Math.round(owed + pastDue),
     };
@@ -363,7 +370,7 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
         }))
         .filter(c => c.owed > 0 || c.unbilled > 0)
         .sort((a, b) => b.owed - a.owed);
-      return { lines, owed: cc.owed, totalOwed: cc.totalOwed, unbilled: cc.unbilled, pendingCards: cc.pendingCards };
+      return { lines, owed: cc.owed, totalOwed: cc.totalOwed, unbilled: cc.unbilled, pendingCards: cc.pendingCards, billed: cc.billed, settled: cc.settled, pastDue: cc.pastDue };
     }
     if (ccMonth) {
       const lines = ccMonth.byCard
@@ -371,7 +378,9 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
         .filter(c => c.owed > 0)
         .sort((a, b) => b.owed - a.owed);
       const total = Math.round(ccMonth.total);
-      return { lines, owed: total, totalOwed: total, unbilled: 0, pendingCards: lines.length };
+      // A past month is closed: treat the billed figure as fully settled so
+      // the progress bar reads that month as done rather than half-paid.
+      return { lines, owed: total, totalOwed: total, unbilled: 0, pendingCards: lines.length, billed: total, settled: total, pastDue: 0 };
     }
     return null;
   }, [cards, cc, ccMonth]);
@@ -414,7 +423,7 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
 
   // Single-pass metric computation via shared finance-utils (non-CC bills).
   const metrics = useMemo(() => computeMetrics(entries), [entries]);
-  const { totalCommitted, totalPaid, paidPercent } = metrics;
+  const { totalCommitted, totalPaid } = metrics;
   // metrics carries only non-CC recurring bills, so committed IS the
   // non-CC recurring figure.
   const recurringNonCC = totalCommitted;
@@ -443,13 +452,6 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
   );
   const totalPendingWithCarryOver = totalPending + carriedOverPending;
 
-  // Old debt actually paid off during the month being viewed — real cash
-  // out this cycle, even though the bill itself belongs to an earlier
-  // month. Belongs in Payables alongside this month's own bills.
-  const settledCarryOverTotal = useMemo(
-    () => settledCarryOverEntries.reduce((s, e) => s + e.amount, 0),
-    [settledCarryOverEntries]
-  );
 
   type GroupedItem =
     | { kind: "entry"; data: EntryWithTemplate }
@@ -596,12 +598,28 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
   const committedInclCC = totalCommitted + (ccView?.totalOwed ?? 0);
   const variableAmount = committedInclCC - fixedAmount + adHocExpense;
 
+  // ── This month's obligations, one consistent basis ─────────────────────
+  // Everything gross (before payments): recurring bills + THIS cycle's card
+  // statement + one-off spend. billed - settled === owed on the card side,
+  // so monthPaid + monthPending === monthBills always, and the progress
+  // bar's three numbers reconcile. Carried debt / past due is NOT here (not
+  // this month's bill) — it rides in pendingAll below and its own subtext.
+  const cardBilled  = isProjected ? 0 : (ccView?.billed ?? 0);
+  const cardSettled = isProjected ? 0 : (ccView?.settled ?? 0);
+  const monthBills   = Math.round(totalCommitted + cardBilled + adHocExpense);
+  const monthPaid    = Math.round(totalPaid + cardSettled + adHocExpense);
+  const monthPending = Math.max(0, monthBills - monthPaid);
+  const monthPct     = monthBills > 0 ? Math.min(100, Math.round((monthPaid / monthBills) * 100)) : 0;
+  // Income not already spent this month. Bills still to pay above this line
+  // (see subtexts below) are the real "can I still cover it" gap.
+  const incomeLeft   = grandIncome - monthPaid;
+
   // Projected-mode display overrides — shadow the actual values when viewing a future month
   const dispIncome          = isProjected ? (projectedIncome ?? 0) : grandIncome;
   const dispCommitted       = isProjected ? projEntries.reduce((s, e) => s + e.amount, 0) : committedInclCC;
   const dispAdHoc           = isProjected ? 0 : adHocExpense;
-  const dispPaidPct         = isProjected ? 0 : paidPercent;
-  const dispPending         = isProjected ? dispCommitted : totalPending;
+  const dispPaidPct         = isProjected ? 0 : monthPct;
+  const dispPending         = isProjected ? dispCommitted : monthPending;
   const dispFixed           = isProjected ? projEntries.filter(e => e.isFixed).reduce((s, e) => s + e.amount, 0) : fixedAmount;
   const dispVariable        = isProjected ? (dispCommitted - dispFixed) : variableAmount;
   const dispSavings         = dispIncome > 0 ? Math.round(((dispIncome - dispCommitted - dispAdHoc) / dispIncome) * 100) : 0;
@@ -1093,12 +1111,15 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
           },
           {
             label: "Payables",
-            value: fmt(dispCommitted + dispAdHoc + (isProjected ? 0 : settledCarryOverTotal)),
+            // This month's own bills only, one gross basis (recurring + this
+            // cycle's card statement + one-off). Old debt paid this month is
+            // shown in the drilldown, not folded into the headline.
+            value: isProjected ? fmt(dispCommitted + dispAdHoc) : fmt(monthBills),
             onClick: () => setShowExpenditureDrilldown(true),
             hint: (() => {
-              const payableTotal = dispCommitted + dispAdHoc + (isProjected ? 0 : settledCarryOverTotal);
-              return payableTotal > dispIncome
-                ? <span className="text-xs text-negative">{fmt(payableTotal - dispIncome)} over income</span>
+              const bills = isProjected ? (dispCommitted + dispAdHoc) : monthBills;
+              return bills > dispIncome
+                ? <span className="text-xs text-negative">{fmt(bills - dispIncome)} over income</span>
                 : undefined;
             })(),
           },
@@ -1123,8 +1144,10 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
             onClick: () => setShowPendingDrilldown(true),
             hint: isProjected
               ? <span className="text-xs text-muted-foreground">projected</span>
-              : totalPendingWithCarryOver > grandIncome
-                ? <span className="text-xs text-negative">{fmt(totalPendingWithCarryOver - grandIncome)} over income</span>
+              // Can you still cover what's left from income you haven't
+              // already spent this month? (incomeLeft = income − paid so far)
+              : totalPendingWithCarryOver > incomeLeft
+                ? <span className="text-xs text-negative">{fmt(totalPendingWithCarryOver - Math.max(0, incomeLeft))} short</span>
                 : undefined,
           },
           ...(!isProjected ? [{
@@ -1139,12 +1162,15 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
         ]}
       />
 
-      {/* Progress — recurring + CC bill this month */}
+      {/* Progress — this month's bills (recurring + this cycle's card
+          statement + one-off), one basis so Paid + Pending == the total and
+          the % matches the fill. Carried debt / past due sits in the
+          Pending tile, not here. */}
       <div className="space-y-1.5">
         <div className="flex justify-between text-xs text-muted-foreground">
-          <span>{isProjected ? "Paid: none" : `Paid ${fmt(totalPaid)}`}</span>
+          <span>{isProjected ? "Paid: none" : `Paid ${fmt(monthPaid)}`}</span>
           <span className="font-semibold text-foreground">{hidden ? "••%" : `${dispPaidPct}%`}</span>
-          <span>{isProjected ? `Projected ${fmt(dispPending)}` : `Pending ${fmt(Math.max(0, totalPending))}`}</span>
+          <span>{isProjected ? `Projected ${fmt(dispPending)}` : `Pending ${fmt(monthPending)}`}</span>
         </div>
         <Progress value={hidden ? 0 : dispPaidPct} className="h-1.5" />
       </div>
@@ -1779,7 +1805,7 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
               <ProjectedBreakdownBody data={projectedBreakdown} month={viewMonth} year={viewYear} fmt={fmt} />
             ) : (
             <>
-            <p className="text-xs text-muted-foreground">This month&apos;s own bills, plus any older debt actually paid off this month.</p>
+            <p className="text-xs text-muted-foreground">This month&apos;s own bills: recurring, this cycle&apos;s card statement, and one-off spends. Old debt paid this month is listed below the total, not in it.</p>
 
             {/* Recurring is already fully itemized in the Payables tab —
                 a summary line here is enough, no need to repeat it. */}
@@ -1788,20 +1814,13 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
               <span className="font-semibold">{fmt(dispRecurringNonCC)}</span>
             </div>
 
-            {/* Credit cards and one-time spends aren't listed anywhere else
-                this compactly, so show the actual items, not just a total. */}
-            {(ccView?.lines ?? []).filter(c => c.owed > 0).length > 0 && (
-              <div className="space-y-1.5">
-                <p className="fin-label">Credit cards</p>
-                {(ccView?.lines ?? []).filter(c => c.owed > 0).map(c => (
-                  <div key={c.templateId} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
-                    <div className="min-w-0">
-                      <span className="truncate">{c.name}</span>
-                      {c.pastDue > 0 && <p className="text-xs text-warning">{fmt(c.pastDue)} past due</p>}
-                    </div>
-                    <span className="font-semibold shrink-0 ml-2">{fmt(c.owed)}</span>
-                  </div>
-                ))}
+            {/* Card side of Payables is this cycle's statement (gross), not
+                "owed now" — the per-card owed/past-due split lives in the
+                Card bills tile. Keep the two figures from colliding here. */}
+            {cardBilled > 0 && (
+              <div className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
+                <span>Card bills (this cycle)</span>
+                <span className="font-semibold">{fmt(cardBilled)}</span>
               </div>
             )}
 
@@ -1817,9 +1836,14 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
               </div>
             )}
 
+            <div className="flex items-center justify-between pt-2 border-t border-border">
+              <p className="text-sm font-semibold">Total this month</p>
+              <span className="text-sm font-bold">{fmt(monthBills)}</span>
+            </div>
+
             {settledCarryOverEntries.length > 0 && (
-              <div className="space-y-1.5">
-                <p className="fin-label">Carried forward, settled this month</p>
+              <div className="space-y-1.5 pt-1">
+                <p className="fin-label">Also paid this month toward earlier months</p>
                 {settledCarryOverEntries.map(e => (
                   <div key={e.id} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
                     <div className="min-w-0">
@@ -1832,13 +1856,9 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
                     </div>
                   </div>
                 ))}
+                <p className="text-xs text-muted-foreground">Real cash out this month, but not a September bill, so kept out of the total above.</p>
               </div>
             )}
-
-            <div className="flex items-center justify-between pt-2 border-t border-border">
-              <p className="text-sm font-semibold">Total</p>
-              <span className="text-sm font-bold">{fmt(dispCommitted + dispAdHoc + settledCarryOverTotal)}</span>
-            </div>
             </>
             )}
           </div>
