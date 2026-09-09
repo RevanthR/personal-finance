@@ -103,7 +103,7 @@ interface DashboardClientProps {
   /** cardStatus() overview for every card, on the real current month only. Null on a past/projected month. */
   cards: CardOverview[] | null;
   /** Read-only credit-card cost for the viewed month (statements that cut that month), for a past month. Null on the current or a projected month. */
-  ccMonth: { total: number; byCard: { templateId: string; name: string; amount: number }[] } | null;
+  ccMonth: { total: number; paid: number; cashback: number; byCard: { templateId: string; name: string; amount: number; paid: number; cashback: number }[] } | null;
   /** Real-time cash balance for the viewed month (as of now, or the month's end). Null on a projected month. See src/lib/cash-balance.ts. */
   cashBalance: {
     balance: number; anchorBalance: number; anchorAsOf: string;
@@ -330,15 +330,9 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
     let owed = 0, pastDue = 0, unbilled = 0, cashThisMonth = 0, pendingCards = 0;
-    // billed = this cycle's full statement (0 until it closes); settled = the
-    // part of it already covered by a payment or cashback. billed - settled
-    // === owed, so paid + pending reconcile against the same figure.
-    let billed = 0, settled = 0;
     for (const c of cards) {
       if (!c.isActive) continue;
       owed += c.status.statementBalance;
-      billed += c.status.statementGross;
-      settled += Math.max(0, c.status.statementGross - c.status.statementBalance);
       pastDue += c.status.pastDue;
       unbilled += c.status.unbilledSpends;
       cashThisMonth += cardCashPaidBetween(c.statements, monthStart, monthEnd);
@@ -346,7 +340,6 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
     }
     return {
       owed: Math.round(owed), pastDue: Math.round(pastDue), unbilled: Math.round(unbilled),
-      billed: Math.round(billed), settled: Math.round(settled),
       cashThisMonth: Math.round(cashThisMonth), pendingCards,
       totalOwed: Math.round(owed + pastDue),
     };
@@ -355,8 +348,8 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
   // Single per-card view of what the cards cost this month, for every tile
   // and drilldown. Current month: live cardStatus (owed = statement balance
   // still due + past due; unbilled = this cycle's spend so far). Past month:
-  // the read-only cycle-expense snapshot (ccMonth). Projected month: null
-  // (that path uses projectedEntries instead).
+  // the per-month bill snapshot (ccMonth), owed net of paid + cashback.
+  // Projected month: null (that path uses projectedEntries instead).
   const ccView = useMemo(() => {
     if (cards && cc) {
       const lines = cards
@@ -370,17 +363,15 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
         }))
         .filter(c => c.owed > 0 || c.unbilled > 0)
         .sort((a, b) => b.owed - a.owed);
-      return { lines, owed: cc.owed, totalOwed: cc.totalOwed, unbilled: cc.unbilled, pendingCards: cc.pendingCards, billed: cc.billed, settled: cc.settled, pastDue: cc.pastDue };
+      return { lines, owed: cc.owed, totalOwed: cc.totalOwed, unbilled: cc.unbilled, pendingCards: cc.pendingCards };
     }
     if (ccMonth) {
       const lines = ccMonth.byCard
-        .map(c => ({ templateId: c.templateId, name: c.name, owed: Math.round(c.amount), pastDue: 0, unbilled: 0 }))
+        .map(c => ({ templateId: c.templateId, name: c.name, owed: Math.max(0, Math.round(c.amount - c.paid - c.cashback)), pastDue: 0, unbilled: 0 }))
         .filter(c => c.owed > 0)
         .sort((a, b) => b.owed - a.owed);
-      const total = Math.round(ccMonth.total);
-      // A past month is closed: treat the billed figure as fully settled so
-      // the progress bar reads that month as done rather than half-paid.
-      return { lines, owed: total, totalOwed: total, unbilled: 0, pendingCards: lines.length, billed: total, settled: total, pastDue: 0 };
+      const owed = Math.max(0, Math.round(ccMonth.total - ccMonth.paid - ccMonth.cashback));
+      return { lines, owed, totalOwed: owed, unbilled: 0, pendingCards: lines.length };
     }
     return null;
   }, [cards, cc, ccMonth]);
@@ -421,8 +412,13 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
   // manually-entered salaryIncome instead of letting it silently read as 0.
   const grandIncome   = (incomeTemplates.length === 0 ? (currentMonth?.salaryIncome ?? 0) : templateIncome) + adHocIncome;
 
-  // Single-pass metric computation via shared finance-utils (non-CC bills).
-  const metrics = useMemo(() => computeMetrics(entries), [entries]);
+  // Committed/paid/pending for this month's recurring bills. A bill settled
+  // via a credit card is left out: it's no longer owed as a recurring bill,
+  // it's now spend on that card (a bill_via_card charge, see
+  // bill-via-card.ts) and shows up through ccMonth instead. Without this
+  // the amount would be counted twice in monthBills.
+  const recurringEntries = useMemo(() => entries.filter(e => !e.paidViaCardTemplateId), [entries]);
+  const metrics = useMemo(() => computeMetrics(recurringEntries), [recurringEntries]);
   const { totalCommitted, totalPaid } = metrics;
   // metrics carries only non-CC recurring bills, so committed IS the
   // non-CC recurring figure.
@@ -432,8 +428,27 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
   // takes its card figure from projectedEntries instead (dispCCBills below).
   const ccBillsThisMonth = ccView?.owed ?? 0;
   const ccNextMonth       = ccView?.unbilled ?? 0;
-  const totalPending      = metrics.totalPending + (ccView?.totalOwed ?? 0);
   const pendingCount      = metrics.pendingCount + (ccView?.pendingCards ?? 0);
+
+  // ── This month's obligations, one consistent basis ─────────────────────
+  // The card side is THIS month's statement (getCardBillsByMonth, due-date
+  // attributed), net of cashback, with its own recorded payment split out
+  // so monthPaid + monthPending === monthBills and the progress bar's three
+  // numbers reconcile. Carried debt / card past due is NOT in monthBills
+  // (not this month's bill) — it's added into the Pending tile below.
+  const cardBilled  = isProjected ? 0 : Math.max(0, Math.round((ccMonth?.total ?? 0) - (ccMonth?.cashback ?? 0)));
+  const cardSettled = isProjected ? 0 : Math.min(cardBilled, Math.round(ccMonth?.paid ?? 0));
+  const monthBills   = Math.round(totalCommitted + cardBilled + adHocExpense);
+  const monthPaid    = Math.round(totalPaid + cardSettled + adHocExpense);
+  const monthPending = Math.max(0, monthBills - monthPaid);
+  const monthPct     = monthBills > 0 ? Math.min(100, Math.round((monthPaid / monthBills) * 100)) : 0;
+  // Everything still to pay: this month's shortfall + card past due + non-CC
+  // bills carried unpaid from earlier months.
+  const cardPastDue  = isProjected ? 0 : (cc?.pastDue ?? 0);
+  const totalPending = monthPending + cardPastDue;
+  // Income not already spent this month — the real "can I still cover
+  // what's left" denominator for the Pending subtext.
+  const incomeLeft   = grandIncome - monthPaid;
 
   // Real-time cash: the latest anchor before this instant, plus every dated
   // inflow and outflow since (src/lib/cash-balance.ts). Computed server-side
@@ -597,22 +612,6 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
   // Non-CC committed spend plus what the cards currently owe (current month).
   const committedInclCC = totalCommitted + (ccView?.totalOwed ?? 0);
   const variableAmount = committedInclCC - fixedAmount + adHocExpense;
-
-  // ── This month's obligations, one consistent basis ─────────────────────
-  // Everything gross (before payments): recurring bills + THIS cycle's card
-  // statement + one-off spend. billed - settled === owed on the card side,
-  // so monthPaid + monthPending === monthBills always, and the progress
-  // bar's three numbers reconcile. Carried debt / past due is NOT here (not
-  // this month's bill) — it rides in pendingAll below and its own subtext.
-  const cardBilled  = isProjected ? 0 : (ccView?.billed ?? 0);
-  const cardSettled = isProjected ? 0 : (ccView?.settled ?? 0);
-  const monthBills   = Math.round(totalCommitted + cardBilled + adHocExpense);
-  const monthPaid    = Math.round(totalPaid + cardSettled + adHocExpense);
-  const monthPending = Math.max(0, monthBills - monthPaid);
-  const monthPct     = monthBills > 0 ? Math.min(100, Math.round((monthPaid / monthBills) * 100)) : 0;
-  // Income not already spent this month. Bills still to pay above this line
-  // (see subtexts below) are the real "can I still cover it" gap.
-  const incomeLeft   = grandIncome - monthPaid;
 
   // Projected-mode display overrides — shadow the actual values when viewing a future month
   const dispIncome          = isProjected ? (projectedIncome ?? 0) : grandIncome;

@@ -94,7 +94,7 @@ export default async function MonthDetailPage({
   const { month: todayMonth, year: todayYear } = getCurrentMonthYear();
 
   const ccByMonth = await getCardBillsByMonth(session.user.id, [{ month: currentMonth.month, year: currentMonth.year }]);
-  const ccMonth = ccByMonth.get(`${currentMonth.year}-${currentMonth.month}`) ?? { total: 0, byCard: [] };
+  const ccMonth = ccByMonth.get(`${currentMonth.year}-${currentMonth.month}`) ?? { total: 0, paid: 0, cashback: 0, byCard: [] };
 
   const isRealCurrentMonth = currentMonth.month === todayMonth && currentMonth.year === todayYear;
   const cashAsOf = isRealCurrentMonth

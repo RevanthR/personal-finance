@@ -1,7 +1,8 @@
 import { isTemplateActiveInMonth } from "@/lib/loan-utils";
 import { chitMonthlyAmount } from "@/lib/entry-amount";
 import { pendingAmountKicks, prevMonthYear } from "@/lib/utils";
-import type { MonthlyCardBills } from "@/lib/cards-db";
+
+type CardBillLineLite = { templateId: string; name: string; amount: number };
 
 // One projection formula for a month that has no ledger yet (a future month,
 // or a not-yet-populated one). The dashboard's future-month view and the
@@ -57,7 +58,7 @@ export type MonthProjection = {
   expenses: number;
   expenseItems: ProjectedExpense[];
   ccTotal: number;
-  ccByCard: MonthlyCardBills["byCard"];
+  ccByCard: CardBillLineLite[];
   endingTemplateNames: string[];
 };
 
@@ -67,7 +68,7 @@ export function projectMonth(opts: {
   /** Active templates (income and expense), each with its chitFund if any. */
   templates: ProjectionTemplate[];
   /** Card bills for this month, from getCardBillsByMonth. */
-  ccBills: MonthlyCardBills;
+  ccBills: { total: number; byCard: CardBillLineLite[] };
   receivables?: { description: string; expectedAmount: number; expectedDate: Date | string | null }[];
   /** Ad-hoc rows already sitting on a not-yet-populated month record. */
   existingAdHoc?: { name: string; amount: number; type: string }[];

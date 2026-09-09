@@ -3,8 +3,9 @@ import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { validate, EntryPatchSchema } from "@/lib/validation";
 import { computePaymentUpdate } from "@/lib/entry-payment";
-import { effectivePaid } from "@/lib/finance-utils";
+import { effectivePaid, netAmount } from "@/lib/finance-utils";
 import { recordEntryCashDelta } from "@/lib/cash-payment";
+import { syncBillViaCardCharge } from "@/lib/bill-via-card";
 import { getCurrentMonthYear } from "@/lib/utils";
 import { closePushForUser, PAYMENT_REMINDER_PUSH_TAG } from "@/lib/push";
 
@@ -100,6 +101,18 @@ export async function PATCH(
       { amount: entry.amount, cashbackAmount: entry.cashbackAmount, isPaid: entry.isPaid, paidAmount: entry.paidAmount, paidViaCardTemplateId: entry.paidViaCardTemplateId },
       { amount: updatedEntry.amount, cashbackAmount: updatedEntry.cashbackAmount, isPaid: updatedEntry.isPaid, paidAmount: updatedEntry.paidAmount, paidViaCardTemplateId: updatedEntry.paidViaCardTemplateId },
     );
+
+    // Settled via a credit card? Log the spend ON that card so it isn't
+    // lost from every "still owed" figure (see bill-via-card.ts).
+    await syncBillViaCardCharge(tx, {
+      userId: session.user.id,
+      entryId,
+      monthId,
+      name: updatedEntry.template.name,
+      category: updatedEntry.template.category,
+      netAmount: netAmount({ amount: updatedEntry.amount, cashbackAmount: updatedEntry.cashbackAmount }),
+      cardTemplateId: updatedEntry.isPaid ? updatedEntry.paidViaCardTemplateId : null,
+    });
 
     // If this is an unlifted chit fund, accumulate savings
     if (updatedEntry.isPaid && updatedEntry.template.category === "CHIT_FUND") {

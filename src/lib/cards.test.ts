@@ -201,7 +201,9 @@ describe("cardBillForMonth", () => {
     const r = cardBillForMonth(axis, statements, [], 9, 2026, new Date("2026-09-05"));
     expect(r.basis).toBe("confirmed");
     expect(r.gross).toBe(50000);
-    expect(r.amount).toBe(39500);
+    expect(r.paid).toBe(10000);
+    expect(r.cashback).toBe(500);
+    expect(r.amount).toBe(39500); // gross - paid - cashback
   });
 
   it("closed but unconfirmed cycle → charge-sum estimate", () => {

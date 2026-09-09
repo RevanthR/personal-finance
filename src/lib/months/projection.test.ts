@@ -76,7 +76,7 @@ describe("projectMonth", () => {
     const r = projectMonth({
       month: 10, year: 2026,
       templates: [tpl({ id: "axis", name: "Axis", category: "CREDIT_CARD", amount: 999 })],
-      ccBills: { total: 63000, byCard: [{ templateId: "axis", name: "Axis", amount: 63000, basis: "projected" }] },
+      ccBills: { total: 63000, byCard: [{ templateId: "axis", name: "Axis", amount: 63000 }] },
     });
     expect(r.ccTotal).toBe(63000);
     expect(r.expenses).toBe(63000); // the 999 template amount is ignored

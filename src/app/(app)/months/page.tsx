@@ -99,7 +99,7 @@ export default async function MonthsPage() {
   for (const { month, year } of fyMonths) ccMonthKeys.set(`${year}-${month}`, { month, year });
   for (const m of allMonths) ccMonthKeys.set(`${m.year}-${m.month}`, { month: m.month, year: m.year });
   const ccByMonth = await getCardBillsByMonth(userId, [...ccMonthKeys.values()]);
-  const ccFor = (m: number, y: number): MonthlyCardBills => ccByMonth.get(`${y}-${m}`) ?? { total: 0, byCard: [] };
+  const ccFor = (m: number, y: number): MonthlyCardBills => ccByMonth.get(`${y}-${m}`) ?? { total: 0, paid: 0, cashback: 0, byCard: [] };
 
   const currentMonthFull = allMonths.find(m => m.month === todayMonth && m.year === todayYear) ?? null;
   const analyticsMonths = allMonths.filter(m => m.isPopulated);

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { validate, ParsedTransactionPatchSchema } from "@/lib/validation";
 import { ensureCurrentStatement, getCardsOverview } from "@/lib/cards-db";
 import { recordEntryCashDelta, recordCardCashDelta } from "@/lib/cash-payment";
+import { syncBillViaCardCharge } from "@/lib/bill-via-card";
 import { resolveCustomCategory } from "@/lib/custom-category";
 import { resolveSubCategory } from "@/lib/sub-category";
 import { rememberMerchantCategory } from "@/lib/merchant-memory";
@@ -94,6 +95,7 @@ export async function PATCH(
       select: {
         id: true, templateId: true, amount: true, cashbackAmount: true, paidAmount: true, isPaid: true,
         paidViaCardTemplateId: true,
+        template: { select: { name: true, category: true } },
         month: { select: { id: true, month: true, year: true } },
       },
     });
@@ -114,6 +116,14 @@ export async function PATCH(
         { amount: entry.amount, cashbackAmount: entry.cashbackAmount, isPaid: entry.isPaid, paidAmount: entry.paidAmount, paidViaCardTemplateId: entry.paidViaCardTemplateId },
         { amount: updatedEntry.amount, cashbackAmount: updatedEntry.cashbackAmount, isPaid: updatedEntry.isPaid, paidAmount: updatedEntry.paidAmount, paidViaCardTemplateId: updatedEntry.paidViaCardTemplateId },
       );
+      // A bank transaction settled this bill, so it wasn't paid via a card —
+      // drop any stale via-card charge (see bill-via-card.ts).
+      await syncBillViaCardCharge(tx, {
+        userId, entryId: entry.id, monthId: entry.month.id,
+        name: entry.template.name, category: entry.template.category,
+        netAmount,
+        cardTemplateId: updatedEntry.paidViaCardTemplateId,
+      });
       await tx.parsedTransaction.update({ where: { id }, data: { status: "APPROVED" } });
       return updatedEntry;
     });

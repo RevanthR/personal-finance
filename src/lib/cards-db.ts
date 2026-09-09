@@ -100,17 +100,25 @@ export async function getCardsOverview(userId: string, asOf: Date = new Date()):
   });
 }
 
-export type CardBillLine = { templateId: string; name: string; amount: number; basis: CardBillBasis };
-export type MonthlyCardBills = { total: number; byCard: CardBillLine[] };
+export type CardBillLine = { templateId: string; name: string; amount: number; paid: number; cashback: number; basis: CardBillBasis };
+export type MonthlyCardBills = {
+  /** Σ gross billed this month (before payments/cashback) — the cost view. */
+  total: number;
+  /** Σ payments recorded against those statements. */
+  paid: number;
+  /** Σ cashback credited on those statements. */
+  cashback: number;
+  byCard: CardBillLine[];
+};
 
 /**
  * What the credit cards cost per calendar month, for a requested set of
  * months (past, current or future). A card's cost in month M is the
  * statement due in M (see cardBillForMonth): the confirmed bank figure, the
- * closed cycle's charge sum, or a projection for a cycle that hasn't
- * closed. This is the GROSS billed figure (a spend/cost view) — payments
- * made against it don't reduce it; "what's still owed right now" is a
- * separate question that cardStatus() answers for the live month.
+ * closed cycle's charge sum, or (for an unclosed cycle) the charges booked
+ * into it so far. `total` is the GROSS billed figure (a spend/cost view);
+ * `paid` / `cashback` are alongside so a caller can also derive what's
+ * still owed on this month's statements (total - paid - cashback).
  * Every screen that shows "what the cards cost in month M" reads this.
  */
 export async function getCardBillsByMonth(
@@ -129,18 +137,17 @@ export async function getCardBillsByMonth(
     },
   });
   if (cards.length === 0) {
-    for (const { month, year } of months) out.set(`${year}-${month}`, { total: 0, byCard: [] });
+    for (const { month, year } of months) out.set(`${year}-${month}`, { total: 0, paid: 0, cashback: 0, byCard: [] });
     return out;
   }
 
-  // Charges: back far enough to cover the earliest requested month's cycle
-  // and the trailing-median lookback (4 cycles before now).
+  // Charges: back far enough to cover the earliest requested month's cycle.
   const earliest = months.reduce((min, m) => {
     const t = Date.UTC(m.year, m.month - 1, 1);
     return t < min ? t : min;
   }, asOf.getTime());
   const since = new Date(earliest);
-  since.setUTCMonth(since.getUTCMonth() - 18);
+  since.setUTCMonth(since.getUTCMonth() - 4);
 
   const charges = await db.adHocItem.findMany({
     where: { type: "EXPENSE", ccTemplateId: { in: cards.map(c => c.templateId) }, date: { gte: since }, month: { userId } },
@@ -154,9 +161,10 @@ export async function getCardBillsByMonth(
     chargesByCard.set(c.ccTemplateId!, l);
   }
 
+  const r2 = (n: number) => Math.round(n * 100) / 100;
   for (const { month, year } of months) {
     const byCard: CardBillLine[] = [];
-    let total = 0;
+    let total = 0, paid = 0, cashback = 0;
     for (const card of cards) {
       if (!card.template.isActive) continue;
       const bill = cardBillForMonth(
@@ -166,11 +174,13 @@ export async function getCardBillsByMonth(
         month, year, asOf,
       );
       if (bill.gross <= 0) continue;
-      byCard.push({ templateId: card.template.id, name: card.template.name, amount: bill.gross, basis: bill.basis });
-      total = Math.round((total + bill.gross) * 100) / 100;
+      byCard.push({ templateId: card.template.id, name: card.template.name, amount: bill.gross, paid: bill.paid, cashback: bill.cashback, basis: bill.basis });
+      total = r2(total + bill.gross);
+      paid = r2(paid + bill.paid);
+      cashback = r2(cashback + bill.cashback);
     }
     byCard.sort((a, b) => b.amount - a.amount);
-    out.set(`${year}-${month}`, { total, byCard });
+    out.set(`${year}-${month}`, { total, paid, cashback, byCard });
   }
   return out;
 }

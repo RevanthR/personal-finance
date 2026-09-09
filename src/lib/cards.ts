@@ -264,6 +264,10 @@ export type CardBillForMonth = {
   amount: number;
   /** The full figure before payments/cashback. */
   gross: number;
+  /** Recorded payment against that statement (0 for an open/future cycle). */
+  paid: number;
+  /** Cashback credited on that statement. */
+  cashback: number;
   basis: CardBillBasis;
   statementDate: Date | null;
   dueDate: Date | null;
@@ -290,20 +294,21 @@ export function cardBillForMonth(
   asOf: Date = new Date(),
 ): CardBillForMonth {
   if (card.statementDay == null) {
-    return { amount: 0, gross: 0, basis: "none", statementDate: null, dueDate: null };
+    return { amount: 0, gross: 0, paid: 0, cashback: 0, basis: "none", statementDate: null, dueDate: null };
   }
   const sd = card.statementDay;
   const dd = card.dueDateDay ?? sd;
   const { statementDate, cycleStart, dueDate } = statementDueInMonth(sd, dd, month, year);
 
   const row = statements.find(s => new Date(s.statementDate).getTime() === statementDate.getTime()) ?? null;
-  const paid = row?.paidAmount ?? 0;
-  const cashback = row?.cashback ?? 0;
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const paid = r2(row?.paidAmount ?? 0);
+  const cashback = r2(row?.cashback ?? 0);
 
   if (row?.confirmedAt != null && row.statementBalance != null) {
     return {
-      amount: Math.max(0, Math.round((row.statementBalance - paid - cashback) * 100) / 100),
-      gross: Math.round(row.statementBalance * 100) / 100,
+      amount: Math.max(0, r2(row.statementBalance - paid - cashback)),
+      gross: r2(row.statementBalance), paid, cashback,
       basis: "confirmed", statementDate, dueDate,
     };
   }
@@ -312,8 +317,9 @@ export function cardBillForMonth(
   if (cycleClosed) {
     const est = Math.max(0, sumBetween(charges, cycleStart, statementDate));
     return {
-      amount: Math.max(0, Math.round((est - paid - cashback) * 100) / 100),
-      gross: est, basis: "estimated", statementDate, dueDate,
+      amount: Math.max(0, r2(est - paid - cashback)),
+      gross: est, paid, cashback,
+      basis: "estimated", statementDate, dueDate,
     };
   }
 
@@ -322,6 +328,6 @@ export function cardBillForMonth(
   const soFarEnd = asOf.getTime() > cycleStart.getTime()
     ? new Date(Math.min(asOf.getTime(), statementDate.getTime()))
     : cycleStart;
-  const soFar = Math.round(Math.max(0, sumBetween(charges, cycleStart, soFarEnd)) * 100) / 100;
-  return { amount: soFar, gross: soFar, basis: "projected", statementDate, dueDate };
+  const soFar = r2(Math.max(0, sumBetween(charges, cycleStart, soFarEnd)));
+  return { amount: soFar, gross: soFar, paid: 0, cashback: 0, basis: "projected", statementDate, dueDate };
 }

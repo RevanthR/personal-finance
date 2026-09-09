@@ -265,18 +265,16 @@ async function DashboardData({
       pendingFromYear: t.pendingFromYear,
     }));
 
-  // Credit cards run on cardStatus() now (see the CC rework). The real
-  // current month gets the interactive per-card status; a past month gets
-  // the read-only cycle-expense snapshot (same source as the Year View).
+  // Credit cards: the current month gets the interactive per-card status
+  // (cardStatus, for the "owed now" tile and confirm/pay actions). Every
+  // month, current included, also gets getCardBillsByMonth for THIS
+  // month's bill figure (due-date attributed, so the same statement can't
+  // land in two calendar months depending on which screen).
   const [cards, ccByMonth] = await Promise.all([
     isRealCurrentMonth ? getCardsOverview(userId) : Promise.resolve([]),
-    isRealCurrentMonth
-      ? Promise.resolve(null)
-      : getCardBillsByMonth(userId, [{ month: targetMonth, year: targetYear }]),
+    getCardBillsByMonth(userId, [{ month: targetMonth, year: targetYear }]),
   ]);
-  const ccMonth = isRealCurrentMonth
-    ? null
-    : ccByMonth!.get(`${targetYear}-${targetMonth}`) ?? { total: 0, byCard: [] };
+  const ccMonth = ccByMonth.get(`${targetYear}-${targetMonth}`) ?? { total: 0, paid: 0, cashback: 0, byCard: [] };
 
   // Real-time cash: as of now for the current month, as of the last moment
   // of the viewed month for a past one. See src/lib/cash-balance.ts.
@@ -289,7 +287,7 @@ async function DashboardData({
     <DashboardClient
       currentMonth={resolvedMonth ? JSON.parse(JSON.stringify(resolvedMonth)) : null}
       cards={isRealCurrentMonth ? JSON.parse(JSON.stringify(cards)) : null}
-      ccMonth={ccMonth ? JSON.parse(JSON.stringify(ccMonth)) : null}
+      ccMonth={JSON.parse(JSON.stringify(ccMonth))}
       cashBalance={JSON.parse(JSON.stringify(cashBalance))}
       recentMonths={JSON.parse(JSON.stringify(recentMonths))}
       ccTemplates={JSON.parse(JSON.stringify(ccTemplates))}
