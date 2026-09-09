@@ -257,17 +257,22 @@ export function cardStatus(
 
 // ── Per-calendar-month bill ─────────────────────────────────────────────────
 
-export type CardBillBasis = "confirmed" | "estimated" | "projected" | "none";
+export type CardBillBasis = "confirmed" | "estimated" | "open" | "none";
 
 export type CardBillForMonth = {
-  /** What this card's bill for the month is, net of any recorded payment/cashback. */
+  /** The bill due this month, net of any recorded payment/cashback. ZERO
+   * until the cycle actually closes — an open cycle's spend is `unbilled`,
+   * not a bill. */
   amount: number;
-  /** The full figure before payments/cashback. */
+  /** The full bill figure before payments/cashback. Zero until the cycle closes. */
   gross: number;
   /** Recorded payment against that statement (0 for an open/future cycle). */
   paid: number;
   /** Cashback credited on that statement. */
   cashback: number;
+  /** Charges booked into a cycle that hasn't closed yet — informational
+   * ("spent on the card this cycle"), never counted as a bill or as pending. */
+  unbilled: number;
   basis: CardBillBasis;
   statementDate: Date | null;
   dueDate: Date | null;
@@ -280,10 +285,9 @@ export type CardBillForMonth = {
  *
  *  - confirmed CardStatement for that cycle  → the bank figure, net of paid/cashback
  *  - cycle already closed, not confirmed     → sum of that cycle's charges (net of any recorded payment)
- *  - cycle still open or entirely future     → only the charges booked into it so far (0 for a
- *                                              cycle that hasn't started). Card spend is not a
- *                                              fixed obligation — it's never guessed forward, it
- *                                              just tracks up as real charges land.
+ *  - cycle NOT closed yet (open or future)   → the bill is 0; whatever's been charged so far is
+ *                                              reported as `unbilled`, never as a payable. It
+ *                                              becomes a bill only when the statement actually cuts.
  */
 export function cardBillForMonth(
   card: CardConfig,
@@ -294,7 +298,7 @@ export function cardBillForMonth(
   asOf: Date = new Date(),
 ): CardBillForMonth {
   if (card.statementDay == null) {
-    return { amount: 0, gross: 0, paid: 0, cashback: 0, basis: "none", statementDate: null, dueDate: null };
+    return { amount: 0, gross: 0, paid: 0, cashback: 0, unbilled: 0, basis: "none", statementDate: null, dueDate: null };
   }
   const sd = card.statementDay;
   const dd = card.dueDateDay ?? sd;
@@ -308,7 +312,7 @@ export function cardBillForMonth(
   if (row?.confirmedAt != null && row.statementBalance != null) {
     return {
       amount: Math.max(0, r2(row.statementBalance - paid - cashback)),
-      gross: r2(row.statementBalance), paid, cashback,
+      gross: r2(row.statementBalance), paid, cashback, unbilled: 0,
       basis: "confirmed", statementDate, dueDate,
     };
   }
@@ -318,16 +322,17 @@ export function cardBillForMonth(
     const est = Math.max(0, sumBetween(charges, cycleStart, statementDate));
     return {
       amount: Math.max(0, r2(est - paid - cashback)),
-      gross: est, paid, cashback,
+      gross: est, paid, cashback, unbilled: 0,
       basis: "estimated", statementDate, dueDate,
     };
   }
 
-  // Open or future cycle: only what's actually been charged into it so far
-  // (nothing for a cycle that hasn't started). Never projected forward.
+  // The cycle due this month hasn't closed yet. The bill is 0. Report what's
+  // been charged into it so far as `unbilled` (a "spent this cycle" figure),
+  // never a payable.
   const soFarEnd = asOf.getTime() > cycleStart.getTime()
     ? new Date(Math.min(asOf.getTime(), statementDate.getTime()))
     : cycleStart;
   const soFar = r2(Math.max(0, sumBetween(charges, cycleStart, soFarEnd)));
-  return { amount: soFar, gross: soFar, paid: 0, cashback: 0, basis: "projected", statementDate, dueDate };
+  return { amount: 0, gross: 0, paid: 0, cashback: 0, unbilled: soFar, basis: "open", statementDate, dueDate };
 }

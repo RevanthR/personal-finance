@@ -214,29 +214,41 @@ describe("cardBillForMonth", () => {
     expect(r.amount).toBe(63931); // Aug only, Sep 2 charge is next cycle
   });
 
-  it("open cycle → only the charges booked into it so far, never guessed forward", () => {
-    // Big spend in Aug/Jul/Jun; the October bill's cycle (Sep) has barely started.
+  it("open cycle → bill is 0, spend so far reported as unbilled", () => {
     const charges = [
       charge("2026-06-10", 62000), charge("2026-07-10", 64000), charge("2026-08-10", 63000),
       charge("2026-09-03", 1200),
     ];
     const r = cardBillForMonth(axis, [], charges, 10, 2026, new Date("2026-09-15"));
-    expect(r.basis).toBe("projected");
-    expect(r.amount).toBe(1200); // just what's on the Sep cycle so far, not last month's total
+    expect(r.basis).toBe("open");
+    expect(r.amount).toBe(0);       // nothing is billed until the cycle closes
+    expect(r.unbilled).toBe(1200);  // what's been charged into the open Sep cycle
   });
 
   it("cycle that hasn't started yet → 0", () => {
     const charges = [charge("2026-08-10", 63000), charge("2026-09-10", 40000)];
-    // November bill = the 1 Nov statement, cycle [1 Oct, 1 Nov) — not started on 15 Sep
     const r = cardBillForMonth(axis, [], charges, 11, 2026, new Date("2026-09-15"));
-    expect(r.basis).toBe("projected");
+    expect(r.basis).toBe("open");
     expect(r.amount).toBe(0);
+    expect(r.unbilled).toBe(0);
   });
 
-  it("open cycle tracks up as charges land", () => {
+  it("statement due this month that hasn't cut yet → 0 bill, spend is unbilled", () => {
+    // Card cuts the 15th, due the 28th. On the 9th the Sep 15 statement
+    // (September's bill) hasn't closed — its spend is unbilled, not pending.
+    const indus = { statementDay: 15, dueDateDay: 28, creditLimit: null };
+    const charges = [charge("2026-08-20", 19745), charge("2026-08-10", 40000)];
+    const r = cardBillForMonth(indus, [], charges, 9, 2026, new Date("2026-09-09"));
+    expect(r.basis).toBe("open");
+    expect(r.amount).toBe(0);
+    expect(r.unbilled).toBe(19745); // Aug 15 -> Sep 9 spend
+  });
+
+  it("open-cycle unbilled tracks up as charges land", () => {
     const charges = [charge("2026-09-05", 12000), charge("2026-09-18", 8000)];
     const r = cardBillForMonth(axis, [], charges, 10, 2026, new Date("2026-09-20"));
-    expect(r.amount).toBe(20000);
+    expect(r.amount).toBe(0);
+    expect(r.unbilled).toBe(20000);
   });
 
   it("no statement day → nothing", () => {

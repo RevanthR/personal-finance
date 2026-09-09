@@ -1804,7 +1804,7 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
               <ProjectedBreakdownBody data={projectedBreakdown} month={viewMonth} year={viewYear} fmt={fmt} />
             ) : (
             <>
-            <p className="text-xs text-muted-foreground">This month&apos;s own bills: recurring, this cycle&apos;s card statement, and one-off spends. Old debt paid this month is listed below the total, not in it.</p>
+            <p className="text-xs text-muted-foreground">This month&apos;s own bills: recurring, card statements due this month, and one-off spends. A card cycle that hasn&apos;t closed yet is not in here (see Spent on cards). Old debt paid this month is listed below the total.</p>
 
             {/* Recurring is already fully itemized in the Payables tab —
                 a summary line here is enough, no need to repeat it. */}
@@ -1813,12 +1813,12 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
               <span className="font-semibold">{fmt(dispRecurringNonCC)}</span>
             </div>
 
-            {/* Card side of Payables is this cycle's statement (gross), not
-                "owed now" — the per-card owed/past-due split lives in the
-                Card bills tile. Keep the two figures from colliding here. */}
+            {/* Card side of Payables is the gross of the statements due this
+                month (closed cycles only), not "owed now" — the owed / past
+                due split lives in the Card bills tile. */}
             {cardBilled > 0 && (
               <div className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
-                <span>Card bills (this cycle)</span>
+                <span>Card bills (due this month)</span>
                 <span className="font-semibold">{fmt(cardBilled)}</span>
               </div>
             )}
