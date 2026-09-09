@@ -446,9 +446,6 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
   // bills carried unpaid from earlier months.
   const cardPastDue  = isProjected ? 0 : (cc?.pastDue ?? 0);
   const totalPending = monthPending + cardPastDue;
-  // Income not already spent this month — the real "can I still cover
-  // what's left" denominator for the Pending subtext.
-  const incomeLeft   = grandIncome - monthPaid;
 
   // Real-time cash: the latest anchor before this instant, plus every dated
   // inflow and outflow since (src/lib/cash-balance.ts). Computed server-side
@@ -1143,10 +1140,11 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
             onClick: () => setShowPendingDrilldown(true),
             hint: isProjected
               ? <span className="text-xs text-muted-foreground">projected</span>
-              // Can you still cover what's left from income you haven't
-              // already spent this month? (incomeLeft = income − paid so far)
-              : totalPendingWithCarryOver > incomeLeft
-                ? <span className="text-xs text-negative">{fmt(totalPendingWithCarryOver - Math.max(0, incomeLeft))} short</span>
+              // Liquidity check: can the cash on hand right now cover what's
+              // still to pay? (Income not yet received isn't counted — when
+              // it lands, inHandNow rises and this shrinks.)
+              : totalPendingWithCarryOver > inHandNow
+                ? <span className="text-xs text-negative">{fmt(totalPendingWithCarryOver - inHandNow)} over cash on hand</span>
                 : undefined,
           },
           ...(!isProjected ? [{
