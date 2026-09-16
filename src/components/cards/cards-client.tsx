@@ -240,14 +240,9 @@ function CardTile({
 
         {/* Pay */}
         {(s.status === "confirmed" || s.status === "pastdue") && s.statementBalance > 0 && (
-          <div className="flex gap-2">
-            <Button size="sm" className="flex-1 h-9 text-xs" disabled={busy} onClick={() => post("pay", { full: true })}>
-              Mark paid ({fmt(Math.round(s.statementBalance))})
-            </Button>
-            <Button size="sm" variant="outline" className="h-9 text-xs shrink-0" disabled={busy} onClick={onEdit}>
-              <Pencil className="w-3 h-3" />
-            </Button>
-          </div>
+          <Button size="sm" className="w-full h-9 text-xs" disabled={busy} onClick={() => post("pay", { full: true })}>
+            Mark paid ({fmt(Math.round(s.statementBalance))})
+          </Button>
         )}
         {s.status === "paid" && (
           <button className="text-xs text-muted-foreground hover:text-foreground" disabled={busy} onClick={() => post("pay", { unpay: true })}>
@@ -255,17 +250,16 @@ function CardTile({
           </button>
         )}
 
-        {/* Footer */}
+        {/* Footer — Edit always available, regardless of status (a paid-off
+            card previously had no way back into the edit dialog at all). */}
         <div className="flex items-center justify-between pt-1 border-t border-border/60">
           <button onClick={() => setShowStatements(true)} className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1">
             Statements <ChevronDown className="w-3 h-3" />
           </button>
           <div className="flex items-center gap-3">
-            {(s.status === "open" || s.status === "unconfigured" || s.status === "awaiting") && (
-              <button onClick={onEdit} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
-                <Pencil className="w-3 h-3" /> Edit
-              </button>
-            )}
+            <button onClick={onEdit} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+              <Pencil className="w-3 h-3" /> Edit
+            </button>
             <button onClick={onDelete} className="text-muted-foreground hover:text-negative">
               <Trash2 className="w-3.5 h-3.5" />
             </button>
