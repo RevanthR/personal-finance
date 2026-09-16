@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { isTemplateActiveInMonth, computeLoanAmortization, computeLoanEndDate, type LoanAmortization } from "@/lib/loan-utils";
 import { chitMonthlyAmount } from "@/lib/entry-amount";
-import { getCardBillsByMonth, type MonthlyCardBills } from "@/lib/cards-db";
+import { getCardBillsByMonth, projectedCardTotal, type MonthlyCardBills } from "@/lib/cards-db";
 import { getCashBalance } from "@/lib/cash-balance";
 import { computeMonthIncome, incomeOverrides, resolvedTemplateIncome, adHocIncomeTotal, effectiveEntryAmount, isBillPending, isPastDueDate, netAmount, effectivePaid, type EntryBase } from "@/lib/finance-utils";
 
@@ -99,7 +99,7 @@ export default async function MonthsPage() {
   for (const { month, year } of fyMonths) ccMonthKeys.set(`${year}-${month}`, { month, year });
   for (const m of allMonths) ccMonthKeys.set(`${m.year}-${m.month}`, { month: m.month, year: m.year });
   const ccByMonth = await getCardBillsByMonth(userId, [...ccMonthKeys.values()]);
-  const ccFor = (m: number, y: number): MonthlyCardBills => ccByMonth.get(`${y}-${m}`) ?? { total: 0, paid: 0, cashback: 0, byCard: [] };
+  const ccFor = (m: number, y: number): MonthlyCardBills => ccByMonth.get(`${y}-${m}`) ?? { total: 0, paid: 0, cashback: 0, unbilled: 0, byCard: [] };
 
   const currentMonthFull = allMonths.find(m => m.month === todayMonth && m.year === todayYear) ?? null;
   const analyticsMonths = allMonths.filter(m => m.isPopulated);
@@ -165,7 +165,9 @@ export default async function MonthsPage() {
     const proj = projectMonth({
       month, year,
       templates: allTemplates,
-      ccBills: ccFor(month, year),
+      // Forward estimate: fold an unclosed cycle's running spend in (see
+      // projectedCardTotal) so the projection doesn't sit at 0 all month.
+      ccBills: projectedCardTotal(ccFor(month, year)),
       receivables: pendingReceivables,
       existingAdHoc: nonPopMonth?.adHocItems ?? [],
       fallbackIncome,

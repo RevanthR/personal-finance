@@ -100,14 +100,19 @@ export async function getCardsOverview(userId: string, asOf: Date = new Date()):
   });
 }
 
-export type CardBillLine = { templateId: string; name: string; amount: number; paid: number; cashback: number; basis: CardBillBasis };
+export type CardBillLine = { templateId: string; name: string; amount: number; paid: number; cashback: number; unbilled: number; basis: CardBillBasis };
 export type MonthlyCardBills = {
-  /** Σ gross billed this month (before payments/cashback) — the cost view. */
+  /** Σ gross billed this month (before payments/cashback) — the cost view.
+   * Zero for a card whose cycle due this month hasn't closed yet; that
+   * card's running spend is in `unbilled` instead, never here. */
   total: number;
   /** Σ payments recorded against those statements. */
   paid: number;
   /** Σ cashback credited on those statements. */
   cashback: number;
+  /** Σ charges booked into a cycle that hasn't closed yet — not a real bill,
+   * see projectedCardTotal() for folding this into a forward estimate. */
+  unbilled: number;
   byCard: CardBillLine[];
 };
 
@@ -115,11 +120,16 @@ export type MonthlyCardBills = {
  * What the credit cards cost per calendar month, for a requested set of
  * months (past, current or future). A card's cost in month M is the
  * statement due in M (see cardBillForMonth): the confirmed bank figure, the
- * closed cycle's charge sum, or (for an unclosed cycle) the charges booked
- * into it so far. `total` is the GROSS billed figure (a spend/cost view);
- * `paid` / `cashback` are alongside so a caller can also derive what's
- * still owed on this month's statements (total - paid - cashback).
- * Every screen that shows "what the cards cost in month M" reads this.
+ * closed cycle's charge sum, or (for an unclosed cycle) zero, with the
+ * running spend reported separately as `unbilled`. `total` is the GROSS
+ * billed figure (a spend/cost view); `paid` / `cashback` are alongside so a
+ * caller can also derive what's still owed on this month's statements
+ * (total - paid - cashback). Every screen that shows "what the cards cost
+ * in month M" reads this — for a month's REAL obligations (Payables,
+ * Pending, a populated month's expense), use `total` as-is; for a forward
+ * ESTIMATE of a month that hasn't happened yet, run it through
+ * projectedCardTotal() first so an accruing cycle isn't shown as a flat 0
+ * for the whole month.
  */
 export async function getCardBillsByMonth(
   userId: string,
@@ -137,7 +147,7 @@ export async function getCardBillsByMonth(
     },
   });
   if (cards.length === 0) {
-    for (const { month, year } of months) out.set(`${year}-${month}`, { total: 0, paid: 0, cashback: 0, byCard: [] });
+    for (const { month, year } of months) out.set(`${year}-${month}`, { total: 0, paid: 0, cashback: 0, unbilled: 0, byCard: [] });
     return out;
   }
 
@@ -164,7 +174,7 @@ export async function getCardBillsByMonth(
   const r2 = (n: number) => Math.round(n * 100) / 100;
   for (const { month, year } of months) {
     const byCard: CardBillLine[] = [];
-    let total = 0, paid = 0, cashback = 0;
+    let total = 0, paid = 0, cashback = 0, unbilled = 0;
     for (const card of cards) {
       if (!card.template.isActive) continue;
       const bill = cardBillForMonth(
@@ -173,16 +183,33 @@ export async function getCardBillsByMonth(
         chargesByCard.get(card.templateId) ?? [],
         month, year, asOf,
       );
-      if (bill.gross <= 0) continue;
-      byCard.push({ templateId: card.template.id, name: card.template.name, amount: bill.gross, paid: bill.paid, cashback: bill.cashback, basis: bill.basis });
+      if (bill.gross <= 0 && bill.unbilled <= 0) continue;
+      byCard.push({ templateId: card.template.id, name: card.template.name, amount: bill.gross, paid: bill.paid, cashback: bill.cashback, unbilled: bill.unbilled, basis: bill.basis });
       total = r2(total + bill.gross);
       paid = r2(paid + bill.paid);
       cashback = r2(cashback + bill.cashback);
+      unbilled = r2(unbilled + bill.unbilled);
     }
-    byCard.sort((a, b) => b.amount - a.amount);
-    out.set(`${year}-${month}`, { total, paid, cashback, byCard });
+    byCard.sort((a, b) => (b.amount + b.unbilled) - (a.amount + a.unbilled));
+    out.set(`${year}-${month}`, { total, paid, cashback, unbilled, byCard });
   }
   return out;
+}
+
+/**
+ * Fold an unclosed cycle's running spend into the bill figure — for a
+ * forward ESTIMATE of what a month not yet lived through will likely cost
+ * (a projected future month, or the year view's not-yet-populated months).
+ * Never use this for a month's real Payables / Pending / recorded expense:
+ * an unbilled cycle is not an obligation yet, see MonthlyCardBills.unbilled.
+ */
+export function projectedCardTotal(bills: MonthlyCardBills): { total: number; byCard: { templateId: string; name: string; amount: number }[] } {
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const byCard = bills.byCard
+    .map(c => ({ templateId: c.templateId, name: c.name, amount: r2(c.amount + c.unbilled) }))
+    .filter(c => c.amount > 0)
+    .sort((a, b) => b.amount - a.amount);
+  return { total: r2(bills.total + bills.unbilled), byCard };
 }
 
 /**

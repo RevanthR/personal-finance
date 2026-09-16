@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { setupMonth } from "@/lib/months/setup-month";
 import { redirect } from "next/navigation";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
-import { getCardsOverview, getCardBillsByMonth } from "@/lib/cards-db";
+import { getCardsOverview, getCardBillsByMonth, projectedCardTotal } from "@/lib/cards-db";
 import { getCashBalance } from "@/lib/cash-balance";
 import { getCurrentMonthYear, prevMonthYear, nextMonthYear } from "@/lib/utils";
 import { projectMonth } from "@/lib/months/projection";
@@ -105,7 +105,9 @@ async function DashboardData({
     const projection = projectMonth({
       month: targetMonth, year: targetYear,
       templates: allTemplates,
-      ccBills: ccBills.get(`${targetYear}-${targetMonth}`) ?? { total: 0, byCard: [] },
+      // Forward estimate: an unclosed cycle's running spend counts here (see
+      // projectedCardTotal) so a future month doesn't sit at 0 all month.
+      ccBills: projectedCardTotal(ccBills.get(`${targetYear}-${targetMonth}`) ?? { total: 0, paid: 0, cashback: 0, unbilled: 0, byCard: [] }),
       receivables: pendingReceivables,
       existingAdHoc: futureMonthRecord?.adHocItems ?? [],
       fallbackIncome: lastPopulatedMonth?.salaryIncome ?? 0,
@@ -274,7 +276,7 @@ async function DashboardData({
     isRealCurrentMonth ? getCardsOverview(userId) : Promise.resolve([]),
     getCardBillsByMonth(userId, [{ month: targetMonth, year: targetYear }]),
   ]);
-  const ccMonth = ccByMonth.get(`${targetYear}-${targetMonth}`) ?? { total: 0, paid: 0, cashback: 0, byCard: [] };
+  const ccMonth = ccByMonth.get(`${targetYear}-${targetMonth}`) ?? { total: 0, paid: 0, cashback: 0, unbilled: 0, byCard: [] };
 
   // Real-time cash: as of now for the current month, as of the last moment
   // of the viewed month for a past one. See src/lib/cash-balance.ts.
