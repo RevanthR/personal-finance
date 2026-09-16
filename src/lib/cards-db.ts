@@ -197,19 +197,25 @@ export async function getCardBillsByMonth(
 }
 
 /**
- * Fold an unclosed cycle's running spend into the bill figure — for a
- * forward ESTIMATE of what a month not yet lived through will likely cost
- * (a projected future month, or the year view's not-yet-populated months).
+ * What's still outstanding on a card for a forward ESTIMATE of a month not
+ * yet lived through (a projected future month, or the year view's
+ * not-yet-populated months): the bill net of whatever's already been paid
+ * or credited back, plus the next cycle's running spend so far. Net of
+ * payment matters here specifically because a statement can already be
+ * fully paid off by the time its due date attributes it to a future month
+ * (e.g. changing a card's payment day can retroactively move an
+ * already-settled statement into next month's projection) — without
+ * netting it out, a paid bill would show up as still owed.
  * Never use this for a month's real Payables / Pending / recorded expense:
  * an unbilled cycle is not an obligation yet, see MonthlyCardBills.unbilled.
  */
 export function projectedCardTotal(bills: MonthlyCardBills): { total: number; byCard: { templateId: string; name: string; amount: number }[] } {
   const r2 = (n: number) => Math.round(n * 100) / 100;
   const byCard = bills.byCard
-    .map(c => ({ templateId: c.templateId, name: c.name, amount: r2(c.amount + c.unbilled) }))
+    .map(c => ({ templateId: c.templateId, name: c.name, amount: r2(Math.max(0, c.amount - c.paid - c.cashback) + c.unbilled) }))
     .filter(c => c.amount > 0)
     .sort((a, b) => b.amount - a.amount);
-  return { total: r2(bills.total + bills.unbilled), byCard };
+  return { total: r2(byCard.reduce((s, c) => s + c.amount, 0)), byCard };
 }
 
 /**
