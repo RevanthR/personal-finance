@@ -242,6 +242,9 @@ export function effectiveEntryAmount(
   todayDay: number,
 ): number {
   if (isBillPending(e, isCurrentMonth, todayDay)) return 0;
+  // Paid with a credit card: the spend is already on that card's statement
+  // (a bill_via_card charge), so counting it here too would double it.
+  if (e.paidViaCardTemplateId) return 0;
   const net = netAmount(e);
   return e.template.category === "CREDIT_CARD"
     ? Math.max(0, net - (e.billPaymentsAttributed ?? 0))

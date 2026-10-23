@@ -9,6 +9,7 @@ import { hasAmountSignal } from "./amount-signal";
 import { tryKnownTemplate } from "./known-templates";
 import { listCandidatesViaHistory, listCandidatesViaSearch, extractSenderEmail } from "./candidates";
 import { runPool } from "./pool";
+import { isAccessAllowed } from "@/lib/plans";
 import type { gmail_v1 } from "googleapis";
 import type { ParsedTransactionPaymentMethod, ParsedTransactionType } from "@/generated/prisma/client";
 
@@ -214,6 +215,14 @@ export interface SyncOptions {
 const SYNC_LOCK_MS = 4 * 60 * 1000;
 
 export async function syncGmailForUser(userId: string, onProgress?: ProgressCallback, opts?: SyncOptions): Promise<SyncResult> {
+  // Webhook and cron runs have no session, so the plan gate the pages and
+  // APIs apply is checked here: no Gemini spend for a deactivated account
+  // or an expired plan.
+  const owner = await db.user.findUnique({ where: { id: userId }, select: { isActive: true, role: true, trialEndsAt: true, planExpiry: true } });
+  if (!owner?.isActive || (owner.role !== "ADMIN" && !isAccessAllowed(owner))) {
+    return { synced: 0, skipped: 0, failed: 0, error: "Account inactive or plan expired" };
+  }
+
   const gmailClient = await getGmailClientForUser(userId);
   if (!gmailClient) return { synced: 0, skipped: 0, failed: 0, error: "Gmail not connected" };
   const gmail = gmailClient; // non-null, closed over below

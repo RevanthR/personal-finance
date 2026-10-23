@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -16,12 +16,12 @@ const CardPostSchema = z.object({
 });
 
 // GET — list all CC cards for the user (with current month's entry if it exists)
-export async function GET(_req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function GET() {
+  const me = await requireApiUser();
+  if (!me.ok) return me.response;
 
   const cards = await db.creditCard.findMany({
-    where: { userId: session.user.id },
+    where: { userId: me.id },
     include: {
       template: {
         select: {
@@ -38,8 +38,8 @@ export async function GET(_req: NextRequest) {
 
 // POST — create a new CC card
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const me = await requireApiUser();
+  if (!me.ok) return me.response;
 
   const parsed = validate(CardPostSchema, await req.json());
   if (!parsed.ok) return parsed.response;
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
 
   const template = await db.lineItemTemplate.create({
     data: {
-      userId:       session.user.id,
+      userId:       me.id,
       name,
       category:     "CREDIT_CARD",
       amount:       0,
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
   const card = await db.creditCard.create({
     data: {
       templateId: template.id,
-      userId:     session.user.id,
+      userId:     me.id,
       bank:       bank    ?? null,
       network:    network ?? null,
       last4:      last4   ?? null,

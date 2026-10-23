@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { setupMonth } from "@/lib/months/setup-month";
 import { redirect } from "next/navigation";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
-import { getCardsOverview, getCardBillsByMonth, projectedCardTotal } from "@/lib/cards-db";
+import { getCardsOverview, getCardBillsByMonth, projectedCardTotal, EMPTY_CARD_BILLS } from "@/lib/cards-db";
 import { getCashBalance } from "@/lib/cash-balance";
 import { getCurrentMonthYear, prevMonthYear, nextMonthYear } from "@/lib/utils";
 import { projectMonth } from "@/lib/months/projection";
@@ -28,8 +28,11 @@ export default async function DashboardPage({
   const { month: todayMonth, year: todayYear } = getCurrentMonthYear();
   const params = await searchParams;
 
-  const targetMonth = params.month ? Math.min(12, Math.max(1, parseInt(params.month))) : todayMonth;
-  const targetYear  = params.year  ? Math.max(2020, parseInt(params.year))            : todayYear;
+  // A missing or garbled ?month=/?year= falls back to today instead of a 500.
+  const pm = Number.parseInt(params.month ?? "", 10);
+  const py = Number.parseInt(params.year ?? "", 10);
+  const targetMonth = Number.isFinite(pm) ? Math.min(12, Math.max(1, pm)) : todayMonth;
+  const targetYear  = Number.isFinite(py) ? Math.min(2100, Math.max(2020, py)) : todayYear;
 
   const { month: prevM, year: prevY } = prevMonthYear(targetMonth, targetYear);
   const { month: nextM, year: nextY } = nextMonthYear(targetMonth, targetYear);
@@ -107,7 +110,7 @@ async function DashboardData({
       templates: allTemplates,
       // Forward estimate: an unclosed cycle's running spend counts here (see
       // projectedCardTotal) so a future month doesn't sit at 0 all month.
-      ccBills: projectedCardTotal(ccBills.get(`${targetYear}-${targetMonth}`) ?? { total: 0, paid: 0, cashback: 0, unbilled: 0, byCard: [] }),
+      ccBills: projectedCardTotal(ccBills.get(`${targetYear}-${targetMonth}`) ?? EMPTY_CARD_BILLS),
       receivables: pendingReceivables,
       existingAdHoc: futureMonthRecord?.adHocItems ?? [],
       fallbackIncome: lastPopulatedMonth?.salaryIncome ?? 0,
@@ -167,7 +170,7 @@ async function DashboardData({
       select: {
         id: true, month: true, year: true,
         salaryIncome: true, freelanceIncome: true, otherIncome: true, openingBalance: true,
-        entries: { select: { id: true, templateId: true, amount: true, cashbackAmount: true } },
+        entries: { select: { id: true, templateId: true, amount: true, cashbackAmount: true, paidViaCardTemplateId: true, template: { select: { category: true } } } },
         adHocItems: { select: { id: true, name: true, type: true, amount: true, category: true, customCategory: true, customCategoryId: true, subCategory: true, notes: true, ccTemplateId: true, isCredit: true, isCardRepayment: true, date: true } },
       },
     }),
@@ -272,11 +275,15 @@ async function DashboardData({
   // month, current included, also gets getCardBillsByMonth for THIS
   // month's bill figure (due-date attributed, so the same statement can't
   // land in two calendar months depending on which screen).
+  // The same call also covers the recent months, for the trend chart.
   const [cards, ccByMonth] = await Promise.all([
     isRealCurrentMonth ? getCardsOverview(userId) : Promise.resolve([]),
-    getCardBillsByMonth(userId, [{ month: targetMonth, year: targetYear }]),
+    getCardBillsByMonth(userId, [{ month: targetMonth, year: targetYear }, ...recentMonths.map(m => ({ month: m.month, year: m.year }))]),
   ]);
-  const ccMonth = ccByMonth.get(`${targetYear}-${targetMonth}`) ?? { total: 0, paid: 0, cashback: 0, unbilled: 0, byCard: [] };
+  const ccMonth = ccByMonth.get(`${targetYear}-${targetMonth}`) ?? EMPTY_CARD_BILLS;
+  const cardBillByMonth: Record<string, number> = Object.fromEntries(
+    recentMonths.map(m => [`${m.year}-${m.month}`, ccByMonth.get(`${m.year}-${m.month}`)?.total ?? 0]),
+  );
 
   // Real-time cash: as of now for the current month, as of the last moment
   // of the viewed month for a past one. See src/lib/cash-balance.ts.
@@ -306,6 +313,7 @@ async function DashboardData({
       gmailStatus={gmailStatus}
       carriedOverEntries={JSON.parse(JSON.stringify(carriedOverEntries))}
       settledCarryOverEntries={JSON.parse(JSON.stringify(settledCarryOverEntries))}
+      cardBillByMonth={cardBillByMonth}
     />
   );
 }

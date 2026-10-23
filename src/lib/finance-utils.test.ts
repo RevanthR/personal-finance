@@ -183,3 +183,11 @@ describe("groupProjectedExpenses", () => {
     expect(g.fixed + g.variable).toBe(g.total);
   });
 });
+
+describe("effectiveEntryAmount, bill paid by card", () => {
+  it("counts 0, the card statement already carries it", async () => {
+    const { effectiveEntryAmount } = await import("./finance-utils");
+    const e = { amount: 30000, isPaid: true, paidAmount: null, cashbackAmount: null, paidViaCardTemplateId: "card1", template: { category: "HOUSE_MAINTENANCE", statementDay: null } };
+    expect(effectiveEntryAmount(e, false, 10)).toBe(0);
+  });
+});

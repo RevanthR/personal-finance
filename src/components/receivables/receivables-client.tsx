@@ -156,7 +156,7 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
 
   const tabs: TabsUnderlineOption<MainTab>[] = [
     { value: "chits",       label: "Chits",       icon: TrendingUp },
-    { value: "receivables", label: "Receivables", icon: Wallet },
+    { value: "receivables", label: "Owed to me", icon: Wallet },
   ];
 
   return (
@@ -166,12 +166,12 @@ export function ReceivablesClient({ chits: initialChits, receivables: initialRec
         icon={Wallet}
         iconClass="text-positive"
         bgClass="bg-positive-bg border-positive-border"
-        title="Vault"
+        title="Chits & Owed"
         desc="Track your chit funds and money owed to you, all in one place."
       />
 
       <PageHeader
-        title="Vault"
+        title="Chits & Owed"
         action={
           <>
             {mainTab === "chits"       && <Button size="sm" onClick={() => setShowAddChit(true)}       className="h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm"><Plus className="w-3.5 h-3.5 mr-1" />Add Chit</Button>}

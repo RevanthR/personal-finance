@@ -242,9 +242,12 @@ export function ImportsClient({ gmail }: ImportsClientProps) {
                   </Button>
                 </>
               ) : syncStatus === "APPROVED" ? (
-                <Button size="sm" onClick={() => { window.location.href = "/api/gmail/connect"; }}>
-                  <Mail className="w-3.5 h-3.5 mr-1.5" />
-                  Connect Gmail
+                // A real link, not client routing: this hops out to Google OAuth.
+                <Button size="sm" asChild>
+                  <a href="/api/gmail/connect">
+                    <Mail className="w-3.5 h-3.5 mr-1.5" />
+                    Connect Gmail
+                  </a>
                 </Button>
               ) : syncStatus === "REQUESTED" ? (
                 <Button size="sm" variant="outline" disabled>

@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { monthYearOf } from "@/lib/utils";
 import { tokenOverlapScore } from "./text-similarity";
 import { netAmount, effectivePaid } from "@/lib/finance-utils";
 import { getCardsOverview } from "@/lib/cards-db";
@@ -71,7 +72,7 @@ type PendingTx = {
 export async function findEntryMatches(userId: string, transactions: PendingTx[]): Promise<Map<string, EntryMatch>> {
   if (transactions.length === 0) return new Map();
 
-  const monthKeys = new Set(transactions.map(t => `${t.date.getFullYear()}-${t.date.getMonth() + 1}`));
+  const monthKeys = new Set(transactions.map(t => `${monthYearOf(t.date).year}-${monthYearOf(t.date).month}`));
   const monthPairs = [...monthKeys].map(k => {
     const [year, month] = k.split("-").map(Number);
     return { year, month };
@@ -132,7 +133,7 @@ export async function findEntryMatches(userId: string, transactions: PendingTx[]
       }
     }
 
-    const month = months.find(m => m.year === t.date.getFullYear() && m.month === t.date.getMonth() + 1);
+    const month = months.find(m => m.year === monthYearOf(t.date).year && m.month === monthYearOf(t.date).month);
     if (!month) continue;
 
     const candidates = month.entries.filter(e => !usedEntryIds.has(e.id) && e.template.category !== "CREDIT_CARD");

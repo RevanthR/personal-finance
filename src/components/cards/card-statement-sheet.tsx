@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { currentCycleOpen, nextCycleClose, prevStatementDate } from "@/lib/cards";
+import { currentCycleOpen, nextCycleClose } from "@/lib/cards";
 import { ChevronRight } from "lucide-react";
 import { reconciliationText, type CardOverview, type CardChargeRow } from "./cards-client";
 
@@ -11,10 +11,22 @@ const d = (iso: string) => new Date(iso).toLocaleDateString("en-IN", { day: "num
 
 function chargesIn(charges: CardChargeRow[], start: Date, end: Date) {
   return charges
+    .filter(c => !c.isCardRepayment)
     .filter(c => { const t = new Date(c.date).getTime(); return t >= start.getTime() && t < end.getTime(); })
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 }
 const sum = (rows: CardChargeRow[]) => rows.reduce((s, c) => s + (c.isCredit ? -c.amount : c.amount), 0);
+
+function ChargeLine({ c, fmt }: { c: CardChargeRow; fmt: (v: number) => string }) {
+  return (
+    <div className="flex items-center justify-between text-xs">
+      <span className="text-muted-foreground truncate">{d(c.date)} · {c.name}</span>
+      <span className={cn("tabular-nums shrink-0 ml-2", c.isCredit && "text-positive")}>
+        {c.isCredit ? "+" : ""}{fmt(c.amount)}
+      </span>
+    </div>
+  );
+}
 
 export function CardStatementSheet({
   open, onOpenChange, card, fmt,
@@ -31,6 +43,7 @@ export function CardStatementSheet({
   const openCycle = sd != null ? currentCycleOpen(sd, new Date()) : null;
   const openEnd = sd != null ? nextCycleClose(sd, new Date()) : null;
   const openCharges = openCycle && openEnd ? chargesIn(card.charges, openCycle, openEnd) : [];
+  const repayments = card.charges.filter(c => c.isCardRepayment);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -52,67 +65,60 @@ export function CardStatementSheet({
               </div>
               {openCharges.length > 0 && (
                 <div className="mt-2 space-y-1">
-                  {openCharges.slice(0, 40).map(c => (
-                    <div key={c.id} className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground truncate">{d(c.date)} · {c.name}</span>
-                      <span className={cn("tabular-nums shrink-0 ml-2", c.isCredit && "text-positive")}>
-                        {c.isCredit ? "+" : ""}{fmt(c.amount)}
-                      </span>
-                    </div>
-                  ))}
+                  {openCharges.slice(0, 40).map(c => <ChargeLine key={c.id} c={c} fmt={fmt} />)}
                 </div>
               )}
             </div>
           )}
 
-          {/* Closed statements */}
-          {card.statements.map(st => {
-            const stDate = new Date(st.statementDate);
-            const cycleStart = sd != null ? prevStatementDate(sd, stDate) : stDate;
-            const rows = chargesIn(card.charges, cycleStart, stDate);
-            const isOpen = expanded === st.statementDate;
-            const confirmed = st.confirmedAt != null && st.statementBalance != null;
-            const gross = confirmed ? st.statementBalance! : Math.max(0, sum(rows));
+          {/* Closed statements, figures from the shared ledger */}
+          {card.cycles.map(cy => {
+            const rows = chargesIn(card.charges, new Date(cy.cycleStart), new Date(cy.statementDate));
+            const isOpen = expanded === cy.statementDate;
+            const paidTotal = cy.recordedPaid + cy.repaid;
+            const paidNote = paidTotal > 0
+              ? cy.outstanding === 0 ? " · paid" : ` · ${fmt(Math.round(paidTotal))} paid, ${fmt(Math.round(cy.outstanding))} left`
+              : "";
             return (
-              <div key={st.statementDate} className="rounded-xl border border-border bg-card overflow-hidden">
+              <div key={cy.statementDate} className="rounded-xl border border-border bg-card overflow-hidden">
                 <button className="w-full flex items-center justify-between p-3 hover:bg-muted/30 transition-colors"
-                  onClick={() => setExpanded(isOpen ? null : st.statementDate)}>
+                  onClick={() => setExpanded(isOpen ? null : cy.statementDate)}>
                   <div className="text-left">
-                    <p className="text-sm font-medium">{d(st.statementDate)}</p>
+                    <p className="text-sm font-medium">{d(cy.statementDate)}</p>
                     <p className="text-[11px] text-muted-foreground">
-                      {confirmed ? "confirmed" : "estimated"}
-                      {st.paidInFull ? " · paid" : st.paidAmount > 0 ? ` · ${fmt(Math.round(st.paidAmount))} paid` : ""}
+                      {cy.confirmed ? "confirmed" : "estimated"}{paidNote}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold tabular-nums">{fmt(Math.round(gross))}</span>
+                    <span className="text-sm font-semibold tabular-nums">{fmt(Math.round(cy.gross))}</span>
                     <ChevronRight className={cn("w-4 h-4 text-muted-foreground transition-transform", isOpen && "rotate-90")} />
                   </div>
                 </button>
                 {isOpen && (
                   <div className="px-3 pb-3 pt-1 space-y-1 border-t border-border">
-                    {confirmed && Math.abs(st.statementBalance! - sum(rows)) > 1 && (
+                    {cy.confirmed && Math.abs(cy.gross - cy.estimated) > 1 && (
                       <p className="text-[11px] text-muted-foreground pb-1 leading-snug">
-                        Logged {fmt(Math.round(sum(rows)))} · statement {fmt(Math.round(st.statementBalance!))}. {reconciliationText({ delta: st.statementBalance! - sum(rows) }, fmt)}
+                        Logged {fmt(Math.round(cy.estimated))} · statement {fmt(Math.round(cy.gross))}. {reconciliationText({ delta: cy.gross - cy.estimated }, fmt)}
                       </p>
                     )}
                     {rows.length === 0 && <p className="text-xs text-muted-foreground py-2 text-center">No logged charges in this cycle.</p>}
-                    {rows.map(c => (
-                      <div key={c.id} className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground truncate">{d(c.date)} · {c.name}</span>
-                        <span className={cn("tabular-nums shrink-0 ml-2", c.isCredit && "text-positive")}>
-                          {c.isCredit ? "+" : ""}{fmt(c.amount)}
-                        </span>
-                      </div>
-                    ))}
+                    {rows.map(c => <ChargeLine key={c.id} c={c} fmt={fmt} />)}
                   </div>
                 )}
               </div>
             );
           })}
 
-          {sd != null && card.statements.length === 0 && (
+          {sd != null && card.cycles.length === 0 && (
             <p className="text-xs text-muted-foreground text-center py-6">No closed statements yet.</p>
+          )}
+
+          {/* Repayments logged as transactions (bank transfer, UPI, autopay) */}
+          {repayments.length > 0 && (
+            <div className="rounded-xl border border-border bg-card p-3 space-y-1">
+              <p className="text-xs font-medium text-muted-foreground pb-1">Payments logged as transactions</p>
+              {repayments.slice(0, 20).map(c => <ChargeLine key={c.id} c={c} fmt={fmt} />)}
+            </div>
           )}
         </div>
       </DialogContent>

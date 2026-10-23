@@ -33,7 +33,7 @@ export async function syncBillViaCardCharge(
 ): Promise<void> {
   const existing = await tx.adHocItem.findFirst({
     where: { notes: marker(opts.entryId), month: { userId: opts.userId } },
-    select: { id: true },
+    select: { id: true, date: true, ccTemplateId: true },
   });
 
   if (!opts.cardTemplateId || opts.netAmount <= 0) {
@@ -50,7 +50,10 @@ export async function syncBillViaCardCharge(
     ccTemplateId: opts.cardTemplateId,
     isCredit: false,
     isCardRepayment: false,
-    date: opts.paidOn ?? new Date(),
+    // Keep the original swipe date when only the amount changes, so an edit
+    // doesn't slide the charge into a later billing cycle.
+    date: opts.paidOn
+      ?? (existing && existing.ccTemplateId === opts.cardTemplateId ? existing.date : new Date()),
     notes: marker(opts.entryId),
   };
 

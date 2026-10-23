@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { findExistingMatches, findParsedTransactionDuplicates } from "@/lib/gmail/dedupe";
@@ -10,9 +10,9 @@ import { findEntryMatches } from "@/lib/gmail/entry-match";
 // /api/gmail/parsed?countOnly=1 returns just the count of actionable
 // (unmatched) items, for the nav badge.
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const userId = session.user.id;
+  const me = await requireApiUser();
+  if (!me.ok) return me.response;
+  const userId = me.id;
 
   const items = await db.parsedTransaction.findMany({
     where: { userId, status: "PENDING" },

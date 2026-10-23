@@ -1,15 +1,15 @@
-import { auth } from "@/lib/auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { validate, ReceivablePostSchema } from "@/lib/validation";
 import { resolveCustomCategory } from "@/lib/custom-category";
 
 export async function GET() {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const me = await requireApiUser();
+  if (!me.ok) return me.response;
 
   const receivables = await db.receivable.findMany({
-    where: { userId: session.user.id },
+    where: { userId: me.id },
     orderBy: { createdAt: "desc" },
   });
 
@@ -17,8 +17,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const me = await requireApiUser();
+  if (!me.ok) return me.response;
 
   const parsed = validate(ReceivablePostSchema, await req.json());
   if (!parsed.ok) return parsed.response;
@@ -28,11 +28,11 @@ export async function POST(req: NextRequest) {
   // recurring templates use, instead of storing an unlinked free-text
   // string — "Kids" typed here now converges with "Kids" created anywhere
   // else in the app, case-insensitively.
-  const customCat = body.customCategory ? await resolveCustomCategory(session.user.id, body.customCategory) : null;
+  const customCat = body.customCategory ? await resolveCustomCategory(me.id, body.customCategory) : null;
 
   const receivable = await db.receivable.create({
     data: {
-      userId: session.user.id,
+      userId: me.id,
       category: body.category,
       customCategory: customCat?.name ?? null,
       customCategoryId: customCat?.id ?? null,

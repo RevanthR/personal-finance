@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { NextResponse } from "next/server";
 
@@ -8,9 +8,9 @@ import { NextResponse } from "next/server";
 // countOnly mode, which still runs the full match-finding pipeline first
 // and counts a different (unmatched-only) subset.
 export async function GET() {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const me = await requireApiUser();
+  if (!me.ok) return me.response;
 
-  const count = await db.parsedTransaction.count({ where: { userId: session.user.id, status: "PENDING" } });
+  const count = await db.parsedTransaction.count({ where: { userId: me.id, status: "PENDING" } });
   return NextResponse.json({ count });
 }

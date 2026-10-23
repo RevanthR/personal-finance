@@ -152,8 +152,10 @@ export async function getCashBalance(userId: string, asOf: Date = new Date()): P
   // No anchor yet (pre-seed / brand-new user): count everything from epoch.
   const anchorAsOf = anchor?.asOf ?? new Date(0);
 
+  // Active income only, the same set the dashboard and Year View use. A
+  // deactivated salary must stop adding cash.
   const incomeTemplates: IncomeTemplate[] = allTemplates
-    .filter(t => t.templateType === "INCOME")
+    .filter(t => t.templateType === "INCOME" && t.isActive)
     .map(t => ({ id: t.id, amount: t.amount, dueDateDay: t.dueDateDay, pendingAmount: t.pendingAmount, pendingFromMonth: t.pendingFromMonth, pendingFromYear: t.pendingFromYear }));
 
   const events: CashEvent[] = [

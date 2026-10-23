@@ -47,9 +47,9 @@ async function main() {
   ]);
 
   const [
-    rentT, grocT, riceT, elecT, airtelT, fuelT, familyT,
+    , , , , , , ,
     isbT, persLoanT,
-    axisT, onecardT, amazonT,
+    axisT, , ,
     goldT,
   ] = templates;
 

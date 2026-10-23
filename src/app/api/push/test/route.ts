@@ -1,12 +1,12 @@
-import { auth } from "@/lib/auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { NextResponse } from "next/server";
 import webpush from "web-push";
 import { initVapid } from "@/lib/push";
 
 export async function POST() {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const me = await requireApiUser();
+  if (!me.ok) return me.response;
 
   const { VAPID_SUBJECT, NEXT_PUBLIC_VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY } = process.env;
   if (!VAPID_SUBJECT || !NEXT_PUBLIC_VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
@@ -16,7 +16,7 @@ export async function POST() {
   initVapid();
 
   const subs = await db.pushSubscription.findMany({
-    where: { userId: session.user.id },
+    where: { userId: me.id },
   });
 
   if (subs.length === 0) {

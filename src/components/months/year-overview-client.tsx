@@ -528,7 +528,7 @@ export function YearOverviewClient({
                         name: i.name,
                         value: i.amount,
                         // % of the card's own credit limit when one's set in
-                        // Vault, so this reads as "how maxed out is this
+                        // /cards, so this reads as "how maxed out is this
                         // card" — not just "share of this month's CC spend".
                         pctOverride: i.creditLimit ? Math.round((i.amount / i.creditLimit) * 100) : undefined,
                       }))}

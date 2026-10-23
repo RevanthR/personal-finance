@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { initVapid, sendPushToUser, PAYMENT_REMINDER_PUSH_TAG } from "@/lib/push";
 import { actualDueDate } from "@/lib/finance-utils";
 import { prevMonthYear } from "@/lib/utils";
+import { getCardsOverview } from "@/lib/cards-db";
 
 export const maxDuration = 60;
 
@@ -43,7 +44,7 @@ export async function GET(req: NextRequest) {
   const entryCandidates = await db.monthlyEntry.findMany({
     where: {
       isPaid: false,
-      template: { dueDateDay: { not: null } },
+      template: { dueDateDay: { not: null }, category: { not: "CREDIT_CARD" }, user: { isActive: true } },
       OR: [
         { month: { month: currentMonth, year: currentYear } },
         { month: { month: prevMonth, year: prevYear } },
@@ -63,27 +64,23 @@ export async function GET(req: NextRequest) {
     if (inWindow(d)) items.push({ userId: e.month.userId, name: e.template.name, daysUntil: d });
   }
 
-  // Credit-card bills live on CardStatement, with a real paymentDueDate.
-  const ccStatements = await db.cardStatement.findMany({
-    where: {
-      paidInFull: false,
-      paymentDueDate: {
-        gte: new Date(todayUtc - NAG_OVERDUE_DAYS * dayMs),
-        lte: new Date(todayUtc + WARN_AHEAD_DAYS * dayMs),
-      },
-    },
-    select: {
-      userId: true, statementBalance: true, paidAmount: true, cashback: true,
-      paymentDueDate: true,
-      card: { select: { template: { select: { name: true } } } },
-    },
+  // Credit-card bills: every unpaid statement from the shared card ledger,
+  // confirmed or still estimated from charges (an unconfirmed bill is still
+  // a bill), net of anything already paid.
+  const cardUsers = await db.creditCard.findMany({
+    where: { template: { isActive: true }, user: { isActive: true } },
+    select: { userId: true },
+    distinct: ["userId"],
   });
-  for (const s of ccStatements) {
-    const owed = (s.statementBalance ?? 0) - s.paidAmount - s.cashback;
-    if (owed <= 1) continue;
-    const due = s.paymentDueDate;
-    const d = daysUntil(due.getUTCFullYear(), due.getUTCMonth() + 1, due.getUTCDate());
-    if (inWindow(d)) items.push({ userId: s.userId, name: s.card.template.name, daysUntil: d });
+  for (const { userId } of cardUsers) {
+    for (const card of await getCardsOverview(userId, now)) {
+      if (!card.isActive) continue;
+      for (const st of card.status.unpaidStatements) {
+        const due = st.dueDate;
+        const d = daysUntil(due.getUTCFullYear(), due.getUTCMonth() + 1, due.getUTCDate());
+        if (inWindow(d)) items.push({ userId, name: card.name, daysUntil: d });
+      }
+    }
   }
 
   if (items.length === 0) return NextResponse.json({ sent: 0, skipped: "nothing due" });

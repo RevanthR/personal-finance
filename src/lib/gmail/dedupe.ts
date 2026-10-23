@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { monthYearOf } from "@/lib/utils";
 import { tokenOverlapScore } from "./text-similarity";
 import { effectivePaid } from "@/lib/finance-utils";
 
@@ -97,7 +98,7 @@ export async function findExistingMatches(
   // AdHocItem pass above didn't already claim are considered.
   const unmatched = sorted.filter(t => !result.has(t.id));
   if (unmatched.length > 0) {
-    const monthKeys = new Set(unmatched.map(t => `${t.date.getFullYear()}-${t.date.getMonth() + 1}`));
+    const monthKeys = new Set(unmatched.map(t => `${monthYearOf(t.date).year}-${monthYearOf(t.date).month}`));
     const monthPairs = [...monthKeys].map(k => {
       const [year, month] = k.split("-").map(Number);
       return { year, month };
@@ -121,7 +122,7 @@ export async function findExistingMatches(
       let tied = false;
       for (const e of paidEntries) {
         if (usedEntryIds.has(e.id)) continue;
-        if (e.month.month !== t.date.getMonth() + 1 || e.month.year !== t.date.getFullYear()) continue;
+        if (e.month.month !== monthYearOf(t.date).month || e.month.year !== monthYearOf(t.date).year) continue;
         const paid = effectivePaid(e);
         // Amount is the load-bearing signal here (merchant text on an
         // EMI/NEFT alert is often the sender's own name, not the bill's),

@@ -1,9 +1,10 @@
-import { auth } from "@/lib/auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { validate, zName, zDay, zMoney } from "@/lib/validation";
 import { revalidatePath } from "next/cache";
+import { rekeyCardStatements } from "@/lib/cards-db";
 
 const CardPatchSchema = z.object({
   name:         zName.optional(),
@@ -21,13 +22,13 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ cardId: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const me = await requireApiUser();
+  if (!me.ok) return me.response;
 
   const { cardId } = await params;
 
   const card = await db.creditCard.findFirst({
-    where: { id: cardId, userId: session.user.id },
+    where: { id: cardId, userId: me.id },
     include: { template: true },
   });
   if (!card) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -48,6 +49,10 @@ export async function PATCH(
         ...(isActive     !== undefined && { isActive }),
       },
     });
+    if (statementDay !== undefined || dueDateDay !== undefined) {
+      // Keep confirmed figures and payments attached to their cycles.
+      await rekeyCardStatements(db, card.templateId);
+    }
   }
 
   const updated = await db.creditCard.update({
@@ -64,7 +69,7 @@ export async function PATCH(
     },
   });
 
-  revalidatePath("/receivables");
+  revalidatePath("/cards");
   revalidatePath("/dashboard");
   return NextResponse.json(updated);
 }
@@ -74,13 +79,13 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ cardId: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const me = await requireApiUser();
+  if (!me.ok) return me.response;
 
   const { cardId } = await params;
 
   const card = await db.creditCard.findFirst({
-    where: { id: cardId, userId: session.user.id },
+    where: { id: cardId, userId: me.id },
   });
   if (!card) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -89,6 +94,7 @@ export async function DELETE(
     data: { isActive: false },
   });
 
-  revalidatePath("/receivables");
+  revalidatePath("/cards");
+  revalidatePath("/dashboard");
   return NextResponse.json({ ok: true });
 }

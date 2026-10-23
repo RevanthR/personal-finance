@@ -34,7 +34,7 @@ const navItems: NavEntry[] = [
   { href: "/dashboard",   label: "Dashboard",  icon: LayoutDashboard,    iconClass: "bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400" },
   { href: "/months",      label: "Year View",  mobileLabel: "Year", icon: Calendar,       iconClass: "bg-orange-100 text-orange-600 dark:bg-orange-500/15 dark:text-orange-400" },
   { href: "/cards",       label: "Cards",      icon: CreditCard,        iconClass: "bg-purple-100 text-purple-600 dark:bg-purple-500/15 dark:text-purple-400" },
-  { href: "/receivables", label: "Vault",      icon: Wallet,            iconClass: "bg-fuchsia-100 text-fuchsia-600 dark:bg-fuchsia-500/15 dark:text-fuchsia-400" },
+  { href: "/receivables", label: "Chits & Owed", mobileLabel: "Chits", icon: Wallet,            iconClass: "bg-fuchsia-100 text-fuchsia-600 dark:bg-fuchsia-500/15 dark:text-fuchsia-400" },
   // Sync is desktop-sidebar only — on mobile it lives in the header bar to
   // keep the bottom nav uncluttered (see Header).
   { href: "/imports",     label: "Sync",       icon: Inbox, badge: true, desktopOnly: true, iconClass: "bg-teal-100 text-teal-600 dark:bg-teal-500/15 dark:text-teal-400" },

@@ -1,11 +1,11 @@
-import { auth } from "@/lib/auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag, revalidatePath } from "next/cache";
 import { templateCacheTag } from "@/lib/cached-queries";
 import { z } from "zod";
 import { validate, zMoney, zDay, zMonth, zYear } from "@/lib/validation";
-import { nextMonthYear } from "@/lib/utils";
+import { nextMonthYear, getCurrentMonthYear } from "@/lib/utils";
 
 const ChitPatchSchema = z.object({
   isLifted:             z.boolean().optional(),
@@ -26,8 +26,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ chitId: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const me = await requireApiUser();
+  if (!me.ok) return me.response;
 
   const { chitId } = await params;
 
@@ -36,7 +36,7 @@ export async function PATCH(
   const body = parsed.data;
 
   const chit = await db.chitFund.findFirst({
-    where: { id: chitId, userId: session.user.id },
+    where: { id: chitId, userId: me.id },
     include: { template: true },
   });
   if (!chit) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -46,8 +46,8 @@ export async function PATCH(
   // Construct liftedOn from the user-selected month/year (first day of that month, UTC)
   let liftedOn = chit.liftedOn;
   if (isLifting || (body.liftMonth != null && body.liftYear != null)) {
-    const m = body.liftMonth ?? (chit.liftedOn ? chit.liftedOn.getUTCMonth() + 1 : new Date().getMonth() + 1);
-    const y = body.liftYear  ?? (chit.liftedOn ? chit.liftedOn.getUTCFullYear()  : new Date().getFullYear());
+    const m = body.liftMonth ?? (chit.liftedOn ? chit.liftedOn.getUTCMonth() + 1 : getCurrentMonthYear().month);
+    const y = body.liftYear  ?? (chit.liftedOn ? chit.liftedOn.getUTCFullYear()  : getCurrentMonthYear().year);
     liftedOn = new Date(Date.UTC(y, m - 1, 1));
   }
 
@@ -77,8 +77,8 @@ export async function PATCH(
     });
   }
 
-  const liftMonth = body.liftMonth ?? (chit.liftedOn ? chit.liftedOn.getUTCMonth() + 1 : new Date().getMonth() + 1);
-  const liftYear  = body.liftYear  ?? (chit.liftedOn ? chit.liftedOn.getUTCFullYear()  : new Date().getFullYear());
+  const liftMonth = body.liftMonth ?? (chit.liftedOn ? chit.liftedOn.getUTCMonth() + 1 : getCurrentMonthYear().month);
+  const liftYear  = body.liftYear  ?? (chit.liftedOn ? chit.liftedOn.getUTCFullYear()  : getCurrentMonthYear().year);
   const incomeLabel = `${chit.template.name} Chit Lifted`;
 
   if (isLifting) {
@@ -87,11 +87,11 @@ export async function PATCH(
     // name-matching "{template name} Chit Lifted" later — that broke
     // silently if the template was ever renamed after lifting.
     let monthRecord = await db.month.findUnique({
-      where: { userId_month_year: { userId: session.user.id, month: liftMonth, year: liftYear } },
+      where: { userId_month_year: { userId: me.id, month: liftMonth, year: liftYear } },
     });
     if (!monthRecord) {
       monthRecord = await db.month.create({
-        data: { userId: session.user.id, month: liftMonth, year: liftYear, salaryIncome: 0 },
+        data: { userId: me.id, month: liftMonth, year: liftYear, salaryIncome: 0 },
       });
     }
     const monthId = monthRecord.id;
@@ -118,11 +118,11 @@ export async function PATCH(
   } else if (chit.isLifted && body.liftMonth != null && body.liftYear != null && chit.liftIncomeItemId) {
     // Lift month edit on already-lifted chit: move income adhoc to the new month
     let newMonthRecord = await db.month.findUnique({
-      where: { userId_month_year: { userId: session.user.id, month: liftMonth, year: liftYear } },
+      where: { userId_month_year: { userId: me.id, month: liftMonth, year: liftYear } },
     });
     if (!newMonthRecord) {
       newMonthRecord = await db.month.create({
-        data: { userId: session.user.id, month: liftMonth, year: liftYear, salaryIncome: 0 },
+        data: { userId: me.id, month: liftMonth, year: liftYear, salaryIncome: 0 },
       });
     }
     await db.adHocItem.update({
@@ -149,13 +149,13 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ chitId: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const me = await requireApiUser();
+  if (!me.ok) return me.response;
 
   const { chitId } = await params;
 
   const chit = await db.chitFund.findFirst({
-    where: { id: chitId, userId: session.user.id },
+    where: { id: chitId, userId: me.id },
     select: { id: true, templateId: true, isLifted: true, liftIncomeItemId: true },
   });
   if (!chit) return NextResponse.json({ error: "Not found" }, { status: 404 });

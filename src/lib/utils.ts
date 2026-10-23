@@ -37,9 +37,43 @@ export function ordinal(day: number): string {
   }
 }
 
+// ── Calendar dates in the user's time zone ──────────────────────────────────
+// The server runs in UTC (Vercel), the users are in India. Without this,
+// between midnight and 05:30 IST the server thinks it is still yesterday
+// (and on the 1st, still last month). Every "what day/month is it" and
+// "which month does this date belong to" question goes through here.
+// Vercel does not allow setting TZ, so it is fixed in code.
+export const APP_TIME_ZONE = "Asia/Kolkata";
+
+const ymdFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: APP_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit",
+});
+
+/** Year, month (1-12) and day of `date` as seen in India. */
+export function localDateParts(date: Date = new Date()): { year: number; month: number; day: number } {
+  const [year, month, day] = ymdFormatter.format(date).split("-").map(Number);
+  return { year, month, day };
+}
+
+/** "2026-10-23" for `date` in India. */
+export function localDateString(date: Date = new Date()): string {
+  return ymdFormatter.format(date);
+}
+
+/** The calendar month a stored date belongs to, in India. Works for both
+ * date-only values (UTC midnight) and exact instants. */
+export function monthYearOf(date: Date): { month: number; year: number } {
+  const { month, year } = localDateParts(date);
+  return { month, year };
+}
+
 export function getCurrentMonthYear(): { month: number; year: number } {
-  const now = new Date();
-  return { month: now.getMonth() + 1, year: now.getFullYear() };
+  return monthYearOf(new Date());
+}
+
+/** Today's day of the month, in India. */
+export function todayDayOfMonth(): number {
+  return localDateParts().day;
 }
 
 // Stored date for an ad-hoc item. A date-only string ("2026-09-07") parses
@@ -50,11 +84,8 @@ export function getCurrentMonthYear(): { month: number; year: number } {
 // real current instant; a backdated or future day keeps its plain midnight.
 export function adHocDate(dateStr: string): Date {
   const picked = new Date(dateStr);
-  const now = new Date();
-  const isToday = picked.getUTCFullYear() === now.getUTCFullYear()
-    && picked.getUTCMonth() === now.getUTCMonth()
-    && picked.getUTCDate() === now.getUTCDate();
-  return isToday ? now : picked;
+  const isToday = picked.toISOString().slice(0, 10) === localDateString();
+  return isToday ? new Date() : picked;
 }
 
 // month/year rollover — this exact `month === 1 ? 12 : month - 1` (and its

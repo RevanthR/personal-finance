@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { validate, EntryPatchSchema } from "@/lib/validation";
@@ -14,8 +14,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ monthId: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const me = await requireApiUser();
+  if (!me.ok) return me.response;
 
   const { monthId } = await params;
 
@@ -28,7 +28,7 @@ export async function PATCH(
   // belongs to an earlier month than today (a carried-over bill being paid
   // late), which changes the "settled this month" bookkeeping.
   const entry = await db.monthlyEntry.findFirst({
-    where: { id: entryId, monthId, month: { userId: session.user.id } },
+    where: { id: entryId, monthId, month: { userId: me.id } },
     select: {
       templateId: true, amount: true, billedAmount: true, cashbackAmount: true, isPaid: true, paidAmount: true,
       paidViaCardTemplateId: true,
@@ -47,7 +47,7 @@ export async function PATCH(
       return NextResponse.json({ error: "paidViaCardTemplateId only applies to a non-CC bill being paid in full" }, { status: 400 });
     }
     const card = await db.lineItemTemplate.findFirst({
-      where: { id: paidViaCardTemplateId, userId: session.user.id, category: "CREDIT_CARD" },
+      where: { id: paidViaCardTemplateId, userId: me.id, category: "CREDIT_CARD" },
       select: { id: true },
     });
     if (!card) return NextResponse.json({ error: "Invalid card" }, { status: 400 });
@@ -81,7 +81,7 @@ export async function PATCH(
 
   const updated = await db.$transaction(async (tx) => {
     const updatedEntry = await tx.monthlyEntry.update({
-      where: { id: entryId, monthId, month: { userId: session.user.id } },
+      where: { id: entryId, monthId, month: { userId: me.id } },
       data: {
         ...paymentData,
         ...(amount          !== undefined && { amount }),
@@ -96,7 +96,7 @@ export async function PATCH(
     // Cash ledger: one row for the change in this bill's cash-paid total.
     await recordEntryCashDelta(
       tx,
-      session.user.id,
+      me.id,
       entryId,
       { amount: entry.amount, cashbackAmount: entry.cashbackAmount, isPaid: entry.isPaid, paidAmount: entry.paidAmount, paidViaCardTemplateId: entry.paidViaCardTemplateId },
       { amount: updatedEntry.amount, cashbackAmount: updatedEntry.cashbackAmount, isPaid: updatedEntry.isPaid, paidAmount: updatedEntry.paidAmount, paidViaCardTemplateId: updatedEntry.paidViaCardTemplateId },
@@ -105,7 +105,7 @@ export async function PATCH(
     // Settled via a credit card? Log the spend ON that card so it isn't
     // lost from every "still owed" figure (see bill-via-card.ts).
     await syncBillViaCardCharge(tx, {
-      userId: session.user.id,
+      userId: me.id,
       entryId,
       monthId,
       name: updatedEntry.template.name,
@@ -114,14 +114,21 @@ export async function PATCH(
       cardTemplateId: updatedEntry.isPaid ? updatedEntry.paidViaCardTemplateId : null,
     });
 
-    // If this is an unlifted chit fund, accumulate savings
-    if (updatedEntry.isPaid && updatedEntry.template.category === "CHIT_FUND") {
-      const chit = await tx.chitFund.findUnique({ where: { templateId: updatedEntry.templateId } });
-      if (chit && !chit.isLifted) {
-        await tx.chitFund.update({
-          where: { id: chit.id },
-          data: { accumulatedSavings: { increment: updatedEntry.amount } },
-        });
+    // Unlifted chit fund: savings track what's been paid in. Adjust by the
+    // change only (pay adds, un-pay takes back, an amount edit while paid
+    // moves it by the difference), so re-saving a paid entry can't double it.
+    if (updatedEntry.template.category === "CHIT_FUND") {
+      const savedBefore = entry.isPaid ? entry.amount : 0;
+      const savedAfter = updatedEntry.isPaid ? updatedEntry.amount : 0;
+      const change = savedAfter - savedBefore;
+      if (change !== 0) {
+        const chit = await tx.chitFund.findUnique({ where: { templateId: updatedEntry.templateId } });
+        if (chit && !chit.isLifted) {
+          await tx.chitFund.update({
+            where: { id: chit.id },
+            data: { accumulatedSavings: Math.max(0, chit.accumulatedSavings + change) },
+          });
+        }
       }
     }
 
@@ -138,7 +145,7 @@ export async function PATCH(
       const delta = paidAfter - paidBefore;
       if (delta > 0) {
         await tx.carriedDebtSettlement.create({
-          data: { userId: session.user.id, templateId: updatedEntry.templateId, billMonth: entry.month.month, billYear: entry.month.year, amount: delta },
+          data: { userId: me.id, templateId: updatedEntry.templateId, billMonth: entry.month.month, billYear: entry.month.year, amount: delta },
         });
       }
     }
@@ -151,7 +158,7 @@ export async function PATCH(
   // covering several bills), so paying any one of them means it's done its
   // job rather than trying to track exactly which entry it was about.
   if (updated.isPaid && !entry.isPaid) {
-    await closePushForUser(session.user.id, PAYMENT_REMINDER_PUSH_TAG, "/dashboard").catch(() => {});
+    await closePushForUser(me.id, PAYMENT_REMINDER_PUSH_TAG, "/dashboard").catch(() => {});
   }
 
   return NextResponse.json(updated);

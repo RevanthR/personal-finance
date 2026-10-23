@@ -153,11 +153,17 @@ export function TemplatesClient({
   }
 
   async function deleteTemplate(id: string) {
-    if (!confirm("Delete this template? It won't affect past entries.")) return;
+    if (!confirm("Remove this item? If it has past payments it is archived instead, so earlier months stay as they were.")) return;
     const res = await fetch(`/api/templates/${id}`, { method: "DELETE" });
     if (!res.ok) { toast.error("Failed to delete"); return; }
-    setTemplates((prev) => prev.filter((x) => x.id !== id));
-    toast.success("Deleted");
+    const { archived } = await res.json() as { archived?: boolean };
+    if (archived) {
+      setTemplates((prev) => prev.map((x) => x.id === id ? { ...x, isActive: false } : x));
+      toast.success("Archived. Past months keep their history.");
+    } else {
+      setTemplates((prev) => prev.filter((x) => x.id !== id));
+      toast.success("Deleted");
+    }
   }
 
   async function handleForeclose(data: {
@@ -574,9 +580,9 @@ export function TemplatesClient({
   );
 }
 
-// CREDIT_CARD excluded — cards are created in Vault instead (also creates
+// CREDIT_CARD excluded. Cards are created on /cards instead (also creates
 // the linked CreditCard row for bank/network/last4, which adding one here
-// never would), and Vault is the single place their Bill Generation
+// never would), and /cards is the single place their Bill Generation
 // Date/Payment Due Date/Credit Limit get edited (see the "managed
 // separately" banner above the expense list).
 const EXPENSE_CATEGORY_CHIPS = Object.entries(CATEGORY_LABELS).filter(
@@ -620,7 +626,8 @@ function TemplateDialog({
   const [amount, setAmount] = useState(String(initial?.amount ?? ""));
   const [isFixed, setIsFixed] = useState(initial?.isFixed ?? true);
   const [dueDateDay, setDueDateDay] = useState(String(initial?.dueDateDay ?? ""));
-  const [statementDay, setStatementDay] = useState(String(initial?.statementDay ?? ""));
+  // Card billing days are edited on /cards; kept here only so a save round-trips the value.
+  const [statementDay] = useState(String(initial?.statementDay ?? ""));
   const [frequency, setFrequency] = useState<"MONTHLY" | "YEARLY">(
     (initial?.frequency as "MONTHLY" | "YEARLY") ?? "MONTHLY"
   );

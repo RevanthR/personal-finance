@@ -256,3 +256,58 @@ describe("cardBillForMonth", () => {
     expect(r).toMatchObject({ amount: 0, basis: "none" });
   });
 });
+
+// ── Payments: repayments, partial payments, confirm after pay ───────────────
+
+describe("card repayments and payments", () => {
+  const card = { statementDay: 2, dueDateDay: 20, creditLimit: 100000 };
+  const repay = (date: string, amount: number): CardCharge => ({ date, amount, isCredit: true, isCardRepayment: true });
+
+  it("a repayment after the cut pays that statement, it does not reduce this cycle's spend", () => {
+    const charges = [charge("2026-08-10", 5000), charge("2026-09-04", 800), repay("2026-09-06", 5000)];
+    const r = cardStatus(card, [], charges, new Date("2026-09-08"));
+    expect(r.statementBalance).toBe(0);
+    expect(r.status).toBe("paid");
+    expect(r.unbilledSpends).toBe(800);
+    expect(r.currentBalance).toBe(800);
+  });
+
+  it("a partial repayment leaves the remainder owed", () => {
+    const charges = [charge("2026-08-10", 5000), repay("2026-09-06", 2000)];
+    const r = cardStatus(card, [], charges, new Date("2026-09-08"));
+    expect(r.statementBalance).toBe(3000);
+    expect(r.status).toBe("awaiting");
+  });
+
+  it("an overpayment pays a past-due statement first, then becomes credit", () => {
+    const charges = [charge("2026-07-10", 3000), charge("2026-08-10", 4000), charge("2026-09-04", 1000), repay("2026-09-06", 8000)];
+    const statements = [row({ statementDate: "2026-08-02", paymentDueDate: "2026-08-20", statementBalance: 3000, confirmedAt: "2026-08-03" })];
+    const r = cardStatus(card, statements, charges, new Date("2026-09-08"));
+    expect(r.pastDue).toBe(0);
+    expect(r.statementBalance).toBe(0);
+    expect(r.unbilledSpends).toBe(0); // 1000 spend, 1000 credit left over
+  });
+
+  it("paying an estimate in full, then confirming a higher bank figure, shows the remainder", () => {
+    const charges = [charge("2026-08-10", 5000)];
+    const statements = [row({ statementDate: "2026-09-02", statementBalance: 5600, confirmedAt: "2026-09-05", paidAmount: 5000, paidInFull: true })];
+    const r = cardStatus(card, statements, charges, new Date("2026-09-08"));
+    expect(r.statementBalance).toBe(600);
+    expect(r.status).toBe("confirmed");
+  });
+
+  it("a past-due statement shows in unpaidStatements so it can be paid", () => {
+    const charges = [charge("2026-07-10", 3000), charge("2026-08-10", 4000)];
+    const statements = [row({ statementDate: "2026-08-02", paymentDueDate: "2026-08-20", statementBalance: 3000, confirmedAt: "2026-08-03" })];
+    const r = cardStatus(card, statements, charges, new Date("2026-09-08"));
+    expect(r.unpaidStatements.map(s => s.outstanding)).toEqual([3000, 4000]);
+  });
+
+  it("cardBillForMonth nets repayments out of that month's bill", () => {
+    const charges = [charge("2026-08-10", 5000), repay("2026-09-06", 2000)];
+    const r = cardBillForMonth(card, [], charges, 9, 2026, new Date("2026-09-08"));
+    expect(r.gross).toBe(5000);
+    expect(r.paid).toBe(2000);
+    expect(r.amount).toBe(3000);
+  });
+});

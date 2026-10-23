@@ -47,10 +47,10 @@ function CardRow({ card, fmt }: { card: CardOverview; fmt: (v: number) => string
   }
 
   const headline =
-    s.status === "awaiting" ? { label: "Statement", value: s.statementEstimated, note: "estimated" }
+    s.status === "awaiting" ? { label: "Statement", value: s.statementBalance, note: "estimated" }
     : s.status === "paid" ? { label: "Statement", value: 0, note: "paid" }
     : s.status === "open" || s.status === "unconfigured" ? { label: "This cycle", value: s.unbilledSpends, note: "" }
-    : { label: "Now owed", value: s.statementBalance, note: s.statementConfirmed ? "confirmed" : "estimated" };
+    : { label: "Now owed", value: s.statementBalance + s.pastDue, note: s.statementConfirmed ? "confirmed" : "estimated" };
 
   return (
     <div className={cn("rounded-xl border bg-card p-3", s.status === "pastdue" && "border-negative/40")}>
@@ -80,9 +80,9 @@ function CardRow({ card, fmt }: { card: CardOverview; fmt: (v: number) => string
           Confirm {fmt(Math.round(s.statementEstimated))}
         </Button>
       )}
-      {(s.status === "confirmed" || s.status === "pastdue") && s.statementBalance > 0 && (
+      {(s.status === "confirmed" || s.status === "pastdue") && s.statementBalance + s.pastDue > 0 && (
         <Button size="sm" className="w-full h-8 text-xs mt-2" disabled={busy} onClick={() => post("pay", { full: true })}>
-          Mark paid ({fmt(Math.round(s.statementBalance))})
+          Mark paid ({fmt(Math.round(s.statementBalance + s.pastDue))})
         </Button>
       )}
     </div>

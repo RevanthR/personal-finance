@@ -1,9 +1,10 @@
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
+import { requireApiUser } from "@/lib/api-auth";
+import { monthYearOf } from "@/lib/utils";
 import { validate, ParsedTransactionPatchSchema } from "@/lib/validation";
-import { ensureCurrentStatement, getCardsOverview } from "@/lib/cards-db";
-import { recordEntryCashDelta, recordCardCashDelta } from "@/lib/cash-payment";
+import { recordCardPayment } from "@/lib/cards-db";
+import { recordEntryCashDelta } from "@/lib/cash-payment";
 import { syncBillViaCardCharge } from "@/lib/bill-via-card";
 import { resolveCustomCategory } from "@/lib/custom-category";
 import { resolveSubCategory } from "@/lib/sub-category";
@@ -23,9 +24,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const userId = session.user.id;
+  const user = await requireApiUser();
+  if (!user.ok) return user.response;
+  const userId = user.id;
 
   const { id } = await params;
 
@@ -51,37 +52,9 @@ export async function PATCH(
     // paid (the same target as the manual /cards Pay button), not a
     // MonthlyEntry — cards don't have those any more (src/lib/cards.ts).
     if (body.cardId) {
-      const card = await db.creditCard.findFirst({
-        where: { id: body.cardId, userId },
-        select: { id: true, userId: true, template: { select: { statementDay: true, dueDateDay: true } } },
-      });
-      if (!card) return NextResponse.json({ error: "Card not found" }, { status: 404 });
-      if (card.template.statementDay == null) {
-        return NextResponse.json({ error: "Set a statement date on this card first" }, { status: 400 });
-      }
-
-      const overview = (await getCardsOverview(userId)).find(c => c.cardId === card.id);
-      const remaining = overview?.status.statementBalance ?? 0;
-      const gross = overview?.status.statementGross ?? 0;
-
-      await db.$transaction(async (tx) => {
-        const stmt = await ensureCurrentStatement(tx, {
-          id: card.id, userId: card.userId,
-          statementDay: card.template.statementDay, dueDateDay: card.template.dueDateDay,
-        });
-        if (!stmt) throw new Error("no cycle to pay");
-        const newPaid = stmt.paidAmount + settleAmount;
-        // Treat a payment that clears (or overpays) the outstanding balance
-        // as paid-in-full — a card bill payment often rounds up or pays
-        // slightly ahead, and the extra just carries against next cycle.
-        const clearsIt = settleAmount + 0.5 >= remaining || newPaid + stmt.cashback + 0.5 >= gross;
-        await tx.cardStatement.update({
-          where: { id: stmt.id },
-          data: { paidAmount: newPaid, paidInFull: clearsIt, paidAt: new Date() },
-        });
-        await recordCardCashDelta(tx, userId, stmt.id, stmt.paidAmount, newPaid);
-        await tx.parsedTransaction.update({ where: { id }, data: { status: "APPROVED" } });
-      });
+      const result = await recordCardPayment(userId, body.cardId, { kind: "amount", amount: settleAmount });
+      if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
+      await db.parsedTransaction.update({ where: { id }, data: { status: "APPROVED" } });
 
       await notifyReviewProgress(userId);
       await closePushForUser(userId, PAYMENT_REMINDER_PUSH_TAG, "/dashboard").catch(() => {});
@@ -142,8 +115,7 @@ export async function PATCH(
   const finalDate = body.date ? new Date(body.date) : existing.date;
   const finalName = body.merchant ?? existing.merchant ?? existing.bank;
 
-  const month = finalDate.getMonth() + 1;
-  const year = finalDate.getFullYear();
+  const { month, year } = monthYearOf(finalDate);
   const monthRow = await db.month.findFirst({ where: { userId, month, year } });
   if (!monthRow) {
     return NextResponse.json(
@@ -194,12 +166,9 @@ export async function PATCH(
       // netting it to zero there.
       const isCardRepayment = existing.paymentMethod !== "CREDIT_CARD";
 
-      // A refund/credit against the card reduces what's owed on the
-      // statement rather than adding a new charge — but it still has to be
-      // a real, queryable row (isCredit: true) rather than a bare arithmetic
-      // adjustment, since a post-close statement total is re-summed from
-      // scratch on every subsequent charge; a decrement with no persisted
-      // trace would just get silently erased by the next resum.
+      // Either way it's a real row (isCredit: true). The card ledger
+      // (cardLedger, src/lib/cards.ts) nets a refund out of the cycle it
+      // lands in, and applies a repayment to the statement it pays.
       const customCat = !isCardRepayment && body.customCategory ? await resolveCustomCategory(userId, body.customCategory) : null;
       const resolvedCategory = isCardRepayment
         ? null

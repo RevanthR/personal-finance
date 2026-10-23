@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { monthYearOf } from "@/lib/utils";
 import type { Prisma } from "@/generated/prisma/client";
 
 type DbClient = typeof db | Prisma.TransactionClient;
@@ -29,8 +30,7 @@ export async function resolveMonthForDate(
   date: Date,
   viewedMonth: { id: string; month: number; year: number },
 ): Promise<ResolvedMonth> {
-  const month = date.getMonth() + 1;
-  const year = date.getFullYear();
+  const { month, year } = monthYearOf(date);
   if (month === viewedMonth.month && year === viewedMonth.year) {
     return { monthId: viewedMonth.id, month, year, moved: false };
   }

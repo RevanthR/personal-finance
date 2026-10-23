@@ -1,6 +1,6 @@
 "use client";
 
-import { X, LayoutDashboard, Calendar, SlidersHorizontal, TrendingUp, Coins, Plus } from "lucide-react";
+import { X, LayoutDashboard, Calendar, SlidersHorizontal, CreditCard, Coins, Inbox, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const sections = [
@@ -10,22 +10,54 @@ const sections = [
     color: "text-indigo-600 dark:text-indigo-400",
     bg: "bg-indigo-100 dark:bg-indigo-500/15",
     lines: [
-      "A full-year view of income, expenses, and balance across all months.",
-      "Mark each recurring item as paid once you settle it.",
-      "The progress bar shows how many items are settled this month.",
-      'Tap "Add Transaction" to log a one-off spend or income that will not repeat next month.',
+      "This month at a glance: income, bills, what is still pending, and cash in hand.",
+      "Mark each recurring bill as paid once you settle it. If you paid it with a credit card, pick the card so it moves onto that card's bill.",
+      'Tap "Add Transaction" to log a one-off spend or income.',
+      "Use the arrows to look at past months or a projection of future ones.",
     ],
   },
   {
     icon: Calendar,
-    title: "Statistics",
+    title: "Year View",
     color: "text-blue-600 dark:text-blue-400",
     bg: "bg-blue-100 dark:bg-blue-500/15",
     lines: [
-      "Shows your full financial year from April to March.",
-      "Solid months are real data. Dashed months are estimates based on your active items.",
-      "Tap any past month to see its full breakdown.",
-      "The chart shows income vs. expenses and your running balance through the year.",
+      "Your financial year from April to March.",
+      "Solid months are real data. Dashed months are estimates from your active recurring items and card spend so far.",
+      "Tap any month to see its full breakdown.",
+    ],
+  },
+  {
+    icon: CreditCard,
+    title: "Cards",
+    color: "text-purple-600 dark:text-purple-400",
+    bg: "bg-purple-100 dark:bg-purple-500/15",
+    lines: [
+      "Each card shows its latest statement, anything past due, and what you have spent in the cycle that is still open.",
+      "Until you confirm it, a statement is estimated from your logged charges. Confirm it with the bank's figure when the statement arrives.",
+      'Pay with "Mark paid", or "Paid part" for a partial payment. Money goes to the oldest unpaid statement first.',
+      "A payment logged as a transaction (bank transfer or UPI to the card, marked as a card repayment) counts the same way. Use one or the other for a payment, not both.",
+      "Tap Statements to see every past cycle and the charges behind it.",
+    ],
+  },
+  {
+    icon: Coins,
+    title: "Chits & Owed",
+    color: "text-amber-600 dark:text-amber-400",
+    bg: "bg-amber-100 dark:bg-amber-500/15",
+    lines: [
+      "Chit funds: before you lift, your monthly payment builds savings. After you lift, it is repaying the group.",
+      "Owed to you: money others owe you. Set an expected date and that month's forecast includes it. Tap Mark as Received when it arrives.",
+    ],
+  },
+  {
+    icon: Inbox,
+    title: "Sync",
+    color: "text-teal-600 dark:text-teal-400",
+    bg: "bg-teal-100 dark:bg-teal-500/15",
+    lines: [
+      "Connect Gmail and bank alert emails turn into suggested transactions.",
+      "Nothing is added until you approve it. Card bill payments can be matched to the card so they pay its statement.",
     ],
   },
   {
@@ -34,35 +66,10 @@ const sections = [
     color: "text-violet-600 dark:text-violet-400",
     bg: "bg-violet-100 dark:bg-violet-500/15",
     lines: [
-      "Set up recurring items that auto-fill every month: salary, EMIs, rent, credit card bills, chit contributions.",
-      "Add your income sources first so the app can calculate your monthly leftover correctly.",
-      "Set a Payment Due Date on any item so the Dashboard can flag it when it is overdue.",
-      "Yearly items like insurance only appear in the month they are due.",
-      'Tap "Foreclose" on a loan once it is fully paid. It will stop showing up in future months.',
-    ],
-  },
-  {
-    icon: TrendingUp,
-    title: "Vault",
-    color: "text-emerald-600 dark:text-emerald-400",
-    bg: "bg-emerald-100 dark:bg-emerald-500/15",
-    lines: [
-      "Three tabs: Cards, Chits, and Receivables (money others owe you).",
-      "Cards: each card's Bill is this cycle's already-generated statement; Utilization also includes spend still accumulating toward next cycle's bill.",
-      'Tap a card\'s bill to see every transaction behind it, split into "Generated Bill" and "Accumulating" tabs.',
-      "Receivables: set an expected date and that month's forecast will include this amount as income. Tap Mark as Received when the money comes in.",
-    ],
-  },
-  {
-    icon: Coins,
-    title: "Chit Funds",
-    color: "text-amber-600 dark:text-amber-400",
-    bg: "bg-amber-100 dark:bg-amber-500/15",
-    lines: [
-      "A group savings scheme where every member pays in monthly and takes turns receiving the full pot.",
-      "Before you lift: your monthly payment is treated as savings, not an expense.",
-      "After you lift: your monthly payment becomes an expense since you are paying back the group.",
-      "Track total value, savings built up, and lift history from this page.",
+      "Items that fill in every month: salary, EMIs, rent, chit contributions.",
+      "Add your income sources first so the app can work out what is left each month.",
+      "Set a Payment Due Date so you get a reminder and overdue items are flagged.",
+      "Removing an item that already has payments archives it, so past months keep their history.",
     ],
   },
   {
@@ -71,10 +78,8 @@ const sections = [
     color: "text-rose-600 dark:text-rose-400",
     bg: "bg-rose-100 dark:bg-rose-500/15",
     lines: [
-      "Logs a one-off item for the current month only. It will not carry over to next month.",
-      "Expense types: House, Loan, Credit Card, Personal, Misc.",
-      "For credit card spends, pick the card and a spend type like Food or Travel. These are grouped under that card and roll into next month's bill.",
-      "Income types: Bonus, Freelance, Refund, Other. These are added directly to this month's income.",
+      "Logs a one-off spend or income. It does not repeat next month.",
+      "For a card spend, pick the card. It lands on that card's current cycle and becomes part of the next statement.",
     ],
   },
 ];

@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { AdHocType, Category } from "@/generated/prisma/client";
@@ -25,9 +25,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ monthId: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const userId = session.user.id;
+  const me = await requireApiUser();
+  if (!me.ok) return me.response;
+  const userId = me.id;
 
   const { monthId } = await params;
 
@@ -42,9 +42,11 @@ export async function POST(
     return NextResponse.json({ error: "Invalid card" }, { status: 400 });
   }
 
-  // A repayment must say which card it's paying down — there's nothing to
-  // reduce otherwise — and it isn't spending in any category, so any
-  // category the client sent is ignored rather than validated.
+  // A card repayment (money sent to the card from a bank) pays the card's
+  // statement: the card ledger (cardLedger in src/lib/cards.ts) applies it
+  // to the bill that was due when it was paid, and the cash balance counts
+  // it as cash out. It must say which card it pays, and it isn't spending
+  // in any category, so any category the client sent is ignored.
   const isCardRepayment = body.type === "EXPENSE" && body.isCardRepayment === true;
   if (isCardRepayment && !body.ccTemplateId) {
     return NextResponse.json({ error: "A card repayment needs a card" }, { status: 400 });
@@ -98,9 +100,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ monthId: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const userId = session.user.id;
+  const me = await requireApiUser();
+  if (!me.ok) return me.response;
+  const userId = me.id;
 
   const { monthId } = await params;
 
@@ -125,6 +127,9 @@ export async function PATCH(
   const nextCCTemplateId = body.ccTemplateId !== undefined
     ? (body.ccTemplateId || null)
     : existing.ccTemplateId;
+  if (existing.isCardRepayment && !nextCCTemplateId) {
+    return NextResponse.json({ error: "A card repayment needs a card" }, { status: 400 });
+  }
 
   // Editing the date across a month boundary re-files the item under the
   // month it now actually belongs to (same reasoning as POST).
@@ -189,9 +194,9 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ monthId: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const userId = session.user.id;
+  const me = await requireApiUser();
+  if (!me.ok) return me.response;
+  const userId = me.id;
 
   const { monthId } = await params;
   const id = req.nextUrl.searchParams.get("id");

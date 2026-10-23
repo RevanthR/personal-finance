@@ -1,16 +1,17 @@
-import { auth } from "@/lib/auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { db } from "@/lib/db";
+import { getCurrentMonthYear } from "@/lib/utils";
 import { NextRequest, NextResponse } from "next/server";
 import { validate, ChitPostSchema } from "@/lib/validation";
 import { revalidateTag, revalidatePath } from "next/cache";
 import { templateCacheTag } from "@/lib/cached-queries";
 
 export async function GET() {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const me = await requireApiUser();
+  if (!me.ok) return me.response;
 
   const chits = await db.chitFund.findMany({
-    where: { userId: session.user.id },
+    where: { userId: me.id },
     include: { template: true },
     orderBy: { startDate: "desc" },
   });
@@ -19,8 +20,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const me = await requireApiUser();
+  if (!me.ok) return me.response;
 
   const parsed = validate(ChitPostSchema, await req.json());
   if (!parsed.ok) return parsed.response;
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
 
   const template = await db.lineItemTemplate.create({
     data: {
-      userId: session.user.id,
+      userId: me.id,
       name: body.name,
       category: "CHIT_FUND",
       amount: body.monthlyUnliftedAmount,
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
   const chit = await db.chitFund.create({
     data: {
       templateId:           template.id,
-      userId:               session.user.id,
+      userId:               me.id,
       totalValue:           body.totalValue,
       durationMonths:       body.durationMonths,
       startDate:            new Date(body.startDate),
@@ -56,15 +57,13 @@ export async function POST(req: NextRequest) {
   const startDate = new Date(body.startDate);
   const startM = startDate.getUTCMonth() + 1;
   const startY = startDate.getUTCFullYear();
-  const now = new Date();
-  const nowM = now.getMonth() + 1;
-  const nowY = now.getFullYear();
+  const { month: nowM, year: nowY } = getCurrentMonthYear();
 
   // Only inject for months from startDate up to and including current month
   if (startY < nowY || (startY === nowY && startM <= nowM)) {
     const months = await db.month.findMany({
       where: {
-        userId: session.user.id,
+        userId: me.id,
         isPopulated: true,
         OR: [
           { year: { gt: startY } },

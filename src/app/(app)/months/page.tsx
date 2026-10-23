@@ -7,13 +7,13 @@ import { chitMonthlyAmount } from "@/lib/entry-amount";
 import { getCardBillsByMonth, projectedCardTotal, type MonthlyCardBills } from "@/lib/cards-db";
 import { getCashBalance } from "@/lib/cash-balance";
 import { computeMonthIncome, incomeOverrides, resolvedTemplateIncome, adHocIncomeTotal, effectiveEntryAmount, isBillPending, isPastDueDate, netAmount, effectivePaid, type EntryBase } from "@/lib/finance-utils";
-
-const isCC = (e: { template: { category: string } }) => e.template.category === "CREDIT_CARD";
 import { YearOverviewClient, type MonthData } from "@/components/months/year-overview-client";
-import { CATEGORY_LABELS, CATEGORY_COLORS, MONTHS, getCurrentMonthYear } from "@/lib/utils";
+import { CATEGORY_LABELS, CATEGORY_COLORS, MONTHS, getCurrentMonthYear, todayDayOfMonth } from "@/lib/utils";
 import { projectMonth } from "@/lib/months/projection";
 import type { AnalyticsData } from "@/components/months/stats-breakdown";
 import { clusterByName } from "@/lib/gmail/text-similarity";
+
+const isCC = (e: { template: { category: string } }) => e.template.category === "CREDIT_CARD";
 
 // Category breakdown of one month's income — mirrors computeMonthIncome's
 // override/pending-promotion logic (finance-utils.ts) per category instead
@@ -105,15 +105,15 @@ export default async function MonthsPage() {
   const analyticsMonths = allMonths.filter(m => m.isPopulated);
 
   // CC statement amounts from current month — used to make the next-month projection more accurate
-  const todayDay = new Date().getDate();
+  const todayDay = todayDayOfMonth();
   // Credit cards are handled separately (ccByMonth, above), so they
   // contribute 0 through these per-entry helpers — every `m.entries` sum
   // below is non-CC, and the card cost is added back where the total needs it.
   function entryExpense(e: EntryBase, isCurrentM: boolean): number {
     return isCC(e) ? 0 : effectiveEntryAmount(e, isCurrentM, todayDay);
   }
-  function entryNet(e: { template: { category: string }; amount: number; cashbackAmount: number | null }): number {
-    return isCC(e) ? 0 : netAmount(e);
+  function entryNet(e: { template: { category: string }; amount: number; cashbackAmount: number | null; paidViaCardTemplateId: string | null }): number {
+    return isCC(e) || e.paidViaCardTemplateId ? 0 : netAmount(e);
   }
 
   // templateType may be null for pre-existing rows (DB DEFAULT not backfilled by Prisma 7)
@@ -276,12 +276,11 @@ export default async function MonthsPage() {
     // spend), which made a heavily-used-but-not-yet-closed card show 0%
     // usage while whichever card happened to already be closed looked like
     // 100% — "usage" means real spend, not billing-cycle status.
-    const cardNameById = new Map(
-      cm.entries.filter(e => e.template.category === "CREDIT_CARD").map(e => [e.templateId, e.template.name])
-    );
-    const cardLimitByName = new Map(
-      cm.entries.filter(e => e.template.category === "CREDIT_CARD").map(e => [e.template.name, e.template.creditLimit ?? null])
-    );
+    // Card names and limits come from the card templates themselves: cards
+    // no longer have a MonthlyEntry row to read them from.
+    const cardTemplates = allTemplates.filter(t => t.category === "CREDIT_CARD");
+    const cardNameById = new Map(cardTemplates.map(t => [t.id, t.name]));
+    const cardLimitByName = new Map(cardTemplates.map(t => [t.name, t.creditLimit ?? null]));
     const cardMap = new Map<string, number>();
     for (const a of cm.adHocItems) {
       // A repayment isn't usage of the card, it's paying it down — leaving
@@ -409,7 +408,7 @@ export default async function MonthsPage() {
   // grouped by name so "Swiggy"/"SWIGGY*BANGALORE"/"Swiggy Order #4471"
   // land in one bucket instead of fragmenting into near-duplicates.
   const merchantItems = fyActual.flatMap(m =>
-    m.adHocItems.filter(a => a.type === "EXPENSE" && !a.isCredit)
+    m.adHocItems.filter(a => a.type === "EXPENSE" && !a.isCredit && !a.notes?.startsWith("bill_via_card:"))
   );
   const topMerchants = clusterByName(merchantItems, a => a.name, a => a.amount)
     .slice(0, 8);

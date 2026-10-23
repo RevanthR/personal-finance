@@ -44,16 +44,24 @@ Type-check with `npx tsc --noEmit`. See `DEFERRED.md` for parked work.
 
 ## Test coverage
 
-vitest covers the pure functions in `src/lib/finance-utils.ts` and the credit-card status engine in
-`src/lib/cards.ts` (`cards.test.ts` — cycle date math and `cardStatus()`). Most other modules are
-not covered.
+vitest covers the pure functions in `src/lib/finance-utils.ts`, `src/lib/utils.ts` (including the
+India-time date helpers), the cash ledger maths in `src/lib/cash-balance.ts`, and the credit-card
+engine in `src/lib/cards.ts` (`cards.test.ts`: cycle date math, `cardStatus()`, `cardBillForMonth()`,
+repayments and payment allocation). API routes and React components are not covered.
 
 ## Architecture
 
 ### Route groups
-- `src/app/(app)/`: authenticated app pages (dashboard, months, templates, chits, settings). `(app)/layout.tsx` enforces auth.
+- `src/app/(app)/`: authenticated app pages (dashboard, months, templates, chits, settings). `(app)/layout.tsx` enforces auth and the plan gate (expired users go to `/pricing`).
 - `src/app/admin/`: admin-only user management.
-- `src/app/api/`: all API routes; every route checks `auth()` from `src/lib/auth.ts`.
+- `src/app/api/`: all API routes. Every user route starts with `requireApiUser()` from `src/lib/api-auth.ts` (signed in, active, and on a trial or paid plan; billing, push, account and Gmail-disconnect routes pass `allowExpired`). Cron and webhook routes check their own secret. Gmail sync itself skips inactive or expired accounts, so webhook and cron runs don't spend Gemini quota on them.
+
+### Dates and time zone
+The server runs in UTC (Vercel, which does not allow setting `TZ`); users are in India. Any "what
+month/day is it" or "which month does this date belong to" question on the server must use the
+helpers in `src/lib/utils.ts`: `getCurrentMonthYear()`, `todayDayOfMonth()`, `monthYearOf(date)`,
+`localDateString()`. Never `new Date().getMonth()` in server code. Card cycle maths stays in UTC
+(`Date.UTC`) to line up with stored date-only values.
 
 ### Pages to Components pattern
 Server pages (`page.tsx`) do all DB queries via `db` (Prisma singleton in `src/lib/db.ts`), then pass
@@ -82,14 +90,28 @@ from. Nothing per-card is stored per-render.
   `ccTemplateId` (added manually or via the Gmail pipeline).
 - `statementDay` on the template is the billing-cycle close day; `dueDateDay` the payment due day.
   All cycle date math is UTC (`Date.UTC()`), to align with stored `AdHocItem.date` values.
-- `cardStatus(card, statements, charges, asOf)` derives everything: statement balance (bank-confirmed
-  `CardStatement.statementBalance` once set, else a charge-sum estimate), unbilled spends, past due,
-  current balance, utilisation, reconciliation. States: `open` → `awaiting` → `confirmed` →
-  `paid` / `pastdue`.
-- `src/lib/cards-db.ts` wraps it: `getCardsOverview()` (per-card status for the dashboard + /cards),
-  `getCardCycleExpenseByMonth()` (CC cost per calendar month, for the Year View), `ensureCurrentStatement()`.
+- `cardLedger()` builds every closed cycle (oldest first): gross (bank figure once confirmed, else
+  the charge-sum estimate), recorded payments, card repayments applied, cashback, outstanding.
+  `cardStatus()` and `cardBillForMonth()` both read from it, so every screen agrees. States:
+  `open`, `awaiting`, `confirmed`, `paid`, `pastdue`. "Paid" is computed from what is outstanding,
+  never from the stored `paidInFull` flag (that flag is informational only).
+- Older cycles with no `CardStatement` row are assumed settled outside the app; only rows and the
+  latest closed cycle can be past due.
+- Two ways a card bill gets paid, both landing in the same ledger:
+  1. The Pay button or a Gmail "settle": `recordCardPayment()` in `cards-db.ts` writes
+     `CardStatement.paidAmount` (oldest unpaid statement first) plus a `CashPayment` row.
+  2. A card repayment logged as a transaction (`AdHocItem` with `isCardRepayment`): applied by the
+     ledger to the statement current when it was paid, then older unpaid ones, then later ones;
+     cash counts it as a one-off outflow. It is NOT a refund and never reduces a cycle's spend.
+  Recording the same payment both ways double counts it.
+- `src/lib/cards-db.ts`: `getCardsOverview()` (status + cycles for the dashboard and /cards),
+  `getCardBillsByMonth()` (card cost per calendar month), `recordCardPayment()`,
+  `getOrCreateLatestStatement()`, `rekeyCardStatements()` (run when a card's statement or due day
+  changes, so statements stay attached to their cycle).
 - Confirm a statement: `POST /api/cards/[cardId]/confirm`. Record a payment: `POST /api/cards/[cardId]/pay`.
-  A Gmail-detected card bill payment routes to the same pay path via the Sync review screen.
+- A non-card bill paid with a card (`MonthlyEntry.paidViaCardTemplateId`) also creates a card charge
+  (`src/lib/bill-via-card.ts`). Every expense total counts it once, via the card, and skips the entry
+  (`effectiveEntryAmount()` returns 0 for it).
 - The old `cc-effects.ts` blended-`MonthlyEntry` engine is gone. Legacy CC `MonthlyEntry` rows from
   before the rework still exist and are read for historical-month dashboards, never written.
 
@@ -117,11 +139,12 @@ NextAuth v5 (beta), Google OAuth + Prisma adapter. `auth()` is the server-side s
   generated `migration.sql` before committing); apply elsewhere with `npm run db:migrate:deploy`. Do
   not use `db:push` for real schema changes anymore, it bypasses migration history, which is exactly
   what baselining fixed. Still fine for a disposable local experiment.
-- **`templateType` is not in the generated Prisma client's TS types.** The column exists in the DB
-  but the generated `src/generated/prisma/` client predates it. Never use `templateType` in a Prisma
-  `where` or `select` clause, it throws `PrismaClientValidationError` at runtime. Always fetch
-  templates without a `select` and filter `t.templateType === "INCOME"` in JavaScript, as done
-  throughout `months/page.tsx`.
+- **`templateType`** is in the schema and the generated client now. Older code still fetches
+  templates without a `select` and filters `t.templateType === "INCOME"` in JavaScript; that is fine
+  to keep, but it is no longer required.
+- **Deleting a recurring item** with any payment history archives it (`isActive: false`) instead
+  of deleting, because a hard delete cascades to past entries and their `CashPayment` rows and
+  rewrites old months and the cash balance.
 - After any `prisma/schema.prisma` change: `npm run db:migrate`, then fully restart `npm run dev`
   (the Prisma client singleton in `src/lib/db.ts` is cached per process).
 

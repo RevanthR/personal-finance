@@ -1,5 +1,4 @@
-import { auth } from "@/lib/auth";
-import { NextResponse } from "next/server";
+import { requireApiUser } from "@/lib/api-auth";
 import { syncGmailForUser } from "@/lib/gmail/sync";
 
 // A full batch (up to 25 emails, Gemini calls in between) can run over a
@@ -12,9 +11,9 @@ export const maxDuration = 60;
 // response, since a full batch (up to 25 emails, one Gemini call each) can
 // take well over a minute — the client renders this as a progress bar.
 export async function POST() {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const userId = session.user.id;
+  const me = await requireApiUser();
+  if (!me.ok) return me.response;
+  const userId = me.id;
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({

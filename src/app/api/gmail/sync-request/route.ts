@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
@@ -11,11 +11,11 @@ import { revalidatePath } from "next/cache";
 // somewhere the admin can see it instead of the user hitting Google's own
 // dead-end error with no way to ask for access.
 export async function POST() {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const me = await requireApiUser();
+  if (!me.ok) return me.response;
 
   const user = await db.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: me.id },
     select: { gmailSyncStatus: true },
   });
   if (user?.gmailSyncStatus !== "NONE") {
@@ -23,7 +23,7 @@ export async function POST() {
   }
 
   const updated = await db.user.update({
-    where: { id: session.user.id },
+    where: { id: me.id },
     data: { gmailSyncStatus: "REQUESTED", gmailSyncRequestedAt: new Date() },
     select: { gmailSyncStatus: true },
   });

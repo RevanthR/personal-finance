@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getCurrentMonthYear } from "@/lib/utils";
 import { redirect } from "next/navigation";
 import { TemplatesClient } from "@/components/templates-client";
 
@@ -7,9 +8,7 @@ export default async function TemplatesPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const now = new Date();
-  const curMonth = now.getMonth() + 1;
-  const curYear = now.getFullYear();
+  const { month: curMonth, year: curYear } = getCurrentMonthYear();
 
   const [templates, recentMonth, paidEntries, customCategories] = await Promise.all([
     db.lineItemTemplate.findMany({

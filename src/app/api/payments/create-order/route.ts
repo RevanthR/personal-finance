@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import Razorpay from "razorpay";
@@ -19,8 +19,8 @@ const razorpay = new Razorpay({
 const REUSE_WINDOW_MS = 15 * 60 * 1000;
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const me = await requireApiUser();
+  if (!me.ok) return me.response;
 
   const parsed = validate(PaymentOrderSchema, await req.json());
   if (!parsed.ok) return parsed.response;
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   // The pricing page already hides ineligible plans, but that's a UI nicety,
   // not enforcement — nothing stopped a direct POST from minting a real
   // order for a plan the user shouldn't be able to buy.
-  const user = await db.user.findUnique({ where: { id: session.user.id }, select: { planType: true, planExpiry: true } });
+  const user = await db.user.findUnique({ where: { id: me.id }, select: { planType: true, planExpiry: true } });
   const active = isPlanActive(user?.planExpiry ?? null);
   if (!canSubscribeTo(user?.planType ?? "FREE", planType, active)) {
     return NextResponse.json({ error: "Not eligible for this plan" }, { status: 400 });
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
 
   const existing = await db.payment.findFirst({
     where: {
-      userId: session.user.id,
+      userId: me.id,
       planType,
       status: "CREATED",
       amount: plan.pricePaise, // skip a stale order if pricing changed since it was created
@@ -55,13 +55,13 @@ export async function POST(req: NextRequest) {
   const order = await razorpay.orders.create({
     amount:   plan.pricePaise,
     currency: "INR",
-    receipt:  `${session.user.id}_${Date.now()}`,
-    notes:    { userId: session.user.id, planType },
+    receipt:  `${me.id}_${Date.now()}`,
+    notes:    { userId: me.id, planType },
   });
 
   await db.payment.create({
     data: {
-      userId:         session.user.id,
+      userId:         me.id,
       razorpayOrderId: order.id,
       planType,
       amount:          plan.pricePaise,

@@ -1,5 +1,7 @@
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { requireApiUser } from "@/lib/api-auth";
+import { getCurrentMonthYear } from "@/lib/utils";
+import { rekeyCardStatements } from "@/lib/cards-db";
 import { NextRequest, NextResponse } from "next/server";
 import { Category } from "@/generated/prisma/client";
 import { revalidateTag } from "next/cache";
@@ -11,8 +13,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ templateId: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const user = await requireApiUser();
+  if (!user.ok) return user.response;
+  const userId = user.id;
 
   const { templateId } = await params;
 
@@ -21,12 +24,12 @@ export async function PATCH(
   const body = parsed.data;
 
   const isCustom = body.customCategory != null && body.customCategory !== "";
-  const customCat = isCustom ? await resolveCustomCategory(session.user.id, body.customCategory!) : null;
+  const customCat = isCustom ? await resolveCustomCategory(userId, body.customCategory!) : null;
 
   let updateCount: number;
   try {
     const result = await db.lineItemTemplate.updateMany({
-      where: { id: templateId, userId: session.user.id },
+      where: { id: templateId, userId: userId },
       data: {
         ...(body.name     !== undefined && { name: body.name }),
         ...(body.category !== undefined && {
@@ -71,7 +74,7 @@ export async function PATCH(
   // Fetched once and reused below (foreclosure name, amount-sync check,
   // response body) instead of a second identical findFirst.
   const updatedTemplate = await db.lineItemTemplate.findFirst({
-    where: { id: templateId, userId: session.user.id },
+    where: { id: templateId, userId: userId },
     include: { chitFund: true },
   });
 
@@ -82,9 +85,8 @@ export async function PATCH(
   // that's still unpaid; one already paid this month was a real, separate
   // installment made before the foreclosure, not part of it.
   if (body.foreClosedOn) {
-    const now = new Date();
     const currentMonth = await db.month.findFirst({
-      where: { userId: session.user.id, month: now.getMonth() + 1, year: now.getFullYear() },
+      where: { userId, ...getCurrentMonthYear() },
     });
     if (currentMonth) {
       if (body.addToCurrentMonth && body.foreCloseAmount) {
@@ -120,7 +122,7 @@ export async function PATCH(
       || (now.getUTCFullYear() === loanStart.getUTCFullYear() && now.getUTCMonth() < loanStart.getUTCMonth());
     if (startsAfterNow) {
       const currentMonth = await db.month.findFirst({
-        where: { userId: session.user.id, month: now.getMonth() + 1, year: now.getFullYear() },
+        where: { userId, ...getCurrentMonthYear() },
       });
       if (currentMonth) {
         await db.monthlyEntry.deleteMany({
@@ -130,13 +132,17 @@ export async function PATCH(
     }
   }
 
+  // A card's billing days moved: keep its statements attached to their cycles.
+  if (updatedTemplate?.category === "CREDIT_CARD" && (body.statementDay !== undefined || body.dueDateDay !== undefined)) {
+    await rekeyCardStatements(db, templateId);
+  }
+
   revalidateTag(templateCacheTag, {});
 
   // Auto-apply amount change to current month's existing unpaid entry (expense templates only)
   if (body.amount !== undefined && updatedTemplate?.templateType !== "INCOME") {
-    const now = new Date();
     const currentMonth = await db.month.findUnique({
-      where: { userId_month_year: { userId: session.user.id, month: now.getMonth() + 1, year: now.getFullYear() } },
+      where: { userId_month_year: { userId, ...getCurrentMonthYear() } },
       select: { id: true },
     });
     if (currentMonth) {
@@ -154,15 +160,41 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ templateId: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const user = await requireApiUser();
+  if (!user.ok) return user.response;
+  const userId = user.id;
 
   const { templateId } = await params;
 
-  await db.lineItemTemplate.deleteMany({
-    where: { id: templateId, userId: session.user.id },
+  const template = await db.lineItemTemplate.findFirst({
+    where: { id: templateId, userId },
+    select: {
+      id: true,
+      _count: { select: { entries: { where: { OR: [{ isPaid: true }, { paidAmount: { gt: 0 } }] } }, adHocCharges: true } },
+      creditCard: { select: { _count: { select: { statements: true } } } },
+    },
   });
+  if (!template) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  // A hard delete cascades to every past entry, its payment history and the
+  // cash ledger rows behind it, which rewrites old months and moves the cash
+  // balance. Anything with real history is archived instead (stops showing
+  // up in new months, past months stay as they were).
+  const hasHistory = template._count.entries > 0
+    || template._count.adHocCharges > 0
+    || (template.creditCard?._count.statements ?? 0) > 0;
+
+  if (hasHistory) {
+    const { month, year } = getCurrentMonthYear();
+    await db.$transaction([
+      db.lineItemTemplate.update({ where: { id: templateId }, data: { isActive: false } }),
+      // This month's still-unpaid bill for it goes away, same as foreclosure.
+      db.monthlyEntry.deleteMany({ where: { templateId, isPaid: false, paidAmount: null, month: { userId, month, year } } }),
+    ]);
+  } else {
+    await db.lineItemTemplate.delete({ where: { id: templateId } });
+  }
 
   revalidateTag(templateCacheTag, {});
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, archived: hasHistory });
 }

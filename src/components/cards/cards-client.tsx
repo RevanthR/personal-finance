@@ -33,9 +33,17 @@ type Status = {
   lastStatementDate: string | null;
   paymentDueDate: string | null;
   reconciliation: { logged: number; statement: number; delta: number } | null;
+  unpaidStatements: { statementDate: string; dueDate: string; outstanding: number; confirmed: boolean }[];
 };
 
-export type CardChargeRow = { id: string; date: string; amount: number; isCredit: boolean; name: string };
+export type CardChargeRow = { id: string; date: string; amount: number; isCredit: boolean; isCardRepayment: boolean; name: string };
+
+// One closed billing cycle (see cardLedger in src/lib/cards.ts).
+export type CardCycleView = {
+  statementDate: string; cycleStart: string; dueDate: string;
+  tracked: boolean; confirmed: boolean;
+  gross: number; estimated: number; recordedPaid: number; repaid: number; cashback: number; outstanding: number;
+};
 
 export type CardOverview = {
   cardId: string;
@@ -49,10 +57,8 @@ export type CardOverview = {
   creditLimit: number | null;
   isActive: boolean;
   status: Status;
-  statements: {
-    statementDate: string; paymentDueDate: string; statementBalance: number | null;
-    confirmedAt: string | null; paidAmount: number; paidInFull: boolean; paidAt: string | null; cashback: number;
-  }[];
+  /** Closed billing cycles, newest first. */
+  cycles: CardCycleView[];
   charges: CardChargeRow[];
 };
 
@@ -107,6 +113,8 @@ function CardTile({
 
   const [confirming, setConfirming] = useState(false);
   const [confirmInput, setConfirmInput] = useState("");
+  const [paying, setPaying] = useState(false);
+  const [payInput, setPayInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [showStatements, setShowStatements] = useState(false);
 
@@ -129,6 +137,13 @@ function CardTile({
   }
 
   const confirmDefault = Math.round(s.statementEstimated);
+  // "Mark paid" clears the latest statement and anything past due.
+  const owedNow = Math.round(s.statementBalance + s.pastDue);
+
+  function payPart() {
+    const v = parseFloat(payInput);
+    if (v > 0) post("pay", { amount: v }).then(() => setPaying(false));
+  }
 
   return (
     <Card>
@@ -168,7 +183,7 @@ function CardTile({
               </p>
               <p className={cn("text-xl font-bold tabular-nums mt-0.5",
                 s.status === "pastdue" ? "text-negative" : s.status === "paid" ? "text-muted-foreground" : "text-foreground")}>
-                {s.status === "paid" ? fmt(Math.round(s.statementEstimated)) : fmt(Math.round(s.statementBalance))}
+                {s.status === "paid" ? fmt(Math.round(s.statementGross)) : fmt(Math.round(s.statementBalance))}
               </p>
               <p className="text-[11px] text-muted-foreground mt-0.5">
                 {s.statementConfirmed ? "confirmed from statement" : "estimated from your charges"}
@@ -239,10 +254,24 @@ function CardTile({
         )}
 
         {/* Pay */}
-        {(s.status === "confirmed" || s.status === "pastdue") && s.statementBalance > 0 && (
-          <Button size="sm" className="w-full h-9 text-xs" disabled={busy} onClick={() => post("pay", { full: true })}>
-            Mark paid ({fmt(Math.round(s.statementBalance))})
-          </Button>
+        {(s.status === "confirmed" || s.status === "pastdue") && owedNow > 0 && !paying && (
+          <div className="flex gap-2">
+            <Button size="sm" className="flex-1 h-9 text-xs" disabled={busy} onClick={() => post("pay", { full: true })}>
+              Mark paid ({fmt(owedNow)})
+            </Button>
+            <Button size="sm" variant="outline" className="flex-1 h-9 text-xs" onClick={() => { setPayInput(""); setPaying(true); }}>
+              Paid part
+            </Button>
+          </div>
+        )}
+        {paying && (
+          <div className="flex gap-2">
+            <Input type="number" min={0} value={payInput} onChange={e => setPayInput(e.target.value)}
+              autoFocus placeholder="Amount paid" className="h-9 text-sm"
+              onKeyDown={e => { if (e.key === "Enter") payPart(); if (e.key === "Escape") setPaying(false); }} />
+            <Button size="sm" className="h-9 text-xs shrink-0" disabled={busy} onClick={payPart}>Save</Button>
+            <Button size="sm" variant="ghost" className="h-9 text-xs shrink-0" onClick={() => setPaying(false)}>Cancel</Button>
+          </div>
         )}
         {s.status === "paid" && (
           <button className="text-xs text-muted-foreground hover:text-foreground" disabled={busy} onClick={() => post("pay", { unpay: true })}>

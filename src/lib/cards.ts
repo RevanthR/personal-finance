@@ -82,9 +82,138 @@ export function statementDueInMonth(
   };
 }
 
-// ── Status ──────────────────────────────────────────────────────────────────
+// ── Ledger ──────────────────────────────────────────────────────────────────
+// Money moves on a card in three ways:
+//  - a charge (AdHocItem with ccTemplateId): adds to the cycle it falls in
+//  - a refund (isCredit): nets out of the cycle it falls in
+//  - a repayment (isCardRepayment): money paid toward the card's bill. It is
+//    NOT a refund, it pays a statement. It goes to the statement that was
+//    current when it was paid, then any older unpaid statement, then the
+//    next statements. Anything left over is credit against the open cycle.
+// A CardStatement row adds what the bank said (statementBalance), payments
+// recorded with the Pay button (paidAmount) and cashback.
 
-export type CardCharge = { date: string | Date; amount: number; isCredit?: boolean | null };
+export type CardCharge = {
+  date: string | Date;
+  amount: number;
+  isCredit?: boolean | null;
+  isCardRepayment?: boolean | null;
+};
+
+/** Below this, an amount still "owed" is rounding, not a real balance. */
+const SLACK = 1;
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
+export type CardCycle = {
+  statementDate: Date;
+  cycleStart: Date;
+  dueDate: Date;
+  /** Has a CardStatement row, or is the most recently closed cycle. Older
+   * cycles with no row are assumed settled outside the app. */
+  tracked: boolean;
+  confirmed: boolean;
+  /** The bank figure once confirmed, else the charge-sum estimate. */
+  gross: number;
+  /** What the logged charges add up to, always. */
+  estimated: number;
+  /** Recorded via the Pay button / Gmail settle (CardStatement.paidAmount). */
+  recordedPaid: number;
+  /** Card repayment entries applied to this statement. */
+  repaid: number;
+  cashback: number;
+  /** gross - recordedPaid - repaid - cashback, never negative. */
+  outstanding: number;
+};
+
+const isRepayment = (c: CardCharge) => !!c.isCardRepayment;
+
+/**
+ * Every closed billing cycle from the first one with any activity up to the
+ * most recently closed one, oldest first, with repayments applied.
+ * `extraCredit` is repayment money left over after every closed statement
+ * was paid off: it counts against the open cycle.
+ */
+export function cardLedger(
+  statementDay: number,
+  dueDay: number | null,
+  statements: CardStatementRow[],
+  charges: CardCharge[],
+  asOf: Date,
+): { cycles: CardCycle[]; extraCredit: number } {
+  const sd = statementDay;
+  const dd = dueDay ?? sd;
+  const latest = currentCycleOpen(sd, asOf);
+
+  // Earliest statement date that anything touches.
+  let earliest = latest;
+  for (const c of charges) {
+    const d = new Date(c.date);
+    const s = isRepayment(c) ? currentCycleOpen(sd, d) : nextCycleClose(sd, d);
+    if (s < earliest) earliest = s;
+  }
+  for (const s of statements) {
+    const d = new Date(s.statementDate);
+    if (d < earliest) earliest = d;
+  }
+
+  const rowByTime = new Map(statements.map(s => [new Date(s.statementDate).getTime(), s]));
+  const spend = charges.filter(c => !isRepayment(c));
+  const cycles: CardCycle[] = [];
+  for (let st = earliest, i = 0; st <= latest && i < 240; st = statementDateFor(st.getUTCFullYear(), st.getUTCMonth() + 1, sd), i++) {
+    const row = rowByTime.get(st.getTime()) ?? null;
+    const cycleStart = prevStatementDate(sd, st);
+    const estimated = Math.max(0, sumBetween(spend, cycleStart, st));
+    const confirmed = row?.confirmedAt != null && row.statementBalance != null;
+    const gross = r2(confirmed ? row!.statementBalance! : estimated);
+    const recordedPaid = r2(row?.paidAmount ?? 0);
+    const cashback = r2(row?.cashback ?? 0);
+    cycles.push({
+      statementDate: st,
+      cycleStart,
+      dueDate: row ? new Date(row.paymentDueDate) : dueDateFor(st, sd, dd),
+      tracked: row != null || st.getTime() === latest.getTime(),
+      confirmed,
+      gross,
+      estimated,
+      recordedPaid,
+      repaid: 0,
+      cashback,
+      outstanding: Math.max(0, r2(gross - recordedPaid - cashback)),
+    });
+  }
+
+  // Apply repayments, oldest first.
+  let extraCredit = 0;
+  const repayments = charges
+    .filter(isRepayment)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  for (const p of repayments) {
+    let left = p.amount;
+    const target = currentCycleOpen(sd, new Date(p.date)).getTime();
+    const ti = cycles.findIndex(c => c.statementDate.getTime() === target);
+    const order = ti < 0
+      ? cycles.filter(c => c.statementDate.getTime() > target)
+      : [
+          cycles[ti],
+          ...cycles.slice(0, ti).filter(c => c.tracked),
+          ...cycles.slice(ti + 1),
+        ];
+    for (const c of order) {
+      if (left <= 0) break;
+      const take = Math.min(left, c.outstanding);
+      if (take <= 0) continue;
+      c.repaid = r2(c.repaid + take);
+      c.outstanding = r2(c.outstanding - take);
+      left = r2(left - take);
+    }
+    extraCredit = r2(extraCredit + Math.max(0, left));
+  }
+  for (const c of cycles) if (c.outstanding < SLACK) c.outstanding = 0;
+
+  return { cycles, extraCredit };
+}
+
+// ── Status ──────────────────────────────────────────────────────────────────
 
 export type CardStatementRow = {
   statementDate: string | Date;
@@ -133,22 +262,9 @@ export type CardStatusResult = {
    * billed (a charge after the cut, or a duplicate).
    */
   reconciliation: { logged: number; statement: number; delta: number } | null;
+  /** Every statement still owing money (past due ones and the latest), oldest first. */
+  unpaidStatements: { statementDate: Date; dueDate: Date; outstanding: number; confirmed: boolean }[];
 };
-
-/**
- * Cash that actually left toward this card's bills inside [from, to). Uses
- * paidAt, so it only counts payments recorded in that window rather than
- * the whole cumulative paidAmount.
- */
-export function cardCashPaidBetween(statements: CardStatementRow[], from: Date, to: Date): number {
-  let total = 0;
-  for (const s of statements) {
-    if (!s.paidAt) continue;
-    const t = new Date(s.paidAt).getTime();
-    if (t >= from.getTime() && t < to.getTime()) total += s.paidAmount;
-  }
-  return Math.round(total * 100) / 100;
-}
 
 const signed = (c: CardCharge) => (c.isCredit ? -c.amount : c.amount);
 
@@ -172,9 +288,11 @@ export function cardStatus(
   const limit = card.creditLimit ?? null;
 
   // No statement day set: cycles can't be placed. Treat every charge as
-  // unbilled and show nothing as due.
+  // unbilled (net of repayments) and show nothing as due.
   if (card.statementDay == null) {
-    const total = Math.max(0, sumBetween(charges, null, null));
+    const spent = sumBetween(charges.filter(c => !isRepayment(c)), null, null);
+    const repaid = charges.filter(isRepayment).reduce((s, c) => s + c.amount, 0);
+    const total = Math.max(0, r2(spent - repaid));
     return {
       status: "unconfigured",
       statementBalance: 0, statementGross: 0, statementConfirmed: false, statementEstimated: 0,
@@ -182,65 +300,48 @@ export function cardStatus(
       availableCredit: limit != null ? Math.max(0, limit - total) : null,
       utilisation: limit ? total / limit : null,
       cycleOpenDate: null, lastStatementDate: null, paymentDueDate: null, reconciliation: null,
+      unpaidStatements: [],
     };
   }
 
   const sd = card.statementDay;
   const cycleOpen = currentCycleOpen(sd, asOf);
   const nextClose = nextCycleClose(sd, asOf);
-  const prevClose = prevStatementDate(sd, cycleOpen);
 
-  const unbilledSpends = Math.max(0, sumBetween(charges, cycleOpen, nextClose));
+  const { cycles, extraCredit } = cardLedger(sd, card.dueDateDay, statements, charges, asOf);
+  const last = cycles[cycles.length - 1]; // always the cycle that closed at cycleOpen
 
-  const earliestCharge = charges.reduce<Date | null>((min, c) => {
-    const d = new Date(c.date);
-    return !min || d < min ? d : min;
-  }, null);
-  const rowFor = (d: Date) =>
-    statements.find(s => new Date(s.statementDate).getTime() === d.getTime()) ?? null;
-  const lastRow = rowFor(cycleOpen);
-  const hasClosedCycle = (earliestCharge != null && earliestCharge < cycleOpen) || lastRow != null;
+  const spentThisCycle = Math.max(0, sumBetween(charges.filter(c => !isRepayment(c)), cycleOpen, nextClose));
+  const unbilledSpends = Math.max(0, r2(spentThisCycle - extraCredit));
 
-  const statementEstimated = Math.max(0, sumBetween(charges, prevClose, cycleOpen));
-  const confirmed = lastRow?.confirmedAt != null && lastRow.statementBalance != null;
-  const gross = confirmed ? lastRow!.statementBalance! : statementEstimated;
-  const paid = lastRow?.paidAmount ?? 0;
-  const cashback = lastRow?.cashback ?? 0;
-  const paidInFull = lastRow?.paidInFull ?? false;
-  const statementBalance = Math.max(0, gross - paid - cashback);
+  const hasRow = statements.some(s => new Date(s.statementDate).getTime() === cycleOpen.getTime());
+  const hasClosedCycle = hasRow || cycles.length > 1 || charges.some(c => !isRepayment(c) && new Date(c.date) < cycleOpen);
 
-  // Past due: earlier statements whose payment due date has passed, unpaid.
-  let pastDue = 0;
-  for (const s of statements) {
-    const stDate = new Date(s.statementDate);
-    if (stDate >= cycleOpen) continue;
-    if (s.paidInFull) continue;
-    if (new Date(s.paymentDueDate) >= asOf) continue;
-    const g = s.confirmedAt != null && s.statementBalance != null
-      ? s.statementBalance
-      : Math.max(0, sumBetween(charges, prevStatementDate(sd, stDate), stDate));
-    pastDue += Math.max(0, g - s.paidAmount - s.cashback);
-  }
-  pastDue = Math.round(pastDue * 100) / 100;
+  // Past due: older tracked statements, due date passed, still owing.
+  const pastDue = r2(cycles
+    .slice(0, -1)
+    .filter(c => c.tracked && c.dueDate < asOf)
+    .reduce((s, c) => s + c.outstanding, 0));
 
-  const currentBalance = Math.round((statementBalance + unbilledSpends + pastDue) * 100) / 100;
+  const statementBalance = last.outstanding;
+  const currentBalance = r2(statementBalance + unbilledSpends + pastDue);
+  const paidSomething = last.recordedPaid + last.repaid + last.cashback > 0;
 
   let status: CardStatusResult["status"];
   if (!hasClosedCycle) status = "open";
   else if (pastDue > 0) status = "pastdue";
-  else if (!confirmed) status = "awaiting";
-  else if (paidInFull || statementBalance <= 0) status = "paid";
+  else if (statementBalance === 0 && (last.confirmed || paidSomething)) status = "paid";
+  else if (!last.confirmed) status = "awaiting";
   else status = "confirmed";
 
-  const grossRounded = Math.round(gross * 100) / 100;
-  const delta = Math.round((grossRounded - statementEstimated) * 100) / 100;
+  const delta = r2(last.gross - last.estimated);
 
   return {
     status,
     statementBalance,
-    statementGross: grossRounded,
-    statementConfirmed: confirmed,
-    statementEstimated,
+    statementGross: last.gross,
+    statementConfirmed: last.confirmed,
+    statementEstimated: last.estimated,
     unbilledSpends,
     pastDue,
     currentBalance,
@@ -248,10 +349,13 @@ export function cardStatus(
     utilisation: limit ? currentBalance / limit : null,
     cycleOpenDate: cycleOpen,
     lastStatementDate: cycleOpen,
-    paymentDueDate: card.dueDateDay != null ? dueDateFor(cycleOpen, sd, card.dueDateDay) : null,
-    reconciliation: confirmed && Math.abs(delta) >= 1
-      ? { logged: statementEstimated, statement: grossRounded, delta }
+    paymentDueDate: card.dueDateDay != null ? last.dueDate : null,
+    reconciliation: last.confirmed && Math.abs(delta) >= 1
+      ? { logged: last.estimated, statement: last.gross, delta }
       : null,
+    unpaidStatements: cycles
+      .filter(c => c.tracked && c.outstanding > 0)
+      .map(c => ({ statementDate: c.statementDate, dueDate: c.dueDate, outstanding: c.outstanding, confirmed: c.confirmed })),
   };
 }
 
@@ -304,26 +408,21 @@ export function cardBillForMonth(
   const dd = card.dueDateDay ?? sd;
   const { statementDate, cycleStart, dueDate } = statementDueInMonth(sd, dd, month, year);
 
-  const row = statements.find(s => new Date(s.statementDate).getTime() === statementDate.getTime()) ?? null;
-  const r2 = (n: number) => Math.round(n * 100) / 100;
-  const paid = r2(row?.paidAmount ?? 0);
-  const cashback = r2(row?.cashback ?? 0);
-
-  if (row?.confirmedAt != null && row.statementBalance != null) {
-    return {
-      amount: Math.max(0, r2(row.statementBalance - paid - cashback)),
-      gross: r2(row.statementBalance), paid, cashback, unbilled: 0,
-      basis: "confirmed", statementDate, dueDate,
-    };
-  }
-
   const cycleClosed = statementDate.getTime() <= asOf.getTime();
   if (cycleClosed) {
-    const est = Math.max(0, sumBetween(charges, cycleStart, statementDate));
+    const { cycles } = cardLedger(sd, card.dueDateDay, statements, charges, asOf);
+    const c = cycles.find(x => x.statementDate.getTime() === statementDate.getTime());
+    if (!c) {
+      return { amount: 0, gross: 0, paid: 0, cashback: 0, unbilled: 0, basis: "estimated", statementDate, dueDate };
+    }
     return {
-      amount: Math.max(0, r2(est - paid - cashback)),
-      gross: est, paid, cashback, unbilled: 0,
-      basis: "estimated", statementDate, dueDate,
+      amount: c.outstanding,
+      gross: c.gross,
+      paid: r2(c.recordedPaid + c.repaid),
+      cashback: c.cashback,
+      unbilled: 0,
+      basis: c.confirmed ? "confirmed" : "estimated",
+      statementDate, dueDate,
     };
   }
 
@@ -333,6 +432,6 @@ export function cardBillForMonth(
   const soFarEnd = asOf.getTime() > cycleStart.getTime()
     ? new Date(Math.min(asOf.getTime(), statementDate.getTime()))
     : cycleStart;
-  const soFar = r2(Math.max(0, sumBetween(charges, cycleStart, soFarEnd)));
+  const soFar = r2(Math.max(0, sumBetween(charges.filter(c => !isRepayment(c)), cycleStart, soFarEnd)));
   return { amount: 0, gross: 0, paid: 0, cashback: 0, unbilled: soFar, basis: "open", statementDate, dueDate };
 }

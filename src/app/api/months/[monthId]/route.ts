@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { validate, MonthPatchSchema } from "@/lib/validation";
@@ -8,13 +8,13 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ monthId: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const me = await requireApiUser();
+  if (!me.ok) return me.response;
 
   const { monthId } = await params;
 
   const month = await db.month.findFirst({
-    where: { id: monthId, userId: session.user.id },
+    where: { id: monthId, userId: me.id },
     include: {
       entries: {
         include: { template: { include: { chitFund: true } } },
@@ -33,8 +33,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ monthId: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const me = await requireApiUser();
+  if (!me.ok) return me.response;
 
   const { monthId } = await params;
 
@@ -43,7 +43,7 @@ export async function PATCH(
   const { salaryIncome, freelanceIncome, otherIncome } = parsed.data;
 
   const updated = await db.month.updateMany({
-    where: { id: monthId, userId: session.user.id },
+    where: { id: monthId, userId: me.id },
     data: {
       ...(salaryIncome    !== undefined && { salaryIncome }),
       ...(freelanceIncome !== undefined && { freelanceIncome }),

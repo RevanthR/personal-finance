@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { validate, ReceivablePatchSchema } from "@/lib/validation";
@@ -8,8 +8,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ receivableId: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const me = await requireApiUser();
+  if (!me.ok) return me.response;
 
   const { receivableId } = await params;
 
@@ -18,7 +18,7 @@ export async function PATCH(
   const body = parsed.data;
 
   const receivable = await db.receivable.findFirst({
-    where: { id: receivableId, userId: session.user.id },
+    where: { id: receivableId, userId: me.id },
   });
   if (!receivable) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -27,7 +27,7 @@ export async function PATCH(
   // Canonicalize against the shared CustomCategory table instead of storing
   // an unlinked free-text string — same reasoning as POST above.
   const customCat = body.customCategory !== undefined
-    ? (body.customCategory ? await resolveCustomCategory(session.user.id, body.customCategory) : null)
+    ? (body.customCategory ? await resolveCustomCategory(me.id, body.customCategory) : null)
     : undefined; // undefined = leave as-is
 
   const updated = await db.receivable.update({
@@ -60,11 +60,11 @@ export async function PATCH(
     const amount   = body.receivedAmount ?? receivable.expectedAmount;
 
     let monthRecord = await db.month.findUnique({
-      where: { userId_month_year: { userId: session.user.id, month: recMonth, year: recYear } },
+      where: { userId_month_year: { userId: me.id, month: recMonth, year: recYear } },
     });
     if (!monthRecord) {
       monthRecord = await db.month.create({
-        data: { userId: session.user.id, month: recMonth, year: recYear, salaryIncome: 0 },
+        data: { userId: me.id, month: recMonth, year: recYear, salaryIncome: 0 },
       });
     }
     const monthId = monthRecord.id;
@@ -94,13 +94,13 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ receivableId: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const me = await requireApiUser();
+  if (!me.ok) return me.response;
 
   const { receivableId } = await params;
 
   const receivable = await db.receivable.findFirst({
-    where: { id: receivableId, userId: session.user.id },
+    where: { id: receivableId, userId: me.id },
   });
   if (!receivable) return NextResponse.json({ error: "Not found" }, { status: 404 });
 

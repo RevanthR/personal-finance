@@ -1,5 +1,6 @@
-import { auth } from "@/lib/auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { db } from "@/lib/db";
+import { getCurrentMonthYear } from "@/lib/utils";
 import { NextRequest, NextResponse } from "next/server";
 import { Category, TemplateType } from "@/generated/prisma/client";
 import { revalidateTag } from "next/cache";
@@ -9,11 +10,11 @@ import { resolveCustomCategory } from "@/lib/custom-category";
 import { computeTemplateEntryAmount } from "@/lib/entry-amount";
 
 export async function GET() {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const me = await requireApiUser();
+  if (!me.ok) return me.response;
 
   const templates = await db.lineItemTemplate.findMany({
-    where: { userId: session.user.id },
+    where: { userId: me.id },
     include: { chitFund: true },
     orderBy: [{ category: "asc" }, { sortOrder: "asc" }],
   });
@@ -22,18 +23,18 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const me = await requireApiUser();
+  if (!me.ok) return me.response;
 
   const parsed = validate(TemplatePostSchema, await req.json());
   if (!parsed.ok) return parsed.response;
   const body = parsed.data;
 
   const isCustom = Boolean(body.customCategory);
-  const customCat = isCustom ? await resolveCustomCategory(session.user.id, body.customCategory!) : null;
+  const customCat = isCustom ? await resolveCustomCategory(me.id, body.customCategory!) : null;
   const template = await db.lineItemTemplate.create({
     data: {
-      userId: session.user.id,
+      userId: me.id,
       name: body.name,
       category: (isCustom ? "MISCELLANEOUS" : body.category) as Category,
       customCategory: customCat?.name ?? null,
@@ -67,11 +68,9 @@ export async function POST(req: NextRequest) {
     (body.templateType ?? "EXPENSE") !== "INCOME" &&
     template.category !== "CREDIT_CARD"
   ) {
-    const now = new Date();
-    const curMonth = now.getMonth() + 1;
-    const curYear = now.getFullYear();
+    const { month: curMonth, year: curYear } = getCurrentMonthYear();
     const curMonthRecord = await db.month.findUnique({
-      where: { userId_month_year: { userId: session.user.id, month: curMonth, year: curYear } },
+      where: { userId_month_year: { userId: me.id, month: curMonth, year: curYear } },
     });
     if (curMonthRecord) {
       const { amount } = computeTemplateEntryAmount(template, template.amount);
