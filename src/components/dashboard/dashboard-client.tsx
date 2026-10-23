@@ -425,7 +425,24 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
   // via cardBillsView (current + past months); a projected month has no cardBillsView and
   // takes its card figure from projectedEntries instead (dispCCBills below).
   const ccBillsThisMonth = cardBillsView?.owed ?? 0;
-  const ccNextMonth       = cardBillsView?.unbilled ?? 0;
+  // Card spend dated in the viewed calendar month, per card: charges net of
+  // refunds. Payments to a card are not spend, so they're left out.
+  const cardSpendThisMonth = useMemo(() => {
+    const nameById = new Map(ccTemplates.map(t => [t.id, t.name]));
+    const byCard = new Map<string, { templateId: string; name: string; amount: number }>();
+    for (const i of adHocItems) {
+      if (i.type !== "EXPENSE" || !i.ccTemplateId || i.isCardRepayment) continue;
+      const line = byCard.get(i.ccTemplateId) ?? { templateId: i.ccTemplateId, name: nameById.get(i.ccTemplateId) ?? "Card", amount: 0 };
+      line.amount += i.isCredit ? -i.amount : i.amount;
+      byCard.set(i.ccTemplateId, line);
+    }
+    const lines = [...byCard.values()]
+      .map(l => ({ ...l, amount: Math.round(l.amount) }))
+      .filter(l => l.amount > 0)
+      .sort((a, b) => b.amount - a.amount);
+    return { lines, total: lines.reduce((s, l) => s + l.amount, 0) };
+  }, [adHocItems, ccTemplates]);
+  const cardSpendTotal = cardSpendThisMonth.total;
   const pendingCount      = metrics.pendingCount + (cardBillsView?.pendingCards ?? 0);
 
   // ── This month's obligations, one consistent basis ─────────────────────
@@ -1121,11 +1138,11 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
             onClick: (isProjected || !cardBillsView || cardBillsView.lines.length === 0) ? undefined : () => setShowCCBillDrilldown(true),
             hint: <span className="text-xs text-muted-foreground">{isProjected ? "projected" : dispCCBills > 0 ? "owed now" : "nothing due"}</span>,
           }] : []),
-          ...(hasCCCards && !isProjected && liveCardTotals ? [{
+          ...(hasCCCards && !isProjected ? [{
             label: "Spent on cards",
-            value: ccNextMonth > 0 ? fmt(ccNextMonth) : "-",
-            onClick: (ccNextMonth <= 0) ? undefined : () => setShowCCSpendDrilldown(true),
-            hint: <span className="text-xs text-muted-foreground">{ccNextMonth > 0 ? "this cycle, unbilled" : "nothing yet"}</span>,
+            value: cardSpendTotal > 0 ? fmt(cardSpendTotal) : "-",
+            onClick: (cardSpendTotal <= 0) ? undefined : () => setShowCCSpendDrilldown(true),
+            hint: <span className="text-xs text-muted-foreground">{cardSpendTotal > 0 ? "this month" : "nothing yet"}</span>,
           }] : []),
           {
             label: "Pending",
@@ -1763,24 +1780,24 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
         </DialogContent>
       </Dialog>
 
-      {/* Spent on cards (this cycle, unbilled) drilldown */}
+      {/* Spent on cards (this calendar month) drilldown */}
       <Dialog open={showCCSpendDrilldown} onOpenChange={setShowCCSpendDrilldown}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Spent on cards: this cycle</DialogTitle>
+            <DialogTitle>Spent on cards: {formatMonthYear(viewMonth, viewYear)}</DialogTitle>
           </DialogHeader>
           <div className="space-y-1.5 pt-1">
-            {(cardBillsView?.lines ?? []).filter(c => c.unbilled > 0).map(c => (
+            {cardSpendThisMonth.lines.map(c => (
               <div key={c.templateId} className="flex items-center justify-between text-sm rounded-lg bg-muted/30 px-3 py-2">
                 <span>{c.name}</span>
-                <span className="font-semibold shrink-0 ml-2">{fmt(c.unbilled)}</span>
+                <span className="font-semibold shrink-0 ml-2">{fmt(c.amount)}</span>
               </div>
             ))}
             <div className="flex items-center justify-between pt-2 border-t border-border">
-              <p className="text-sm font-semibold">Total this cycle</p>
-              <span className="text-sm font-bold">{fmt(ccNextMonth)}</span>
+              <p className="text-sm font-semibold">Total this month</p>
+              <span className="text-sm font-bold">{fmt(cardSpendTotal)}</span>
             </div>
-            <p className="text-xs text-muted-foreground pt-1">Not billed yet, so not in Payables or Pending. Becomes a bill when the statement closes.</p>
+            <p className="text-xs text-muted-foreground pt-1">Card charges dated this month, net of refunds. It reaches Payables when each card&apos;s statement is due, which can be next month.</p>
           </div>
         </DialogContent>
       </Dialog>
@@ -1796,7 +1813,7 @@ export function DashboardClient({ currentMonth: initialMonth, cards, ccMonth, ca
               <ProjectedBreakdownBody data={projectedBreakdown} month={viewMonth} year={viewYear} fmt={fmt} />
             ) : (
             <>
-            <p className="text-xs text-muted-foreground">This month&apos;s own bills: recurring, card statements due this month, and one-off spends. A card cycle that hasn&apos;t closed yet is not in here (see Spent on cards). Old debt paid this month is listed below the total.</p>
+            <p className="text-xs text-muted-foreground">This month&apos;s own bills: recurring, card statements due this month, and one-off spends. Card spend whose statement hasn&apos;t closed yet is not in here (see Spent on cards). Old debt paid this month is listed below the total.</p>
 
             {/* Recurring is already fully itemized in the Payables tab —
                 a summary line here is enough, no need to repeat it. */}
